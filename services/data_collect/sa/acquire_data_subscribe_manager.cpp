@@ -36,6 +36,7 @@
 #include "security_event_info.h"
 #include "data_format.h"
 #include "data_statistics.h"
+#include "security_guard_utils.h"
 
 namespace OHOS::Security::SecurityGuard {
 namespace {
@@ -603,6 +604,9 @@ void AcquireDataSubscribeManager::UploadEventTask(const SecurityCollector::Event
     if (!ConfigDataManager::GetInstance().GetEventConfig(retEvent.eventId, config)) {
         SGLOGE("GetEventConfig fail eventId=%{public}" PRId64, event.eventId);
         return;
+    }
+    if (retEvent.timestamp.empty()) {
+        retEvent.timestamp = SecurityGuardUtils::GetDate();
     }
     // change old event id to new eventid
     retEvent.eventId = config.eventId;
