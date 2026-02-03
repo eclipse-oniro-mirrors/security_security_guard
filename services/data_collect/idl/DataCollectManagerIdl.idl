@@ -36,4 +36,5 @@ interface OHOS.Security.SecurityGuard.DataCollectManagerIdl {
     void Subscribe([in] long eventId, [in] String clientId);
     void Unsubscribe([in] long eventId, [in] String clientId);
     void QuerySecurityEventById([in] List<SecurityEventRuler> rulers, [in] IRemoteObject cb, [in] String eventGroup);
+    void QueryCodeSignInfoByPath([in] FileDescriptor fd, [in] int pid, [inout] String resStr);
 }

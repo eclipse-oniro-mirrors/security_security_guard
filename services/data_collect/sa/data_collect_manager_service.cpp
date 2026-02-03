@@ -80,7 +80,8 @@ namespace {
         {"QuerySecurityEventConfig", {MANAGE_CONFIG_PERMISSION}},
         {"AddFilter", {QUERY_SECURITY_EVENT_PERMISSION}},
         {"RemoveFilter", {QUERY_SECURITY_EVENT_PERMISSION}},
-        {"QuerySecurityEventById", {QUERY_AUDIT_EVENT_PERMISSION}}
+        {"QuerySecurityEventById", {QUERY_AUDIT_EVENT_PERMISSION}},
+        {"QueryCodeSignInfoByPath", {QUERY_AUDIT_EVENT_PERMISSION}}
     };
     std::unordered_set<std::string> g_configCacheFilesSet;
     constexpr uint32_t FINISH = 0;
@@ -1125,6 +1126,29 @@ ErrCode DataCollectManagerService::CreatClient(const std::string &eventGroup, co
         std::lock_guard<std::mutex> lock(mutex_);
         clientCallBacks_[clientId] = cb;
     }
+    return SUCCESS;
+}
+
+ErrCode DataCollectManagerService::QueryCodeSignInfoByPath(const int fd, const int pid, std::string &resStr)
+{
+    SGLOGI("enter DataCollectManagerService QuerySecurityEventById");
+    int32_t code = IsApiHasPermission("QueryCodeSignInfoByPath");
+    if (code != SUCCESS) {
+        return code;
+    }
+    std::string param = "fd=" + std::to_string(fd) + ",pid=" + std::to_string(pid);
+    SecurityCollector::SecurityEventRuler ruler(0xffffffff06, "", "", param);
+    std::vector<SecurityCollector::SecurityEvent> replyEvents {};
+    int ret = SecurityCollector::DataCollection::GetInstance().QuerySecurityEvent({ruler}, replyEvents);
+    if (ret != SUCCESS) {
+        SGLOGE("CodeSign QuerySecurityEvent fail ret=%{public}d", ret);
+        return ret;
+    }
+    if (replyEvents.empty()) {
+        SGLOGE("CodeSign QuerySecurityEvent replyEvents empty");
+        return FAILED;
+    }
+    resStr = replyEvents[0].GetContent();
     return SUCCESS;
 }
 }
