@@ -61,7 +61,7 @@ bool SecurityGuardUtils::StrToI64Hex(const std::string &str, int64_t &value)
 bool SecurityGuardUtils::StrToLL(const std::string &str, long long &value, int32_t base)
 {
     if (str.empty()) {
-        return;
+        return false;
     }
     auto add = str.c_str();
     char *end = nullptr;
@@ -86,7 +86,7 @@ bool SecurityGuardUtils::StrToLL(const std::string &str, long long &value, int32
 bool SecurityGuardUtils::StrToULL(const std::string &str, unsigned long long &value)
 {
     if (str.empty()) {
-        return;
+        return false;
     }
     auto add = str.c_str();
     char *end = nullptr;

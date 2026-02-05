@@ -66,7 +66,7 @@ void SecurityGuardRiskAnalysisTest::TearDown()
 
 HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_ApiNotInMap, TestSize.Level1) {
     std::string api = "apiNotInMap";
-    EXPECT_EQ(riskAnalysisManagerService.IsApiHasPermission(api), 1);
+    EXPECT_EQ(riskAnalysisManagerService.IsCallerHasApiPermission(api), 1);
 }
 
 HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_CallerNoPermission, TestSize.Level1) {
@@ -75,7 +75,7 @@ HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_CallerNoPermission, T
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), GetTokenType)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_HAP));
-    int32_t result = riskAnalysisManagerService.IsApiHasPermission(api);
+    int32_t result = riskAnalysisManagerService.IsCallerHasApiPermission(api);
     EXPECT_EQ(result, NO_SYSTEMCALL);
 }
 
@@ -85,7 +85,7 @@ HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_NotSystemAppNoPermiss
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), GetTokenType)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_NATIVE));
-    int32_t result = riskAnalysisManagerService.IsApiHasPermission(api);
+    int32_t result = riskAnalysisManagerService.IsCallerHasApiPermission(api);
     EXPECT_EQ(result, SUCCESS);
 }
 
@@ -93,7 +93,7 @@ HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_PermissionDenied, Tes
     const std::string api = "RequestSecurityModelResult";
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillRepeatedly(
         Return(AccessToken::PermissionState::PERMISSION_DENIED));
-    int32_t result = riskAnalysisManagerService.IsApiHasPermission(api);
+    int32_t result = riskAnalysisManagerService.IsCallerHasApiPermission(api);
     EXPECT_EQ(result, 2);
 }
 
@@ -101,7 +101,7 @@ HWTEST_F(SecurityGuardRiskAnalysisTest, IsApiHasPermission_Success, TestSize.Lev
     const std::string api = "RequestSecurityModelResult";
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillRepeatedly(
         Return(AccessToken::PermissionState::PERMISSION_GRANTED));
-    int32_t result = riskAnalysisManagerService.IsApiHasPermission(api);
+    int32_t result = riskAnalysisManagerService.IsCallerHasApiPermission(api);
     EXPECT_EQ(result, 0);
 }
 

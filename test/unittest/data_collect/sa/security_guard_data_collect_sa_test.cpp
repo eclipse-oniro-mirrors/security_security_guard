@@ -1169,7 +1169,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, IsApiHasPermission01, TestSize.Level0)
 {
     const std::string api = "testString";
     DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
-    int32_t result = service.IsApiHasPermission(api);
+    int32_t result = service.IsCallerHasApiPermission(api);
     EXPECT_EQ(result, FAILED);
 }
 
