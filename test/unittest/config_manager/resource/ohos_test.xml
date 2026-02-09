@@ -35,4 +35,9 @@
             <option name="push" value="detect_plugin_err.json -> /data/test/unittest/resource/" src="res"/>
         </preparer>
     </target>
+    <target name="libsg_collect_sdk_test">
+        <preparer>
+            <option name="push" value="security_guard_cache_event.cfg -> /data/test/unittest/resource/security_guard/security_guard/" src="res"/>
+        </preparer>
+    </target>
 </configuration>

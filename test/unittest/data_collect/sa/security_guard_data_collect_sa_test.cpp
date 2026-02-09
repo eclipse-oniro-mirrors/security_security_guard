@@ -1806,4 +1806,41 @@ HWTEST_F(SecurityGuardDataCollectSaTest, NewUnsubscribe002, TestSize.Level0)
     DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
     EXPECT_EQ(service.Unsubscribe(11111, "test_no_client"), NO_PERMISSION);
 }
+
+HWTEST_F(SecurityGuardDataCollectSaTest, TestQueryCodeSign, TestSize.Level0)
+{
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
+        .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_DENIED));
+
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    std::string result {};
+    EXPECT_EQ(service.QueryCodeSignInfoByPath(1, 1, result), NO_PERMISSION);
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, TestQueryCodeSign01, TestSize.Level0)
+{
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
+        .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEvent).WillOnce(Return(
+        OHOS::Security::SecurityGuard::SUCCESS));
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    std::string result {};
+    EXPECT_EQ(service.QueryCodeSignInfoByPath(1, 1, result), FAILED);
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, TestQueryCodeSign02, TestSize.Level0)
+{
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
+        .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEvent).WillOnce(
+        [] (const std::vector<SecurityEventRuler> rulers,
+            std::vector<SecurityCollector::SecurityEvent> &events) {
+            SecurityCollector::SecurityEvent event(111, "1.0", "test");
+            events.emplace_back(event);
+            return SUCCESS;
+        });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    std::string result {};
+    EXPECT_EQ(service.QueryCodeSignInfoByPath(1, 1, result), SUCCESS);
+}
 }
