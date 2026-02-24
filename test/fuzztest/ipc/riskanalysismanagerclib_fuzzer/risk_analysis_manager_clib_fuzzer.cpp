@@ -105,6 +105,8 @@ extern "C" int FuzzRiskAnalysisFuzzService(FuzzedDataProvider &fdp)
             g_service.OnRemoveSystemAbility(systemAbilityId, deviceId);
             break;
         }
+        default:
+            break;
     }
     return 0;
 }

@@ -15,6 +15,8 @@
 #include "iservice_registry.h"
 #include "data_collect_manager.h"
 #include <chrono>
+#include "fdsan_fd.h"
+#include "directory_ex.h"
 #include "data_collect_manager_idl_proxy.h"
 #include "data_collect_manager_idl.h"
 #include "security_event_ruler.h"
@@ -482,5 +484,37 @@ int32_t DataCollectManager::RequestSecurityEventInfo(std::string &devId, std::st
         return ret;
     }
     return SUCCESS;
+}
+
+int32_t DataCollectManager::QueryCodeSignInfoByPath(const std::string &filePath, std::string &result)
+{
+    SGLOGI("Start DataCollectManager QueryCodeSignInfoByPath");
+    std::string realPath {};
+    if (!PathToRealPath(filePath, realPath)) {
+        SGLOGE("PathToRealPath fail");
+        return FILE_NOT_FOUND;
+    }
+    auto fdsan = std::make_shared<FdsanFd>(open(realPath.c_str(), O_RDONLY));
+    if (fdsan->Get() < 0) {
+        SGLOGE("open file fail! reason %{publics}s", strerror(errno));
+        return FILE_NOT_FOUND;
+    }
+    auto pid = getpid();
+    auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
+    if (registry == nullptr) {
+        SGLOGE("GetSystemAbilityManager error");
+        return FAILED;
+    }
+    auto object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
+    if (object == nullptr) {
+        SGLOGE("object is nullptr");
+        return FAILED;
+    }
+    auto proxy = iface_cast<DataCollectManagerIdl>(object);
+    if (proxy == nullptr) {
+        SGLOGE("proxy is null");
+        return FAILED;
+    }
+    return proxy->QueryCodeSignInfoByPath(fdsan->Get(), pid, result);
 }
 }

@@ -622,4 +622,19 @@ HWTEST_F(DataCollectKitTest, TestQueryProcInfo01, TestSize.Level1)
     EXPECT_EQ(SecurityGuard::DataCollectManager::GetInstance().QuerySecurityEventById({rule}, callback, "auditGroup"),
         SecurityGuard::BAD_PARAM);
 }
+
+HWTEST_F(DataCollectKitTest, TestQueryCodeSignInfoByPath01, TestSize.Level1)
+{
+    std::string result {};
+    EXPECT_EQ(SecurityGuard::DataCollectManager::GetInstance().QueryCodeSignInfoByPath("test", result),
+        SecurityGuard::FILE_NOT_FOUND);
+}
+
+HWTEST_F(DataCollectKitTest, TestQueryCodeSignInfoByPath02, TestSize.Level1)
+{
+    std::string result {};
+    std::string path = "/data/test/unittest/resource/security_guard/security_guard/security_guard_cache_event.cfg";
+    EXPECT_EQ(SecurityGuard::DataCollectManager::GetInstance().QueryCodeSignInfoByPath(path, result),
+        SecurityGuard::NO_PERMISSION);
+}
 }

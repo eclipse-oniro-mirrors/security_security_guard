@@ -150,6 +150,8 @@ void AcquireDataManagerFuzzTest(const uint8_t* data, size_t size)
     DataCollectManager::GetInstance().QuerySecurityEvent(rulers, callback);
     DataCollectManager::GetInstance().SecurityGuardConfigUpdate(fd, string);
     DataCollectManager::GetInstance().QuerySecurityEventById(rulers, callback, "auditGroup");
+    std::string result {};
+    DataCollectManager::GetInstance().QueryCodeSignInfoByPath(fdp.ConsumeRandomLengthString(MAX_STRING_SIZE), result);
 }
 
 void DataCollectManagerFuzzTest(const uint8_t* data, size_t size)

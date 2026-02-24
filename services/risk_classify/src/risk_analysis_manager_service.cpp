@@ -95,7 +95,7 @@ void RiskAnalysisManagerService::OnStop()
 {
 }
 
-int32_t RiskAnalysisManagerService::IsApiHasPermission(const std::string &api)
+int32_t RiskAnalysisManagerService::IsCallerHasApiPermission(const std::string &api)
 {
     if (g_apiPermissionsMap.count(api) == 0) {
         SGLOGE("api not in map");
@@ -125,7 +125,7 @@ ErrCode RiskAnalysisManagerService::RequestSecurityModelResult(const std::string
     const std::string &param, const sptr<IRemoteObject> &cb)
 {
     SGLOGI("enter RiskAnalysisManagerService RequestSecurityModelResult");
-    int32_t ret = IsApiHasPermission("RequestSecurityModelResult");
+    int32_t ret = IsCallerHasApiPermission("RequestSecurityModelResult");
     if (ret != SUCCESS) {
         return ret;
     }
@@ -181,7 +181,7 @@ ErrCode RiskAnalysisManagerService::SetModelState(uint32_t modelId, bool enable)
 ErrCode RiskAnalysisManagerService::StartSecurityModel(uint32_t modelId, const std::string &param)
 {
     SGLOGI("enter RiskAnalysisManagerService StartSecurityModel");
-    int32_t ret = IsApiHasPermission("StartSecurityModel");
+    int32_t ret = IsCallerHasApiPermission("StartSecurityModel");
     if (ret != SUCCESS) {
         return ret;
     }

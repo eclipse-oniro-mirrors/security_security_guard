@@ -22,6 +22,8 @@
 #include "system_ability.h"
 #include "data_collection.h"
 #include "ffrt.h"
+#include "accesstoken_kit.h"
+#include "tokenid_kit.h"
 #include "i_db_listener.h"
 #include "i_model_info.h"
 #include "data_collect_manager_idl_stub.h"
@@ -66,6 +68,7 @@ public:
     void OnRemoveSystemAbility(int32_t systemAbilityId, const std::string& deviceId) override;
     ErrCode QuerySecurityEventById(const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
         const sptr<IRemoteObject> &cb, const std::string &eventGroup) override;
+    ErrCode QueryCodeSignInfoByPath(const int fd, const int pid, std::string &resStr) override;
 private:
     class SubscriberDeathRecipient : public IRemoteObject::DeathRecipient {
     public:
@@ -83,9 +86,12 @@ private:
         SecurityCollector::SecurityEventRuler ruler);
     static int32_t QueryEventConfig(std::string &result);
     int32_t WriteRemoteFileToLocal(int fd, const std::string &realPath);
-    int32_t IsApiHasPermission(const std::string &api);
-    int32_t IsEventGroupHasPermission(const std::string &eventGroup, std::vector<int64_t> eventIds);
-    int32_t IsEventGroupHasPublicPermission(const std::string &eventGroup, std::vector<int64_t> eventIds);
+    int32_t IsCallerHasApiPermission(const std::string &api);
+    int32_t IsCallerHasSystemPermission(const AccessToken::AccessTokenID &callerToken);
+    int32_t IsCallerHasPublicPermissions(const AccessToken::AccessTokenID &callerToken,
+        const std::set<std::string> &permissions);
+    int32_t IsEventGroupHasPermission(const std::string &eventGroup, const std::vector<int64_t> &eventIds);
+    int32_t IsEventGroupHasPublicPermission(const std::string &eventGroup, const std::vector<int64_t> &eventIds);
     bool ParseTrustListFile(const std::string &trustListFile);
     int32_t SetDeathCallBack(SgSubscribeEvent event, const sptr<IRemoteObject> &callback);
     static void QuerySecurityEventCallBack(sptr<ISecurityEventQueryCallback> proxy,

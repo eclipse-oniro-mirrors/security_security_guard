@@ -87,7 +87,7 @@ void SetPermission()
 }
 extern "C" int FuzzDataCollectManagerService(FuzzedDataProvider &fdp)
 {
-    static const int ipccode[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
+    static const int ipccode[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
     int code = fdp.PickValueInArray(ipccode);
     switch (code) {
         case 0: {
@@ -244,6 +244,15 @@ extern "C" int FuzzDataCollectManagerService(FuzzedDataProvider &fdp)
             g_service.QuerySecurityEventById(rulers, obj, eventGroup);
             break;
         }
+        case 19: {
+            int32_t fd = fdp.ConsumeIntegral<int32_t>();
+            int32_t pid = fdp.ConsumeIntegral<int32_t>();
+            std::string res {};
+            g_service.QueryCodeSignInfoByPath(fd, pid, res);
+            break;
+        }
+        default:
+            break;
     }
     return 0;
 
