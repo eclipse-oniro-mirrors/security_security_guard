@@ -196,16 +196,16 @@ void DataCollectManagerService::DumpEventInfo(int fd, int64_t eventId)
 ErrCode DataCollectManagerService::RequestDataSubmit(int64_t eventId, const std::string &version,
     const std::string &time, const std::string &content)
 {
-    if (tokenBucket_.load() <= 0) {
-        DataStatistics::GetInstance().IncrementRequestDataSubmit();
-        return FAILED;
-    }
-    tokenBucket_.fetch_sub(1);
     SGLOGD("enter DataCollectManagerService RequestDataSubmit");
     int32_t ret = IsCallerHasApiPermission("RequestDataSubmit");
     if (ret != SUCCESS) {
         return ret;
     }
+    if (tokenBucket_.load() <= 0) {
+        DataStatistics::GetInstance().IncrementRequestDataSubmit();
+        return FAILED;
+    }
+    tokenBucket_.fetch_sub(1);
     SecurityCollector::Event event {};
     event.eventId = eventId;
     event.version = version;
