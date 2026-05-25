@@ -891,35 +891,46 @@ static typename std::unordered_map<napi_ref, std::pair<pid_t, std::shared_ptr<T>
     return iter;
 }
 
-static napi_value NapiQuerySecurityEvent(napi_env env, napi_callback_info info)
+static int32_t ParseQueryParamsAndCreateContext(napi_env env, napi_callback_info info,
+    std::vector<SecurityEventRuler> &rules, QuerySecurityEventContext *&context)
 {
     size_t argc = NAPI_QUERY_SECURITY_EVENT_ARGS_CNT;
     napi_value argv[NAPI_QUERY_SECURITY_EVENT_ARGS_CNT] = {nullptr};
-    NAPI_CALL(env, napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr));
+    NAPI_CALL_BASE(env, napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr), BAD_PARAM);
     if (argc != NAPI_QUERY_SECURITY_EVENT_ARGS_CNT) {
         SGLOGE("query arguments count is not expected");
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
-        return nullptr;
+        return BAD_PARAM;
     }
     size_t index = 0;
-    std::vector<SecurityEventRuler> rules;
     if (auto ret = ParseSecurityEventRulers(env, argv[index++], rules); ret != SUCCESS) {
         SGLOGE("failed to parse query rules, result code is %{public}d.", ret);
-        return nullptr;
+        return BAD_PARAM;
     }
     if (IsValueTypeValid(env, argv[index], napi_valuetype::napi_null) ||
         IsValueTypeValid(env, argv[index], napi_valuetype::napi_undefined)) {
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "Parameter error. The type of must querier be Querier."));
         SGLOGE("querier is null or undefined.");
-        return nullptr;
+        return BAD_PARAM;
     }
-    auto context = new (std::nothrow) QuerySecurityEventContext;
+    context = new (std::nothrow) QuerySecurityEventContext;
     if (context == nullptr) {
-        return nullptr;
+        return NULL_OBJECT;
     }
     context->env = env;
     context->threadId = getproctid();
     napi_create_reference(env, argv[index], 1, &context->ref);
+    return SUCCESS;
+}
+
+static napi_value NapiQuerySecurityEvent(napi_env env, napi_callback_info info)
+{
+    std::vector<SecurityEventRuler> rules;
+    QuerySecurityEventContext *context = nullptr;
+    int32_t ret = ParseQueryParamsAndCreateContext(env, info, rules, context);
+    if (ret != SUCCESS || context == nullptr) {
+        return nullptr;
+    }
     auto querier = std::make_shared<NapiSecurityEventQuerier>(context, [] (const napi_env env, const napi_ref ref) {
             napi_value querier = nullptr;
             napi_get_reference_value(env, ref, &querier);
@@ -934,7 +945,9 @@ static napi_value NapiQuerySecurityEvent(napi_env env, napi_callback_info info)
     int32_t code = SecurityGuardSdkAdaptor::QuerySecurityEvent(rules, querier);
     if (code != SUCCESS) {
         SGLOGE("query error, code=%{public}d", code);
+        delete context;
         napi_throw(env, GenerateBusinessError(env, code));
+        return nullptr;
     }
     std::unique_lock<std::mutex> lock(g_queryMutex);
     queriers[context->ref] = std::make_pair(context->threadId, querier);
