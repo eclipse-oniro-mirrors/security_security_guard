@@ -65,6 +65,8 @@ bool ConfigDataManagerFuzzTest(const uint8_t* data, size_t size)
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelToEventMap();
     ConfigDataManager::GetInstance().ResetEventToTableMap();
+    std::unordered_map<int64_t, EventCfg> mapTmp {};
+    ConfigDataManager::GetInstance().SwapEventConfigMap(mapTmp);
     return true;
 }
 

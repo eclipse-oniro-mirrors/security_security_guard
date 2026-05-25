@@ -109,8 +109,14 @@ bool EventConfig::Update()
         SGLOGE("copyFile error");
         return false;
     }
-    ConfigDataManager::GetInstance().ResetEventMap();
-    EventConfig::CacheEventConfig(configs);
+    std::unordered_map<int64_t, EventCfg> newEventMap {};
+    for (const auto &config : configs) {
+        if (config.oldEventId != 0) {
+            newEventMap[config.oldEventId] = config;
+        }
+        newEventMap[config.eventId] = config;
+    }
+    ConfigDataManager::GetInstance().SwapEventConfigMap(std::move(newEventMap));
     EventConfig::CacheEventToTable(configs);
     SGLOGI("cache EventConfig success");
     return true;

@@ -36,6 +36,7 @@ public:
     bool GetEventGroupConfig(const std::string &groupName, EventGroupCfg &config);
     void ResetModelMap();
     void ResetEventMap();
+    void SwapEventConfigMap(std::unordered_map<int64_t, EventCfg> newEventMap);
     void ResetModelToEventMap();
     void ResetEventToTableMap();
     std::vector<int64_t> GetEventIds(uint32_t modelId);
