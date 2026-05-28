@@ -88,6 +88,12 @@ void ConfigDataManager::ResetEventMap()
     eventMap_.clear();
 }
 
+void ConfigDataManager::SwapEventConfigMap(std::unordered_map<int64_t, EventCfg> newEventMap)
+{
+    std::lock_guard<ffrt::mutex> lock(eventMutex_);
+    eventMap_.swap(newEventMap);
+}
+
 void ConfigDataManager::ResetModelToEventMap()
 {
     std::lock_guard<std::mutex> lock(modelToEventMutex_);

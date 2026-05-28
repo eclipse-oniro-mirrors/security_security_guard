@@ -39,6 +39,7 @@
       OHOS::Security::SecurityGuard::ConfigDataManager::GetAllEventConfigs*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetEventGroupConfig*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetIsBatchUpload*;
+      OHOS::Security::SecurityGuard::ConfigDataManager::SwapEventConfigMap*;
     };
   local:
     *;
