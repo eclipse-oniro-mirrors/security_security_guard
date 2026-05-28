@@ -50,10 +50,6 @@ int DatabaseManager::InsertEvent(uint32_t source, const SecEvent& event,
 int DatabaseManager::InsertEvent(uint32_t source, const std::vector<SecEvent>& events,
     const std::set<std::string> &eventSubscribes)
 {
-    if (events.empty()) {
-        return SUCCESS;
-    }
-
     int ret = SUCCESS;
     for (const auto &event : events) {
         EventCfg config;
@@ -68,25 +64,19 @@ int DatabaseManager::InsertEvent(uint32_t source, const std::vector<SecEvent>& e
             continue;
         }
         std::string table = ConfigDataManager::GetInstance().GetTableFromEventId(event.eventId);
-        SGLOGD("table=%{public}s, eventId=%{public}" PRId64, table.c_str(), config.eventId);
-        if (table == AUDIT_TABLE || config.dataSensitivityLevel == SENSITIVITY_INFO) {
-            SGLOGD("audit event insert");
-            DbChanged(IDbListener::INSERT, event, eventSubscribes);
-            continue;
-        }
-        
-        SGLOGD("risk event insert, eventId=%{public}" PRId64, event.eventId);
-
         // notify changed
         DbChanged(IDbListener::INSERT, event, eventSubscribes);
         std::lock_guard<ffrt::mutex> lock(delMutex_);
         // Check whether the upper limit is reached.
-        int64_t count = RiskEventRdbHelper::GetInstance().CountEventByEventId(event.eventId);
-        if (count >= config.storageRomNums) {
-            (void) RiskEventRdbHelper::GetInstance().DeleteOldEventByEventId(event.eventId,
-                count + 1 - config.storageRomNums);
+        if (table == RISK_TABLE) {
+            SGLOGD("risk event insert, eventId=%{public}" PRId64, event.eventId);
+            int64_t count = RiskEventRdbHelper::GetInstance().CountEventByEventId(event.eventId);
+            if (count >= config.storageRomNums) {
+                (void) RiskEventRdbHelper::GetInstance().DeleteOldEventByEventId(event.eventId,
+                    count + 1 - config.storageRomNums);
+            }
+            ret = RiskEventRdbHelper::GetInstance().InsertEvent(event);
         }
-        ret = RiskEventRdbHelper::GetInstance().InsertEvent(event);
     }
     return ret;
 }
