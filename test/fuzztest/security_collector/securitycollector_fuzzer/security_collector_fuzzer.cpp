@@ -96,15 +96,12 @@ void SecurityCollectorManagerCallbackProxyFuzzTest(const uint8_t* data, size_t s
     if (data == nullptr || size < sizeof(int64_t)) {
         return;
     }
-    size_t offset = 0;
-    int64_t eventId = *(reinterpret_cast<const int64_t *>(data));
-    offset += sizeof(int64_t);
-    std::string string(reinterpret_cast<const char*>(data + offset), size - offset);
+    FuzzedDataProvider fdp(data, size);
     Security::SecurityCollector::Event event{};
-    event.eventId = eventId;
-    event.version = string;
-    event.content = string;
-    event.extra = string;
+    event.eventId = fdp.ConsumeIntegral<int64_t>();
+    event.version = fdp.ConsumeRandomLengthString(MAX_STRING_SIZE);
+    event.content = fdp.ConsumeRandomLengthString(MAX_STRING_SIZE);
+    event.extra = fdp.ConsumeRandomLengthString(MAX_STRING_SIZE);
     sptr<IRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     SecurityCollectorManagerCallbackProxy proxy{obj};
     proxy.OnNotify(event);
