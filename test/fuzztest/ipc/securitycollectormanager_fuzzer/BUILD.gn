@@ -81,6 +81,5 @@ ohos_fuzztest("SecurityCollectorManagerFuzzTest") {
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
     "sqlite:sqlite",
-    "zlib:libz",
   ]
 }
