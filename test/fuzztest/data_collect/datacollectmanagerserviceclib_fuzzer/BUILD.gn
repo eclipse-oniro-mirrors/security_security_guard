@@ -103,7 +103,6 @@ ohos_fuzztest("DataCollectManagerServiceClibFuzzTest") {
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
     "sqlite:sqlite",
-    "zlib:libz",
     "os_account:os_account_innerkits",
     "access_token:libaccesstoken_sdk",
     "access_token:libnativetoken",

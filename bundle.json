@@ -65,7 +65,6 @@
         "appverify",
         "ffrt",
         "bundle_framework",
-        "zlib",
         "cJSON",
         "selinux_adapter",
         "sqlite"

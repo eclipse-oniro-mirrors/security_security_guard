@@ -122,7 +122,6 @@ ohos_shared_library("sg_collect_service") {
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
     "sqlite:sqlite",
-    "zlib:libz",
     "os_account:os_account_innerkits",
   ]
   if (security_guard_enable_device_id) {
