@@ -945,7 +945,6 @@ static napi_value NapiQuerySecurityEvent(napi_env env, napi_callback_info info)
     int32_t code = SecurityGuardSdkAdaptor::QuerySecurityEvent(rules, querier);
     if (code != SUCCESS) {
         SGLOGE("query error, code=%{public}d", code);
-        delete context;
         napi_throw(env, GenerateBusinessError(env, code));
         return nullptr;
     }
