@@ -27,11 +27,14 @@ NapiSecurityEventQuerier::NapiSecurityEventQuerier(QuerySecurityEventContext *co
 NapiSecurityEventQuerier::~NapiSecurityEventQuerier()
 {
     if (callbackContext_ != nullptr) {
-        if (callbackContext_->threadId == getproctid()) {
-            napi_delete_reference(callbackContext_->env, callbackContext_->ref);
-        }
+        napi_env env = callbackContext_->env;
+        napi_ref ref = callbackContext_->ref;
+        pid_t threadId = callbackContext_->threadId;
         delete callbackContext_;
         callbackContext_ = nullptr;
+        if (env != nullptr && threadId == getproctid()) {
+            napi_delete_reference(env, ref);
+        }
     }
 };
 
