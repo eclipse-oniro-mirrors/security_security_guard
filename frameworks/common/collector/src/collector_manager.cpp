@@ -20,11 +20,11 @@
 #include "security_collector_define.h"
 #include "security_collector_log.h"
 #include "collector_service_loader.h"
+#include "sys_binder.h"
 
 namespace OHOS::Security::SecurityCollector {
-int32_t CollectorManager::Subscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber)
+int32_t CollectorManager::SubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber)
 {
-    LOGI("enter CollectorManager Subscribe");
     if (subscriber == nullptr) {
         LOGE("subscriber is null");
         return BAD_PARAM;
@@ -71,9 +71,19 @@ int32_t CollectorManager::Subscribe(const std::shared_ptr<ICollectorSubscriber> 
     return ret;
 }
 
-int32_t CollectorManager::Unsubscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber)
+int32_t CollectorManager::Subscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber)
 {
-    LOGI("enter CollectorManager Unsubscribe");
+    LOGI("enter CollectorManager Subscribe");
+    int32_t ret = SubscribeImpl(subscriber);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry CollectorManager Subscribe");
+        return SubscribeImpl(subscriber);
+    }
+    return ret;
+}
+
+int32_t CollectorManager::UnsubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber)
+{
     if (subscriber == nullptr) {
         LOGE("subscriber is null");
         return BAD_PARAM;
@@ -101,6 +111,17 @@ int32_t CollectorManager::Unsubscribe(const std::shared_ptr<ICollectorSubscriber
     return ret;
 }
 
+int32_t CollectorManager::Unsubscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber)
+{
+    LOGI("enter CollectorManager Unsubscribe");
+    int32_t ret = UnsubscribeImpl(subscriber);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry CollectorManager Unsubscribe");
+        return UnsubscribeImpl(subscriber);
+    }
+    return ret;
+}
+
 void CollectorManager::DeathRecipient::OnRemoteDied(const wptr<IRemoteObject> &remote)
 {
     if (remote == nullptr) {
@@ -122,10 +143,9 @@ void CollectorManager::HandleDecipient()
     eventListeners_.clear();
 }
 
-int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+int32_t CollectorManager::QuerySecurityEventImpl(const std::vector<SecurityEventRuler> rulers,
     std::vector<SecurityEvent> &events)
 {
-    LOGE("begin collector QuerySecurityEvent");
     auto object = CollectorServiceLoader::GetInstance().LoadCollectorService();
     if (object == nullptr) {
         LOGE("object is null");
@@ -146,9 +166,20 @@ int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRule
     return SUCCESS;
 }
 
-int32_t CollectorManager::CollectorStart(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
+int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    std::vector<SecurityEvent> &events)
 {
-    LOGI("enter CollectorManager CollectorStart");
+    LOGE("begin collector QuerySecurityEvent");
+    int32_t ret = QuerySecurityEventImpl(rulers, events);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry collector QuerySecurityEvent");
+        return QuerySecurityEventImpl(rulers, events);
+    }
+    return ret;
+}
+
+int32_t CollectorManager::CollectorStartImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
+{
     auto object = CollectorServiceLoader::GetInstance().LoadCollectorService();
     if (object == nullptr) {
         LOGE("object is null");
@@ -174,9 +205,19 @@ int32_t CollectorManager::CollectorStart(const SecurityCollector::SecurityCollec
     return SUCCESS;
 }
 
-int32_t CollectorManager::CollectorStop(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
+int32_t CollectorManager::CollectorStart(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
 {
     LOGI("enter CollectorManager CollectorStart");
+    int32_t ret = CollectorStartImpl(subscriber);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry CollectorManager CollectorStartImpl");
+        return CollectorStartImpl(subscriber);
+    }
+    return ret;
+}
+
+int32_t CollectorManager::CollectorStopImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
+{
     auto object = CollectorServiceLoader::GetInstance().LoadCollectorService();
     if (object == nullptr) {
         LOGE("object is null");
@@ -200,5 +241,16 @@ int32_t CollectorManager::CollectorStop(const SecurityCollector::SecurityCollect
     }
     LOGI("CollectorStop result, ret=%{public}d", ret);
     return SUCCESS;
+}
+
+int32_t CollectorManager::CollectorStop(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber)
+{
+    LOGI("enter CollectorManager CollectorStop");
+    int32_t ret = CollectorStopImpl(subscriber);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry CollectorManager CollectorStopImpl");
+        return CollectorStopImpl(subscriber);
+    }
+    return ret;
 }
 }

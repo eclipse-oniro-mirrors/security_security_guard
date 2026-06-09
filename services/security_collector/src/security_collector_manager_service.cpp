@@ -108,16 +108,19 @@ void SecurityCollectorManagerService::OnRemoveSystemAbility(int32_t systemAbilit
 int32_t SecurityCollectorManagerService::Subscribe(const SecurityCollectorSubscribeInfo &subscribeInfo,
     const sptr<IRemoteObject> &callback)
 {
+    g_refCount.fetch_add(1);
+    int32_t ret = HasPermission(QUERY_EVENT_PERMISSION);
+    if (ret != SUCCESS) {
+        LOGE("caller no permission");
+        g_refCount.fetch_sub(1);
+        return ret;
+    }
     Event event = subscribeInfo.GetEvent();
     LOGI("in subscribe, subscribinfo: duration:%{public}" PRId64 ", isNotify:%{public}d, eventid:%{public}" PRId64 ","
         "version:%{public}s, extra:%{public}s", subscribeInfo.GetDuration(), (int)subscribeInfo.IsNotify(),
         event.eventId, event.version.c_str(), event.extra.c_str());
-    int32_t ret = HasPermission(QUERY_EVENT_PERMISSION);
-    if (ret != SUCCESS) {
-        LOGE("caller no permission");
-        return ret;
-    }
     if (!SetDeathRecipient(callback)) {
+        g_refCount.fetch_sub(1);
         return NULL_OBJECT;
     }
     auto eventHandler = [this] (const std::string &appName, const sptr<IRemoteObject> &remote, const Event &event) {
@@ -134,12 +137,12 @@ int32_t SecurityCollectorManagerService::Subscribe(const SecurityCollectorSubscr
         UnsetDeathRecipient(callback);
         subEvent.ret = BAD_PARAM;
         ReportScSubscribeEvent(subEvent);
+        g_refCount.fetch_sub(1);
         return BAD_PARAM;
     }
     subEvent.ret = SUCCESS;
     ReportScSubscribeEvent(subEvent);
     LOGI("Out subscribe");
-    g_refCount.fetch_add(1);
     return SUCCESS;
 }
 
@@ -171,27 +174,42 @@ int32_t SecurityCollectorManagerService::Unsubscribe(const sptr<IRemoteObject> &
 int32_t SecurityCollectorManagerService::CollectorStart(const SecurityCollectorSubscribeInfo &subscribeInfo,
     const sptr<IRemoteObject> &callback)
 {
-    Event event = subscribeInfo.GetEvent();
+    g_refCount.fetch_add(1);
     int32_t ret = HasPermission(COLLECT_EVENT_PERMISSION);
     if (ret != SUCCESS) {
         LOGE("caller no permission");
+        g_refCount.fetch_sub(1);
         return ret;
     }
+    Event event = subscribeInfo.GetEvent();
     int32_t collectorType = COLLECTOR_NOT_CAN_START;
     if (DataCollection::GetInstance().GetCollectorType(event.eventId, collectorType) != SUCCESS) {
         LOGE("get collector type error event id: %{public}" PRId64, event.eventId);
+        g_refCount.fetch_sub(1);
         return BAD_PARAM;
     }
 
     if (collectorType != COLLECTOR_CAN_START) {
         LOGE("collector type not support be start, event id: %{public}" PRId64, event.eventId);
+        g_refCount.fetch_sub(1);
         return BAD_PARAM;
     }
     std::string appName = GetAppName();
     LOGI("in subscribe, appname:%{public}s", appName.c_str());
     if (appName.empty()) {
+        g_refCount.fetch_sub(1);
         return BAD_PARAM;
     }
+    ret = CollectorStartInner(appName, subscribeInfo, event);
+    if (ret != SUCCESS) {
+        g_refCount.fetch_sub(1);
+    }
+    return ret;
+}
+
+int32_t SecurityCollectorManagerService::CollectorStartInner(const std::string &appName,
+    const SecurityCollectorSubscribeInfo &subscribeInfo, const Event &event)
+{
     auto eventHandler = [this] (const std::string &appName, const sptr<IRemoteObject> &remote, const Event &event) {
         LOGD("eventid:%{public}" PRId64 " callback default", event.eventId);
         auto reportEvent = [event] () {
@@ -215,7 +233,6 @@ int32_t SecurityCollectorManagerService::CollectorStart(const SecurityCollectorS
     subEvent.ret = SUCCESS;
     ReportScSubscribeEvent(subEvent);
     LOGI("Out CollectorStart");
-    g_refCount.fetch_add(1);
     return SUCCESS;
 }
 

@@ -40,6 +40,12 @@ public:
     int32_t CollectorStop(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
 private:
     void HandleDecipient();
+    int32_t SubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber);
+    int32_t UnsubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber);
+    int32_t QuerySecurityEventImpl(const std::vector<SecurityEventRuler> rulers,
+        std::vector<SecurityEvent> &events);
+    int32_t CollectorStartImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
+    int32_t CollectorStopImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
     std::mutex mutex_{};
     std::map<std::shared_ptr<ICollectorSubscriber>, sptr<SecurityCollectorManagerCallbackService>> eventListeners_;
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
