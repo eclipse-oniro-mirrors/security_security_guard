@@ -63,7 +63,8 @@ private:
     void UnsetDeathRecipient(const sptr<IRemoteObject> &remote);
     void CleanSubscriber(const sptr<IRemoteObject> &remote);
     void ExecuteOnNotifyByTask(const sptr<IRemoteObject> &remote, const Event &event);
-
+    int32_t CollectorStartInner(const std::string &appName,
+        const SecurityCollectorSubscribeInfo &subscribeInfo, const Event &event);
     std::mutex deathRecipientMutex_{};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
 };

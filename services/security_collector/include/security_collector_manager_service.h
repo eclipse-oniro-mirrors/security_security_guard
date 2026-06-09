@@ -57,6 +57,8 @@ public:
     static void ReportScSubscribeEvent(const ScSubscribeEvent &event);
     static void ReportScUnsubscribeEvent(const ScUnsubscribeEvent &event);
 private:
+    int32_t CollectorStartInner(const std::string &appName,
+        const SecurityCollectorSubscribeInfo &subscribeInfo, const Event &event);
     static std::string GetAppName();
     static int32_t HasPermission(const std::string &permission);
     bool SetDeathRecipient(const sptr<IRemoteObject> &remote);
