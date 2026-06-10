@@ -45,6 +45,7 @@ using ErrorCode = enum {
     CLIENT_EXCEED_PROCESS_LIMIT = 1007,
     CLIENT_EXCEED_GLOBAL_LIMIT = 1008,
     FILE_NOT_FOUND = 1011,      // same as ext
+    KERNEL_NOT_SUPPORT = 1012,
 };
 
 using SecurityModel = struct {

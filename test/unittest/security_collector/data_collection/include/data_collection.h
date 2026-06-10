@@ -36,9 +36,10 @@ public:
     static DataCollection &GetInstance();
     virtual bool StartCollectors(const std::vector<int64_t>& eventIds, std::shared_ptr<ICollectorFwk> api);
     virtual bool StopCollectors(const std::vector<int64_t>& eventIds);
-    virtual bool SubscribeCollectors(const std::vector<int64_t>& eventIds, std::shared_ptr<ICollectorFwk> api);
-    virtual bool SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
-    virtual bool UnsubscribeCollectors(const std::vector<int64_t>& eventIds);
+    virtual int SubscribeCollectors(const std::vector<int64_t>& eventIds, std::shared_ptr<ICollectorFwk> api);
+    virtual int SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds,
+        std::shared_ptr<ICollectorFwk> api);
+    virtual int UnsubscribeCollectors(const std::vector<int64_t>& eventIds);
     virtual ErrorCode GetCollectorType(int64_t eventId, int32_t& collectorType);
     virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
         std::vector<SecurityEvent> &events);
@@ -46,7 +47,7 @@ public:
     virtual void CloseLib();
 private:
     DataCollection() = default;
-    virtual ErrorCode LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
+    virtual int LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
     virtual ErrorCode LoadCollector(std::string path, const SecurityEventRuler &ruler,
                                     std::vector<SecurityEvent> &events);
     virtual ErrorCode GetCollectorPath(int64_t eventId, std::string& path);

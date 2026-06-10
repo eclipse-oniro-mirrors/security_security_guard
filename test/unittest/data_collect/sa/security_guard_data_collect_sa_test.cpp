@@ -572,7 +572,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, Publish_WithSubscribers, TestSize.Level
         return true;
     });
     EXPECT_CALL(*(DataFormat::GetInterface()), CheckRiskContent).WillRepeatedly(Return(true));
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillRepeatedly(Return(true));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillRepeatedly(Return(SUCCESS));
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     AcquireDataSubscribeManager::GetInstance().CreatClient("auditGroup", "publish_sub_client", obj);
     AcquireDataSubscribeManager::GetInstance().InsertSubscribeRecord(1, "publish_sub_client");
@@ -707,7 +707,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, AcquireDataSubscrSubscribeSc02, TestSiz
         config.prog = "security_guard";
         return true;
     });
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(false));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(FAILED));
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     int result = adsm.SubscribeSc(111);
     EXPECT_EQ(result, FAILED);
@@ -781,12 +781,12 @@ HWTEST_F(SecurityGuardDataCollectSaTest, AcquireDataSubscrSubscribeSc06, TestSiz
         config.prog = "security_guard";
         return true;
     });
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(false));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(FAILED));
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     int result = adsm.SubscribeSc(111);
     EXPECT_EQ(result, FAILED);
 
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), UnsubscribeCollectors).WillOnce(Return(false));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), UnsubscribeCollectors).WillOnce(Return(FAILED));
     auto collectorListenner = std::make_shared<AcquireDataSubscribeManager::CollectorListener>();
     adsm.eventToListenner_.emplace(event.eventId, collectorListenner);
     result = adsm.UnSubscribeSc(111);
@@ -1239,7 +1239,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, UploadEvent, TestSize.Level0)
 HWTEST_F(SecurityGuardDataCollectSaTest, SubscribeScInSg01, TestSize.Level0)
 {
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(true));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(SUCCESS));
     int ret = AcquireDataSubscribeManager::GetInstance().SubscribeScInSg(1, 0);
     EXPECT_EQ(ret, SUCCESS);
     AcquireDataSubscribeManager::GetInstance().eventToListenner_.clear();
@@ -1381,8 +1381,8 @@ HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient003, TestSize.Level0)
         config.prog = "security_guard";
         return true;
     });
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(true));
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), UnsubscribeCollectors).WillOnce(Return(true));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(SUCCESS));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), UnsubscribeCollectors).WillOnce(Return(SUCCESS));
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     int result = adsm.CreatClient("auditGroup", "111", obj);
     EXPECT_EQ(result, SUCCESS);
@@ -1464,7 +1464,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, IsEventGroupHasPublicPermission001, Tes
         eventIds.emplace_back(11111);
         return eventIds;
     });
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(true));
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(SUCCESS));
     AcquireDataSubscribeManager::GetInstance().SubscriberEventOnSgStart();
     int32_t result = service.IsEventGroupHasPermission("111", {222});
     EXPECT_EQ(result, BAD_PARAM);

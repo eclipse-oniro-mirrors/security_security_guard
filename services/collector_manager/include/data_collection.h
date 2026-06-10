@@ -36,9 +36,9 @@ public:
     static DataCollection &GetInstance();
     bool StartCollectors(const std::vector<int64_t>& eventIds, std::shared_ptr<ICollectorFwk> api);
     bool StopCollectors(const std::vector<int64_t> &eventIds);
-    bool SubscribeCollectors(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
-    bool SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
-    bool UnsubscribeCollectors(const std::vector<int64_t> &eventIds);
+    int SubscribeCollectors(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
+    int SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
+    int UnsubscribeCollectors(const std::vector<int64_t> &eventIds);
     ErrorCode GetCollectorType(int64_t eventId, int32_t &collectorType);
     int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
                                std::vector<SecurityEvent> &events);
@@ -46,7 +46,7 @@ public:
     void CloseLib();
 private:
     DataCollection() = default;
-    ErrorCode LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
+    int LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
     ErrorCode LoadCollector(std::string path, const SecurityEventRuler &ruler, std::vector<SecurityEvent> &events);
     ErrorCode GetCollectorPath(int64_t eventId, std::string& path);
     ErrorCode CheckFileStream(std::ifstream &stream);

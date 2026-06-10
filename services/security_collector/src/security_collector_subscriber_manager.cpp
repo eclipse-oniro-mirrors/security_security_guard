@@ -177,7 +177,7 @@ bool SecurityCollectorSubscriberManager::SubscribeCollector(
         collectorListenner_ = std::make_shared<SecurityCollectorSubscriberManager::CollectorListenner>(nullptr);
     }
     LOGI("Scheduling start collector, eventId:%{public}" PRId64, eventId);
-    if (!DataCollection::GetInstance().SubscribeCollectors(std::vector<int64_t>{eventId}, collectorListenner_)) {
+    if (DataCollection::GetInstance().SubscribeCollectors(std::vector<int64_t>{eventId}, collectorListenner_) != 0) {
         LOGE("failed to start collectors");
         return false;
     }
@@ -205,7 +205,7 @@ bool SecurityCollectorSubscriberManager::UnsubscribeCollector(const sptr<IRemote
             eventToSubscribers_[eventId].erase(subscriber);
             if (eventToSubscribers_[eventId].size() == 0) {
                 LOGI("Scheduling stop collector, eventId:%{public}" PRId64, eventId);
-                if (!DataCollection::GetInstance().UnsubscribeCollectors(std::vector<int64_t>{eventId})) {
+                if (DataCollection::GetInstance().UnsubscribeCollectors(std::vector<int64_t>{eventId}) != 0) {
                     LOGE("failed to stop collectors");
                 }
                 eventToSubscribers_.erase(eventId);
