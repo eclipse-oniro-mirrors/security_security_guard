@@ -26,7 +26,7 @@ SecurityEventQueryCallbackProxy::SecurityEventQueryCallbackProxy(const sptr<OHOS
 
 void SecurityEventQueryCallbackProxy::OnQuery(const std::vector<SecurityCollector::SecurityEvent> &events)
 {
-    SGLOGI("start OnQuery");
+    SGLOGD("start OnQuery");
     MessageParcel data;
     MessageParcel reply;
     if (!data.WriteInterfaceToken(GetDescriptor())) {

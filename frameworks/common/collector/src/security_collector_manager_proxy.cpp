@@ -167,7 +167,7 @@ int32_t SecurityCollectorManagerProxy::CollectorStop(const SecurityCollectorSubs
 int32_t SecurityCollectorManagerProxy::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
     std::vector<SecurityEvent> &events)
 {
-    LOGI("enter SecurityCollectorManagerProxy QuerySecurityEvent");
+    LOGD("enter SecurityCollectorManagerProxy QuerySecurityEvent");
     MessageParcel data;
     MessageParcel reply;
 

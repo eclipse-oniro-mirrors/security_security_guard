@@ -51,7 +51,7 @@ sptr<IRemoteObject> CollectorServiceLoader::LoadCollectorService()
 
 void CollectorServiceLoader::LoadCallback::OnLoadSystemAbilitySuccess(int32_t sid, const sptr<IRemoteObject> &object)
 {
-    LOGI("OnLoadSystemAbilitySuccess = %{public}d.", sid);
+    LOGD("OnLoadSystemAbilitySuccess = %{public}d.", sid);
     promise_.set_value(object);
 }
 

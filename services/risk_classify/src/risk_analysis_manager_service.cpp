@@ -124,9 +124,10 @@ int32_t RiskAnalysisManagerService::IsCallerHasApiPermission(const std::string &
 ErrCode RiskAnalysisManagerService::RequestSecurityModelResult(const std::string &devId, uint32_t modelId,
     const std::string &param, const sptr<IRemoteObject> &cb)
 {
-    SGLOGI("enter RiskAnalysisManagerService RequestSecurityModelResult");
+    SGLOGD("enter RiskAnalysisManagerService RequestSecurityModelResult");
     int32_t ret = IsCallerHasApiPermission("RequestSecurityModelResult");
     if (ret != SUCCESS) {
+        SGLOGE("permission err");
         return ret;
     }
     ClassifyEvent event;
@@ -144,7 +145,6 @@ ErrCode RiskAnalysisManagerService::RequestSecurityModelResult(const std::string
         result = future.get();
         ret =  SUCCESS;
     }
-    SGLOGI("ReportClassifyEvent");
     event.status = result;
     BigData::ReportClassifyEvent(event);
     auto proxy = iface_cast<IRiskAnalysisManagerCallback>(cb);
@@ -152,7 +152,7 @@ ErrCode RiskAnalysisManagerService::RequestSecurityModelResult(const std::string
         return NULL_OBJECT;
     }
     proxy->ResponseSecurityModelResult(devId, modelId, result);
-    SGLOGI("get analysis result=%{private}s", result.c_str());
+    SGLOGD("get analysis result=%{private}s", result.c_str());
     return ret;
 }
 
@@ -167,7 +167,7 @@ void RiskAnalysisManagerService::PushRiskAnalysisTask(uint32_t modelId, std::str
             return;
         }
         std::string result = ModelManager::GetInstance().GetResult(modelId, param);
-        SGLOGI("result is %{private}s", result.c_str());
+        SGLOGD("result is %{private}s", result.c_str());
         promise->set_value(result);
     };
     ffrt::submit(task);

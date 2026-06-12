@@ -68,7 +68,7 @@ void SecurityCollectorManagerService::OnStart()
             if (g_refCount.load() != 0) {
                 continue;
             }
-            LOGI("Unload security collector manager SA begin.");
+            LOGD("Unload security collector manager SA begin.");
             auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
             if (registry == nullptr) {
                 LOGE("GetSystemAbilityManager error.");
@@ -364,7 +364,7 @@ int32_t SecurityCollectorManagerService::QuerySecurityEvent(const std::vector<Se
     std::vector<SecurityEvent> &events)
 {
     g_refCount.fetch_add(1);
-    LOGI("begin QuerySecurityEvent");
+    LOGD("begin QuerySecurityEvent");
     AccessToken::AccessTokenID callerToken = IPCSkeleton::GetCallingTokenID();
     int code = AccessToken::AccessTokenKit::VerifyAccessToken(callerToken, QUERY_EVENT_PERMISSION);
     if (code != AccessToken::PermissionState::PERMISSION_GRANTED) {

@@ -63,7 +63,7 @@ bool DataCollection::StartCollectors(const std::vector<int64_t>& eventIds, std::
         }
         loadedEventIds_.push_back(eventId);
     }
-    LOGI("StartCollectors finish");
+    LOGD("StartCollectors finish");
     return true;
 }
 
@@ -88,7 +88,7 @@ bool DataCollection::SecurityGuardSubscribeCollector(const std::vector<int64_t>&
             continue;
         }
     }
-    LOGI("StartCollectors finish");
+    LOGD("SubscribeCollectors finish");
     return true;
 }
 
@@ -300,13 +300,13 @@ ErrorCode DataCollection::LoadCollector(
     }
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     eventIdToLoaderMap_.emplace(eventId, loader);
-    LOGI("End LoadCollector");
+    LOGD("End LoadCollector");
     return SUCCESS;
 }
 
 ErrorCode DataCollection::GetCollectorPath(int64_t eventId, std::string& path)
 {
-    LOGI("Start GetCollectorPath");
+    LOGD("Start GetCollectorPath");
     std::ifstream stream(SA_CONFIG_PATH, std::ios::in);
     if (!stream.is_open()) {
         LOGE("Stream error, %{public}s", strerror(errno));
@@ -336,9 +336,9 @@ ErrorCode DataCollection::GetCollectorPath(int64_t eventId, std::string& path)
         [eventId] (const ModuleCfgSt &module) {
             auto ifIt = std::find(module.eventId.begin(), module.eventId.end(), eventId);
             if (ifIt != module.eventId.end()) {
-                LOGI("success to find the event id: 0x%{public}" PRIx64, eventId);
                 return true;
             } else {
+                LOGE("not find the event id: 0x%{public}" PRIx64, eventId);
                 return false;
             }
         });
@@ -441,14 +441,14 @@ ErrorCode DataCollection::LoadCollector(std::string path, const SecurityEventRul
         LOGE("Failed to start collector");
         return FAILED;
     }
-    LOGI("End LoadCollector");
+    LOGD("End LoadCollector");
     return SUCCESS;
 }
 
 int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
     std::vector<SecurityEvent> &events)
 {
-    LOGI("QuerySecurityEvent start");
+    LOGD("QuerySecurityEvent start");
     if (rulers.empty()) {
         LOGE("Invalid input parameter");
         return FAILED;
@@ -467,7 +467,7 @@ int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler>
             return FAILED;
         }
     }
-    LOGI("StartCollectors finish");
+    LOGD("QueryCollectors finish");
     return SUCCESS;
 }
 }

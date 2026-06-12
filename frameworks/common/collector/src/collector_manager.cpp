@@ -162,14 +162,13 @@ int32_t CollectorManager::QuerySecurityEventImpl(const std::vector<SecurityEvent
         LOGI("QuerySecurityEvent failed, ret=%{public}d", ret);
         return ret;
     }
-    LOGI("QuerySecurityEvent result, ret=%{public}d", ret);
     return SUCCESS;
 }
 
 int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
     std::vector<SecurityEvent> &events)
 {
-    LOGE("begin collector QuerySecurityEvent");
+    LOGI("begin collector QuerySecurityEvent");
     int32_t ret = QuerySecurityEventImpl(rulers, events);
     if (ret == BR_DEAD_REPLY) {
         LOGE("retry collector QuerySecurityEvent");

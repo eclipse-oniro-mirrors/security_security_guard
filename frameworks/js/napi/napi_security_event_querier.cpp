@@ -64,7 +64,7 @@ napi_value NapiSecurityEventQuerier::NapiCreateInt64(const napi_env env, int64_t
 {
     napi_value result = nullptr;
     napi_status status = napi_create_int64(env, value, &result);
-    SGLOGI("create napi value of int64 type, value is %{public}" PRId64, value);
+    SGLOGD("create napi value of int64 type, value is %{public}" PRId64, value);
     if (status != napi_ok || result == nullptr) {
         SGLOGE("failed to create napi value of int64 type.");
     }

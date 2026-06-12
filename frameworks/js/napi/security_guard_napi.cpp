@@ -125,7 +125,7 @@ static napi_value NapiCreateInt64(const napi_env env, int64_t value)
 {
     napi_value result = nullptr;
     napi_status status = napi_create_int64(env, value, &result);
-    SGLOGI("create napi value of int64 type, value is %{public}" PRId64, value);
+    SGLOGD("create napi value of int64 type, value is %{public}" PRId64, value);
     if (status != napi_ok || result == nullptr) {
         SGLOGE("failed to create napi value of int64 type.");
     }
@@ -356,7 +356,7 @@ static napi_value GetConditionsTime(napi_env env, napi_value object, const std::
     bool hasProperty = false;
     NAPI_CALL(env, napi_has_named_property(env, object, key.c_str(), &hasProperty));
     if (!hasProperty) {
-        SGLOGE("no %{public}s param", key.c_str());
+        SGLOGW("no %{public}s param", key.c_str());
         return NapiCreateInt32(env, SUCCESS);
     }
     napi_value result;
@@ -491,7 +491,7 @@ static std::string ParseOptionalString(napi_env env, napi_value object, const st
     bool hasProperty = false;
     NAPI_CALL(env, napi_has_named_property(env, object, key.c_str(), &hasProperty));
     if (!hasProperty) {
-        SGLOGE("no %{public}s param", key.c_str());
+        SGLOGW("no %{public}s param", key.c_str());
         return "";
     }
     napi_value value = nullptr;

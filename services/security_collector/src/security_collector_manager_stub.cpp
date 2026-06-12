@@ -153,7 +153,7 @@ int32_t SecurityCollectorManagerStub::HandleStopCmd(MessageParcel &data, Message
 
 int32_t SecurityCollectorManagerStub::HandleSecurityEventQueryCmd(MessageParcel &data, MessageParcel &reply)
 {
-    LOGI("%{public}s", __func__);
+    LOGD("%{public}s", __func__);
     uint32_t expected = sizeof(uint32_t);
     uint32_t actual = data.GetReadableBytes();
     if (actual <= expected) {
