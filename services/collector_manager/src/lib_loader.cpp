@@ -33,7 +33,7 @@ LibLoader::~LibLoader()
  
 ErrorCode LibLoader::LoadLib()
 {
-    LOGI("LoadLib start");
+    LOGD("LoadLib start");
     std::string realPath;
     if (!PathToRealPath(m_libPath, realPath) || realPath.find("/system/lib") != 0) {
         LOGE("LoadLib m_libPath error, realPath: %{public}s", realPath.c_str());
@@ -44,7 +44,7 @@ ErrorCode LibLoader::LoadLib()
         LOGE("LoadLib m_handle error");
         return RET_DLOPEN_LIB_FAIL;
     }
-    LOGI("dlopen success");
+    LOGD("dlopen success");
     return SUCCESS;
 }
  
@@ -61,7 +61,7 @@ void LibLoader::UnLoadLib()
 
 ICollector* LibLoader::CallGetCollector()
 {
-    LOGI("CallGetCollector start");
+    LOGD("CallGetCollector start");
     if (m_handle == nullptr) {
         LOGE("lib not found");
         return nullptr;
