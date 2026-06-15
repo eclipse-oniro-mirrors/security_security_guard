@@ -48,7 +48,7 @@ public:
 
 class MockMyClass : public DataCollection {
 public:
-    MOCK_METHOD3(LoadCollector, ErrorCode(
+    MOCK_METHOD3(LoadCollector, int(
         int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api));
     MOCK_METHOD2(GetCollectorPath, ErrorCode(int64_t eventId, std::string &path));
     MOCK_METHOD1(IsCollectorStarted, bool(int64_t eventId));
@@ -327,9 +327,9 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors01, testing::ext::TestSize.Level
     DataCollection collec {};
     std::vector<int64_t> eventIds {};
     std::shared_ptr<SecurityCollector::ICollectorFwk> api;
-    EXPECT_FALSE(collec.SubscribeCollectors(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectors(eventIds, api), SUCCESS);
     eventIds.emplace_back(1);
-    EXPECT_FALSE(collec.SubscribeCollectors(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectors02, testing::ext::TestSize.Level0)
@@ -337,7 +337,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors02, testing::ext::TestSize.Level
     DataCollection collec {};
     std::vector<int64_t> eventIds {1};
     std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
-    EXPECT_FALSE(collec.SubscribeCollectors(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectors03, testing::ext::TestSize.Level0)
@@ -348,7 +348,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors03, testing::ext::TestSize.Level
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
     EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(SUCCESS));
-    EXPECT_TRUE(myOb.SubscribeCollectors(eventIds, api));
+    EXPECT_EQ(myOb.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectors04, testing::ext::TestSize.Level0)
@@ -359,7 +359,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors04, testing::ext::TestSize.Level
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
     EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(FAILED));
-    EXPECT_FALSE(myOb.SubscribeCollectors(eventIds, api));
+    EXPECT_NE(myOb.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectors05, testing::ext::TestSize.Level0)
@@ -369,7 +369,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors05, testing::ext::TestSize.Level
     std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(FAILED));
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
-    EXPECT_FALSE(myOb.SubscribeCollectors(eventIds, api));
+    EXPECT_NE(myOb.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectors06, testing::ext::TestSize.Level0)
@@ -378,28 +378,28 @@ HWTEST_F(DataCollectionTest, SubscribeCollectors06, testing::ext::TestSize.Level
     std::vector<int64_t> eventIds {1};
     std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(true));
-    EXPECT_TRUE(myOb.SubscribeCollectors(eventIds, api));
+    EXPECT_EQ(myOb.SubscribeCollectors(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, UnsubscribeCollectors01, testing::ext::TestSize.Level0)
 {
     DataCollection myOb;
     std::vector<int64_t> eventIds;
-    EXPECT_TRUE(myOb.UnsubscribeCollectors(eventIds));
+    EXPECT_EQ(myOb.UnsubscribeCollectors(eventIds), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, UnsubscribeCollectors02, testing::ext::TestSize.Level0)
 {
     DataCollection myOb;
     std::vector<int64_t> eventIds {1};
-    EXPECT_TRUE(myOb.UnsubscribeCollectors(eventIds));
+    EXPECT_EQ(myOb.UnsubscribeCollectors(eventIds), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, UnsubscribeCollectors03, testing::ext::TestSize.Level0)
 {
     DataCollection myOb;
     std::vector<int64_t> eventIds {1};
-    EXPECT_TRUE(myOb.UnsubscribeCollectors(eventIds));
+    EXPECT_EQ(myOb.UnsubscribeCollectors(eventIds), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, UnsubscribeCollectors04, testing::ext::TestSize.Level0)
@@ -407,7 +407,7 @@ HWTEST_F(DataCollectionTest, UnsubscribeCollectors04, testing::ext::TestSize.Lev
     DataCollection myOb;
     myOb.eventIdToLoaderMap_.emplace(1, LibLoader("testPath"));
     std::vector<int64_t> eventIds {1};
-    EXPECT_FALSE(myOb.UnsubscribeCollectors(eventIds));
+    EXPECT_NE(myOb.UnsubscribeCollectors(eventIds), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky01, testing::ext::TestSize.Level0)
@@ -415,9 +415,9 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky01, testing::ext::TestSi
     DataCollection collec {};
     std::vector<int64_t> eventIds {};
     std::shared_ptr<SecurityCollector::ICollectorFwk> api;
-    EXPECT_FALSE(collec.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
     eventIds.emplace_back(1);
-    EXPECT_FALSE(collec.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky02, testing::ext::TestSize.Level0)
@@ -425,7 +425,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky02, testing::ext::TestSi
     DataCollection collec {};
     std::vector<int64_t> eventIds {1};
     std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
-    EXPECT_FALSE(collec.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_NE(collec.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky03, testing::ext::TestSize.Level0)
@@ -436,7 +436,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky03, testing::ext::TestSi
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
     EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(SUCCESS));
-    EXPECT_TRUE(myOb.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_EQ(myOb.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky04, testing::ext::TestSize.Level0)
@@ -447,7 +447,7 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky04, testing::ext::TestSi
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
     EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(FAILED));
-    EXPECT_FALSE(myOb.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_NE(myOb.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
 
 HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky05, testing::ext::TestSize.Level0)
@@ -457,6 +457,6 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky05, testing::ext::TestSi
     std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
     EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(FAILED));
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
-    EXPECT_FALSE(myOb.SubscribeCollectorsBySticky(eventIds, api));
+    EXPECT_NE(myOb.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
 }

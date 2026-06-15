@@ -241,16 +241,28 @@ int AcquireDataSubscribeManager::SubscribeScInSg(int64_t eventId, uint32_t isSti
         SGLOGE("collectorListener is nullptr");
         return NULL_OBJECT;
     }
+    int32_t ret = SUCCESS;
     if (isSticky == 0) {
-        if (!SecurityCollector::DataCollection::GetInstance().SubscribeCollectors({eventId}, collectorListener_)) {
+        ret = SecurityCollector::DataCollection::GetInstance().SubscribeCollectors({eventId}, collectorListener_);
+        // In consideration of compatibility， only return KERNEL_NOT_SUPPORT
+        if (ret == KERNEL_NOT_SUPPORT) {
             SGLOGI("Subscribe SG failed, eventId=%{public}" PRId64, eventId);
+            return ret;
+        }
+        if (ret != SUCCESS) {
+            SGLOGI("Subscribe SG failed, eventId=%{public}" PRId64 ", ret=%{public}d", eventId, ret);
             return FAILED;
         }
         eventToListenner_.emplace(eventId, collectorListener_);
     } else {
-        if (!SecurityCollector::DataCollection::GetInstance().SubscribeCollectorsBySticky({eventId},
-            collectorListener_)) {
-            SGLOGI("Subscribe SG failed, eventId=%{public}" PRId64, eventId);
+        ret = SecurityCollector::DataCollection::GetInstance().SubscribeCollectorsBySticky({eventId},
+            collectorListener_);
+        if (ret == KERNEL_NOT_SUPPORT) {
+            SGLOGI("Subscribe Sticky SG failed, eventId=%{public}" PRId64, eventId);
+            return ret;
+        }
+        if (ret != SUCCESS) {
+            SGLOGI("Subscribe Sticky SG failed, eventId=%{public}" PRId64 ", ret=%{public}d", eventId, ret);
             return FAILED;
         }
     }
@@ -311,9 +323,14 @@ int AcquireDataSubscribeManager::UnSubscribeSc(int64_t eventId)
             SGLOGE("not find eventId in linstener, eventId=%{public}" PRId64, eventId);
             return FAILED;
         }
-        if (!SecurityCollector::DataCollection::GetInstance().UnsubscribeCollectors({eventId})) {
+        int32_t ret = SecurityCollector::DataCollection::GetInstance().UnsubscribeCollectors({eventId});
+        if (ret == KERNEL_NOT_SUPPORT) {
             SGLOGE("UnSubscribe SG failed, eventId=%{public}" PRId64, eventId);
-            return FAILED;
+            return ret;
+        }
+        if (ret != SUCCESS) {
+            SGLOGI("UnSubscribe Sticky SG failed, eventId=%{public}" PRId64 ", ret=%{public}d", eventId, ret);
+            return ret;
         }
         if (config.isSticky == 0) {
             eventToListenner_.erase(eventId);
@@ -851,7 +868,8 @@ void AcquireDataSubscribeManager::SubscriberEventOnSgStart()
         SGLOGI("listener or collectorListener is nullptr");
         return;
     }
-    if (!SecurityCollector::DataCollection::GetInstance().SubscribeCollectors(onStartEventList, collectorListener_)) {
+    if (SecurityCollector::DataCollection::GetInstance().SubscribeCollectors(onStartEventList, collectorListener_) !=
+        SUCCESS) {
         SGLOGE("subscribe sg failed");
     }
 }

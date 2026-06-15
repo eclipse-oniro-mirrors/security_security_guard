@@ -78,6 +78,7 @@ static const std::unordered_map<int32_t, std::pair<int32_t, std::string>> g_erro
     { BAD_PARAM, { JS_ERR_BAD_PARAM, "Parameter error, please make sure using the correct value"} },
     { NO_SYSTEMCALL, { JS_ERR_NO_SYSTEMCALL, "non-system application uses the system API"} },
     { API_SUPPORT_ERROR, { JS_ERR_API_SUPPORT_ERROR, "API is not supported"} },
+    { KERNEL_NOT_SUPPORT, { JS_ERR_API_SUPPORT_ERROR, "kernel version is not supported"} },
 };
 
 static std::string ConvertToJsErrMsg(int32_t code)
