@@ -305,7 +305,7 @@ int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared
 
 ErrorCode DataCollection::GetCollectorPath(int64_t eventId, std::string& path)
 {
-    LOGD("Start GetCollectorPath");
+    LOGD("Start GetCollectorPath, eventid is 0x%{public}" PRIx64, eventId);
     std::ifstream stream(SA_CONFIG_PATH, std::ios::in);
     if (!stream.is_open()) {
         LOGE("Stream error, %{public}s", strerror(errno));
@@ -337,7 +337,6 @@ ErrorCode DataCollection::GetCollectorPath(int64_t eventId, std::string& path)
             if (ifIt != module.eventId.end()) {
                 return true;
             } else {
-                LOGE("not find the event id: 0x%{public}" PRIx64, eventId);
                 return false;
             }
         });
