@@ -1091,7 +1091,7 @@ HWTEST_F(SecurityGuardDataCollectSaNewTest, InsertSubscribeMute_EventFilterFail_
 HWTEST_F(SecurityGuardDataCollectSaNewTest, RemoveSubscribeRecord_ClientNotFound_Test, TestSize.Level0)
 {
     int32_t ret = AcquireDataSubscribeManager::GetInstance().RemoveSubscribeRecord(999, "mute_insert_fail_client");
-    EXPECT_EQ(ret, BAD_PARAM);
+    EXPECT_EQ(ret, SUCCESS);
 }
 
 HWTEST_F(SecurityGuardDataCollectSaNewTest, SubscriberEventOnSgStart_SubscribeFail_Test, TestSize.Level0)

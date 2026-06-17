@@ -1703,7 +1703,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, NewUnsubscribe001, TestSize.Level0)
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
         .WillOnce(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
-    EXPECT_EQ(service.Unsubscribe(11111, "test_no_client"), BAD_PARAM);
+    EXPECT_EQ(service.Unsubscribe(11111, "test_no_client"), SUCCESS);
 }
 
 HWTEST_F(SecurityGuardDataCollectSaTest, NewUnsubscribe002, TestSize.Level0)

@@ -359,11 +359,11 @@ int AcquireDataSubscribeManager::RemoveSubscribeRecord(int64_t eventId, const st
     std::lock_guard<ffrt::mutex> lock(sessionMutex_);
     if (sessionsMap_.find(clientId) == sessionsMap_.end() || sessionsMap_.at(clientId) == nullptr) {
         SGLOGI("not find current clientId");
-        return BAD_PARAM;
+        return SUCCESS;
     }
     if (sessionsMap_.at(clientId)->subEvents.find(eventId) == sessionsMap_.at(clientId)->subEvents.end()) {
         SGLOGI("not find current eventid");
-        return BAD_PARAM;
+        return SUCCESS;
     }
     sessionsMap_.at(clientId)->subEvents.erase(eventId);
     bool isFind = false;
