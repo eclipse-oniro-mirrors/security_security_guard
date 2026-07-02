@@ -357,7 +357,7 @@ static napi_value GetConditionsTime(napi_env env, napi_value object, const std::
     bool hasProperty = false;
     NAPI_CALL(env, napi_has_named_property(env, object, key.c_str(), &hasProperty));
     if (!hasProperty) {
-        SGLOGW("no %{public}s param", key.c_str());
+        SGLOGD("no %{public}s param", key.c_str());
         return NapiCreateInt32(env, SUCCESS);
     }
     napi_value result;
@@ -492,7 +492,7 @@ static std::string ParseOptionalString(napi_env env, napi_value object, const st
     bool hasProperty = false;
     NAPI_CALL(env, napi_has_named_property(env, object, key.c_str(), &hasProperty));
     if (!hasProperty) {
-        SGLOGW("no %{public}s param", key.c_str());
+        SGLOGD("no %{public}s param", key.c_str());
         return "";
     }
     napi_value value = nullptr;

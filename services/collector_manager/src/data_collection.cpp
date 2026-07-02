@@ -276,7 +276,7 @@ void DataCollection::CloseLib()
 
 int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api)
 {
-    LOGI("Start LoadCollector");
+    LOGD("Start LoadCollector");
     LibLoader loader(path);
     ErrorCode ret = loader.LoadLib();
     if (ret != SUCCESS) {
@@ -418,7 +418,7 @@ ErrorCode DataCollection::CheckFileStream(std::ifstream &stream)
 ErrorCode DataCollection::LoadCollector(std::string path, const SecurityEventRuler &ruler,
     std::vector<SecurityEvent> &events)
 {
-    LOGI("Start LoadCollector");
+    LOGD("Start LoadCollector");
     LibLoader loader(path);
     ErrorCode ret = loader.LoadLib();
     if (ret != SUCCESS) {
