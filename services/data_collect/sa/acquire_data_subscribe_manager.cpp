@@ -152,7 +152,11 @@ int AcquireDataSubscribeManager::InsertSubscribeRecord(
         SGLOGE("not need subscribe again");
         return SUCCESS;
     }
+    std::string eventGroup = subscribeInfo.GetEventGroup();
     int32_t code = SubscribeSc(eventId);
+    if (eventWrapper_ != nullptr && eventGroup == "auditGroup") {
+        eventWrapper_()->RecordSubscribeEvent(eventId, code, IPCSkeleton::GetCallingUid());
+    }
     if (code != SUCCESS) {
         SGLOGE("SubscribeSc error");
         return code;
@@ -162,7 +166,7 @@ int AcquireDataSubscribeManager::InsertSubscribeRecord(
         session->clientId = clientId;
         session->callback = callback;
         session->pid = callerPid;
-        session->eventGroup = subscribeInfo.GetEventGroup();
+        session->eventGroup = eventGroup;
         sessionsMap_[clientId] = session;
     }
     sessionsMap_[clientId]->subEvents.insert(eventId);

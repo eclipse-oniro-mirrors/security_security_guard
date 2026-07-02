@@ -15,10 +15,12 @@
 #ifndef SECURITY_COLLECTOR_I_EVENT_WRAPPER_H
 #define SECURITY_COLLECTOR_I_EVENT_WRAPPER_H
 #include "event_define.h"
+#include <string>
 namespace OHOS::Security::SecurityCollector {
 class IEventWrapper {
 public:
     virtual int32_t WrapperEvent(Event &event) = 0;
+    virtual void RecordSubscribeEvent(int64_t eventId, int32_t errorCode, int32_t callerUid) = 0;
 };
 }
 #endif
