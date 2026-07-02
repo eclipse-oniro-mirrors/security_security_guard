@@ -62,7 +62,7 @@ void CollectorServiceLoader::LoadCallback::OnLoadSystemAbilityFail(int32_t sid)
 
 sptr<IRemoteObject> CollectorServiceLoader::LoadCallback::Promise()
 {
-    constexpr int32_t TimeoutInterval = 1;
+    constexpr int32_t TimeoutInterval = 3;
     auto future = promise_.get_future();
     auto span = std::chrono::seconds(TimeoutInterval);
     if (future.wait_for(span) == std::future_status::timeout) {
