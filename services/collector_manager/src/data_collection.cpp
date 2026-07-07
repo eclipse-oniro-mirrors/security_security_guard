@@ -141,6 +141,7 @@ int DataCollection::SubscribeCollectors(const std::vector<int64_t>& eventIds, st
         return BAD_PARAM;
     }
     std::vector<int64_t> loadedEventIds_;
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("SubscribeCollectors eventId is 0x%{public}" PRIx64, eventId);
         auto count = eventIdToSubscribeCount_.find(eventId);
@@ -181,6 +182,7 @@ int DataCollection::SubscribeCollectorsBySticky(const std::vector<int64_t>& even
         return BAD_PARAM;
     }
     std::vector<int64_t> loadedEventIds_;
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("SubscribeCollectorsByIsSticky eventId is 0x%{public}" PRIx64, eventId);
         auto count = eventIdToSubscribeCount_.find(eventId);
