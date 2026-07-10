@@ -73,5 +73,6 @@ ohos_shared_library("security_collector_manager") {
     "hilog:libhilog",
     "json:nlohmann_json_static",
     "samgr:samgr_proxy",
+    "ffrt:libffrt",
   ]
 }
