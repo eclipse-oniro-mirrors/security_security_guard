@@ -67,7 +67,9 @@
         "bundle_framework",
         "cJSON",
         "selinux_adapter",
-        "sqlite"
+        "sqlite",
+        "node",
+        "libuv"
       ],
       "third_party": [
       ]

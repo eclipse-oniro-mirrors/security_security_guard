@@ -50,6 +50,8 @@ ohos_unittest("SecurityGuardNapiTest") {
     "napi:ace_napi",
     "samgr:samgr_proxy",
     "googletest:gmock",
+    "node:node_header_notice",
+    "libuv:uv"
   ]
 }
 
