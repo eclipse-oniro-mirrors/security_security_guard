@@ -69,7 +69,8 @@
         "selinux_adapter",
         "sqlite",
         "node",
-        "libuv"
+        "libuv",
+        "bounds_checking_function"
       ],
       "third_party": [
       ]
