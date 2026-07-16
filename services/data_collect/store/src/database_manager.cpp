@@ -51,6 +51,7 @@ int DatabaseManager::InsertEvent(uint32_t source, const std::vector<SecEvent>& e
     const std::set<std::string> &eventSubscribes)
 {
     int ret = SUCCESS;
+    RiskEventRdbHelper::GetInstance().BeginTransactionEvent();
     for (const auto &event : events) {
         EventCfg config;
         bool success = ConfigDataManager::GetInstance().GetEventConfig(event.eventId, config);
@@ -78,6 +79,7 @@ int DatabaseManager::InsertEvent(uint32_t source, const std::vector<SecEvent>& e
             ret = RiskEventRdbHelper::GetInstance().InsertEvent(event);
         }
     }
+    RiskEventRdbHelper::GetInstance().CommitEvent();
     return ret;
 }
 

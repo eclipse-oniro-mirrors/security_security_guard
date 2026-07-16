@@ -333,4 +333,13 @@ std::string DatabaseHelper::Join(const std::vector<std::string> &vec, const std:
     return result;
 }
 
+void DatabaseHelper::CommitEvent()
+{
+    Commit();
+}
+
+void DatabaseHelper::BeginTransactionEvent()
+{
+    BeginTransaction();
+}
 } // namespace OHOS::Security::SecurityGuard

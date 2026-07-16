@@ -139,7 +139,6 @@ private:
     ffrt::mutex eventsMutex_{};
     std::map<std::string, std::shared_ptr<AcquireDataSubscribeManager::ClientSession>> sessionsMap_ {};
     std::shared_ptr<ffrt::queue> queue_{};
-    std::shared_ptr<ffrt::queue> dbQueue_{};
     std::shared_ptr<ffrt::queue> crucialQueue_{};
     std::vector<SecEvent> events_ {};
     std::vector<SecurityCollector::Event> notifyEvents_ {};

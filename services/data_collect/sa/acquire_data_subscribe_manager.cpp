@@ -521,12 +521,7 @@ void AcquireDataSubscribeManager::InitEventQueue()
         SGLOGI("InitEventQueue queue_ already init");
         return;
     }
-    if (dbQueue_ != nullptr) {
-        SGLOGI("InitEventQueue dbQueue already init");
-        return;
-    }
     queue_ = std::make_shared<ffrt::queue>(ffrt::queue_serial, "UploadEvent");
-    dbQueue_ = std::make_shared<ffrt::queue>(ffrt::queue_serial, "UploadDbEvent");
     crucialQueue_ = std::make_shared<ffrt::queue>(ffrt::queue_serial, "UploadEventImmediately");
     SGLOGI("InitEventQueue successed");
 }
@@ -535,7 +530,6 @@ void AcquireDataSubscribeManager::DeInitEventQueue()
 {
     std::lock_guard<ffrt::mutex> lock(queueMutex_);
     queue_ = nullptr;
-    dbQueue_ = nullptr;
     crucialQueue_ = nullptr;
 }
 void AcquireDataSubscribeManager::StartTokenBucketTask()
@@ -592,24 +586,9 @@ void AcquireDataSubscribeManager::UploadEventToStore(const SecurityCollector::Ev
         tmp.swap(events_);
         events_.reserve(MAX_CACHE_EVENT_SIZE);
     }
-    auto task = [tmp] () {
-        int code = DatabaseManager::GetInstance().InsertEvent(USER_SOURCE, tmp, {});
-        if (code != SUCCESS) {
-            SGLOGE("insert event error, %{public}d", code);
-        }
-    };
-    {
-        std::lock_guard<ffrt::mutex> lock(dbQueueMutex_);
-        if (dbQueue_ == nullptr) {
-            return;
-        }
-        if (dbQueue_->get_task_cnt() > UPLOAD_EVENT_DB_TASK_MAX_COUNT) {
-            for (const auto &event : tmp) {
-                SGLOGI("db event be discarded is id %{public}" PRId64, event.eventId);
-            }
-            return;
-        }
-        dbQueue_->submit(task);
+    int code = DatabaseManager::GetInstance().InsertEvent(USER_SOURCE, tmp, {});
+    if (code != SUCCESS) {
+        SGLOGE("insert event error, %{public}d", code);
     }
 }
 
