@@ -92,6 +92,7 @@ ohos_shared_library("libsg_collect_sdk") {
 
   external_deps = [
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "hilog:libhilog",
     "ipc:ipc_core",
     "samgr:samgr_proxy",
