@@ -20,7 +20,7 @@
 #include "parcel.h"
 
 #include <vector>
-
+#include "ffrt.h"
 #include "lib_loader.h"
 #include "i_collector_fwk.h"
 #include "security_event.h"

@@ -22,6 +22,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include "ffrt.h"
 #include "nlohmann/json.hpp"
 
 #include "lib_loader.h"
@@ -51,7 +52,7 @@ private:
     ErrorCode GetCollectorPath(int64_t eventId, std::string& path);
     ErrorCode CheckFileStream(std::ifstream &stream);
     bool IsCollectorStarted(int64_t eventId);
-    std::recursive_mutex mutex_;
+    ffrt::recursive_mutex mutex_;
     std::mutex closeLibmutex_;
     std::unordered_map<int64_t, LibLoader> eventIdToLoaderMap_;
     std::unordered_map<int64_t, LibLoader> needCloseLibMap_;

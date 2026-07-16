@@ -208,6 +208,7 @@ ohos_unittest("DataCollectionTest") {
     "json:nlohmann_json_static",
     "safwk:system_ability_fwk",
     "samgr:samgr_proxy",
+    "ffrt:libffrt",
   ]
 }
 group("unittest") {

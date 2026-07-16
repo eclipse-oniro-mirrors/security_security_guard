@@ -94,7 +94,7 @@ bool DataCollection::SecurityGuardSubscribeCollector(const std::vector<int64_t>&
 
 bool DataCollection::IsCollectorStarted(int64_t eventId)
 {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     auto it = eventIdToLoaderMap_.find(eventId);
     return it != eventIdToLoaderMap_.end();
 }
@@ -107,7 +107,7 @@ bool DataCollection::StopCollectors(const std::vector<int64_t>& eventIds)
         return true;
     }
     bool ret = true;
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("StopCollectors eventId is 0x%{public}" PRIx64, eventId);
         auto loader = eventIdToLoaderMap_.find(eventId);
@@ -141,6 +141,7 @@ int DataCollection::SubscribeCollectors(const std::vector<int64_t>& eventIds, st
         return BAD_PARAM;
     }
     std::vector<int64_t> loadedEventIds_;
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("SubscribeCollectors eventId is 0x%{public}" PRIx64, eventId);
         auto count = eventIdToSubscribeCount_.find(eventId);
@@ -181,6 +182,7 @@ int DataCollection::SubscribeCollectorsBySticky(const std::vector<int64_t>& even
         return BAD_PARAM;
     }
     std::vector<int64_t> loadedEventIds_;
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("SubscribeCollectorsByIsSticky eventId is 0x%{public}" PRIx64, eventId);
         auto count = eventIdToSubscribeCount_.find(eventId);
@@ -230,7 +232,7 @@ int DataCollection::UnsubscribeCollectors(const std::vector<int64_t> &eventIds)
         return SUCCESS;
     }
     int ret = SUCCESS;
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     for (int64_t eventId : eventIds) {
         LOGI("UnsubscribeCollectors eventId is 0x%{public}" PRIx64, eventId);
         auto loader = eventIdToLoaderMap_.find(eventId);
@@ -297,7 +299,7 @@ int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared
         LOGE("Failed to start collector");
         return result;
     }
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
     eventIdToLoaderMap_.emplace(eventId, loader);
     LOGD("End LoadCollector");
     return SUCCESS;
