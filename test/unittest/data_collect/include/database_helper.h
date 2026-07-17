@@ -42,7 +42,8 @@ public:
     virtual int DeleteOldEventByEventId(int64_t eventId, int64_t count);
     virtual int DeleteAllEventByEventId(int64_t eventId);
     virtual int FlushAllEvent();
-
+    virtual void CommitEvent();
+    virtual void BeginTransactionEvent();
 protected:
     int QueryEventBase(const GenericValues &conditions, std::vector<SecEvent> &events,
         const QueryOptions &options = {});

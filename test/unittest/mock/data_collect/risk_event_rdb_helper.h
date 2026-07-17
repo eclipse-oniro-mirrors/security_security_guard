@@ -43,6 +43,8 @@ public:
     virtual int DeleteOldEventByEventId(int64_t eventId, int64_t count) = 0;
     virtual int DeleteAllEventByEventId(int64_t eventId) = 0;
     virtual int FlushAllEvent() = 0;
+    virtual void CommitEvent() = 0;
+    virtual void BeginTransactionEvent() = 0;
 };
 
 class RiskEventRdbHelper : public BaseRiskEventRdbHelper {
@@ -70,6 +72,8 @@ public:
     MOCK_METHOD2(DeleteOldEventByEventId, int(int64_t eventId, int64_t count));
     MOCK_METHOD1(DeleteAllEventByEventId, int(int64_t eventId));
     MOCK_METHOD0(FlushAllEvent, int());
+    MOCK_METHOD0(CommitEvent, void());
+    MOCK_METHOD0(BeginTransactionEvent, void());
 };
 } // namespace OHOS::Security::SecurityGuard
 #endif // SECURITY_GUARD_RISK_EVENT_RDB_HELPER_H
