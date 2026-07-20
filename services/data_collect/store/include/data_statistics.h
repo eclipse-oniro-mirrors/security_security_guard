@@ -41,7 +41,7 @@ private:
     std::atomic<uint64_t> requestDataSubmitDropCounters_;
     std::atomic<uint64_t> insertEventsCounters_;
     std::atomic<uint64_t> publishEventsDropCounters_;
-    bool running_ { false };
+    std::atomic<bool> running_ { false };
 };
 } // namespace OHOS::Security::SecurityGuard
 #endif // DATA_STATISTICS_H

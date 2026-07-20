@@ -46,8 +46,13 @@ static int32_t ReportSecurityInfoImpl(const struct EventInfoSt *info, bool isSyn
     if (info == nullptr || info->contentLen >= CONTENT_MAX_LEN || info->version == nullptr) {
         return OHOS::Security::SecurityGuard::BAD_PARAM;
     }
+    constexpr size_t VERSION_MAX_LNE = 50;
     int64_t eventId = info->eventId;
-    std::string version = reinterpret_cast<const char *>(info->version);
+    size_t versionLen = strnlen(info->version, VERSION_MAX_LNE);
+    if (versionLen == 0 ||versionLen >= VERSION_MAX_LNE) {
+        return OHOS::Security::SecurityGuard::BAD_PARAM;
+    }
+    std::string version(info->version, versionLen);
     uint8_t tmp[CONTENT_MAX_LEN] = {};
     (void)memset_s(tmp, CONTENT_MAX_LEN, 0, CONTENT_MAX_LEN);
     errno_t rc = memcpy_s(tmp, CONTENT_MAX_LEN, info->content, info->contentLen);

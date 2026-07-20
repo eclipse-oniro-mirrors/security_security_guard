@@ -107,7 +107,9 @@ int32_t CollectorManager::UnsubscribeImpl(const std::shared_ptr<ICollectorSubscr
 
     int32_t ret = proxy->Unsubscribe(eventListeners_[subscriber]);
     LOGI("Unsubscribe result, ret=%{public}d", ret);
-    eventListeners_.erase(subscriber);
+    if (ret == SUCCESS) {
+        eventListeners_.erase(subscriber);
+    }
     return ret;
 }
 

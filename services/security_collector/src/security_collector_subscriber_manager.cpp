@@ -56,10 +56,12 @@ SecurityCollectorSubscriberManager::~SecurityCollectorSubscriberManager()
     if (handle_ != nullptr) {
         dlclose(handle_);
         handle_ = nullptr;
+        eventFilter_ = nullptr;
     }
     if (wrapperHandle_ != nullptr) {
         dlclose(wrapperHandle_);
         wrapperHandle_ = nullptr;
+        eventWrapper_ = nullptr;
     }
 }
 
@@ -190,6 +192,10 @@ bool SecurityCollectorSubscriberManager::UnsubscribeCollector(const sptr<IRemote
 {
     std::lock_guard<ffrt::mutex> lock(collectorMutex_);
     std::set<int64_t> eventIds = FindEventIds(remote);
+    if (eventIds.empty()) {
+        LOGI("no event found for remote");
+        return false;
+    }
     for (int64_t eventId : eventIds) {
         LOGI("Remove collecctor, eventId:%{public}" PRId64, eventId);
         if (eventId == -1) {

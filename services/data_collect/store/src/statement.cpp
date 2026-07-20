@@ -86,9 +86,6 @@ std::string Statement::GetColumnString(const int32_t column) const
 
 std::string Statement::GetColumnName(const int32_t column) const
 {
-    if (!statement_) {
-        return "";
-    }
     const char* namePtr = sqlite3_column_name(statement_, column);
     return namePtr ? std::string(namePtr) : std::string();
 }

@@ -63,7 +63,7 @@ private:
     static int32_t HasPermission(const std::string &permission);
     bool SetDeathRecipient(const sptr<IRemoteObject> &remote);
     void UnsetDeathRecipient(const sptr<IRemoteObject> &remote);
-    void CleanSubscriber(const sptr<IRemoteObject> &remote);
+    bool CleanSubscriber(const sptr<IRemoteObject> &remote);
     void ExecuteOnNotifyByTask(const sptr<IRemoteObject> &remote, const Event &event);
 
     std::mutex deathRecipientMutex_{};
