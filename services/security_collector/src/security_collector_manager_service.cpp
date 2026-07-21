@@ -44,7 +44,7 @@ namespace {
     constexpr const char* SUB_RET = "SUB_RET";
     constexpr const char* UNSUB_RET = "UNSUB_RET";
     constexpr const int SLEEP_INTERVAL = 5000;
-    std::atomic<uint32_t> g_refCount = 0;
+    std::atomic<int32_t> g_refCount = 0;
     ffrt::thread g_mainThread {};
     std::atomic<bool> g_flag = true;
 }
@@ -65,7 +65,7 @@ void SecurityCollectorManagerService::OnStart()
     auto task = []() {
         while (g_flag) {
             ffrt::this_task::sleep_for(std::chrono::milliseconds(SLEEP_INTERVAL));
-            if (g_refCount.load() != 0) {
+            if (g_refCount.load() > 0) {
                 continue;
             }
             LOGD("Unload security collector manager SA begin.");
@@ -160,7 +160,7 @@ int32_t SecurityCollectorManagerService::Unsubscribe(const sptr<IRemoteObject> &
         LOGE("caller no permission");
         return ret;
     }
-    if (g_refCount.load() == 0) {
+    if (g_refCount.load() <= 0) {
         LOGE("Unsubscriber event failed, subscriber count is 0");
         return FAILED;
     }
@@ -249,7 +249,7 @@ int32_t SecurityCollectorManagerService::CollectorStop(const SecurityCollectorSu
 {
     Event event = subscribeInfo.GetEvent();
     int32_t ret = HasPermission(COLLECT_EVENT_PERMISSION);
-    if (g_refCount.load() == 0) {
+    if (g_refCount.load() <= 0) {
         LOGE("Collector stop failed, subscriber count is 0");
         return FAILED;
     }

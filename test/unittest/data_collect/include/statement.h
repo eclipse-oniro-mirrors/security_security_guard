@@ -46,9 +46,9 @@ public:
     VariantValue GetValue(const int32_t column, const bool flagInt64) const;
 
 private:
-    sqlite3* db_;
-    sqlite3_stmt* statement_;
-    const std::string sql_;
+    sqlite3* db_ = nullptr;
+    sqlite3_stmt* statement_ = nullptr;
+    const std::string sql_ {};
 };
 } // namespace Security::SecurityGuard
 } // namespace OHOS

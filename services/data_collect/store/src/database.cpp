@@ -146,19 +146,26 @@ int Database::Attach(const std::string &alias, const std::string &pathName,
 
 int Database::IsExistStore()
 {
-    if (store_ != nullptr) {
-        return SUCCESS;
-    }
-    int32_t tryTimes = MAX_TIMES;
-    while (tryTimes > 0) {
+    {
+        std::lock_guard<ffrt::mutex> lock(storeMutex_);
         if (store_ != nullptr) {
             return SUCCESS;
         }
-
+    }
+    int32_t tryTimes = MAX_TIMES;
+    while (tryTimes > 0) {
+        {
+            std::lock_guard<ffrt::mutex> lock(storeMutex_);
+            if (store_ != nullptr) {
+                return SUCCESS;
+            }
+        }
         SGLOGW("tryTimes = %{public}d", tryTimes);
         std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_INTERVAL));
         tryTimes--;
     }
+
+    std::lock_guard<ffrt::mutex> lock(storeMutex_);
     if (store_ == nullptr) {
         SGLOGE("EventStore::IsExistStore NativeRdb::RdbStore is null!");
         return FAILED;

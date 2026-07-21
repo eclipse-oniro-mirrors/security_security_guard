@@ -243,12 +243,14 @@ int DatabaseHelper::QueryEventBase(const GenericValues &conditions, std::vector<
     }
 
     for (const auto& row : queryResults) {
+        int64_t userId64 = row.GetInt64(USER_ID);
+        int32_t uid = (userId64 >= INT32_MIN && userId64 <= INT32_MAX) ? static_cast<int32_t>(userId64) : -1;
         events.emplace_back(
             SecEvent{
                 .eventId = row.GetInt64(EVENT_ID),
                 .date = row.GetString(DATE),
                 .content = row.GetString(CONTENT),
-                .userId = static_cast<int32_t>(row.GetInt64(USER_ID)),
+                .userId = uid,
                 .deviceId = row.GetString(DEVICE_ID)
             }
         );

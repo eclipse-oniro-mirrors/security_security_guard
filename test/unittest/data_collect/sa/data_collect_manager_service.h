@@ -97,7 +97,7 @@ private:
     int32_t SetDeathCallBack(SgSubscribeEvent event, const sptr<IRemoteObject> &callback);
     static void QuerySecurityEventCallBack(sptr<ISecurityEventQueryCallback> proxy,
         std::vector<SecurityCollector::SecurityEvent> events);
-    std::mutex mutex_ {};
+    ffrt::mutex mutex_ {};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::map<std::string,  sptr<IRemoteObject>> clientCallBacks_ {};
     std::atomic<int32_t> tokenBucket_{};

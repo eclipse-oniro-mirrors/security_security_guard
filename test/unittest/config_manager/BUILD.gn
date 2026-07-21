@@ -136,6 +136,7 @@ ohos_unittest("AppInfoDatabseTest") {
     "samgr:samgr_proxy",
     "sqlite:sqlite",
     "selinux_adapter:librestorecon",
+    "ffrt:libffrt",
   ]
 
   sanitize = {

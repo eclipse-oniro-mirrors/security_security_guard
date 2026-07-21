@@ -186,5 +186,6 @@ ohos_shared_library("sg_collect_service_database") {
     "c_utils:utils",
     "hilog:libhilog",
     "sqlite:sqlite",
+    "ffrt:libffrt",
   ]
 }

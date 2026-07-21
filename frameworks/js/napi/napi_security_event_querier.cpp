@@ -102,6 +102,9 @@ void NapiSecurityEventQuerier::RunCallback(QuerySecurityEventContext *context, C
     };
     if (napi_send_event(tmpContext->env, task, napi_eprio_high, "NapiSecurityEventQuerier::RunCallback") != napi_ok) {
         SGLOGE("napi_send_event failed");
+        if (release != nullptr) {
+            release(tmpContext->threadId);
+        }
     }
 }
 
@@ -114,7 +117,7 @@ napi_value NapiSecurityEventQuerier::ConvertEventsToJsArray(const napi_env env,
     for (size_t i = 0; i < len; i++) {
         napi_value item = nullptr;
         napi_status status = napi_create_object(env, &item);
-        if (status != napi_ok) {
+        if (status != napi_ok || item == nullptr) {
             SGLOGE("napi_create_object failed, %{public}d", status);
             return nullptr;
         }
@@ -122,6 +125,10 @@ napi_value NapiSecurityEventQuerier::ConvertEventsToJsArray(const napi_env env,
         napi_value version = NapiCreateString(env, napiEvents[i].GetVersion().c_str());
         napi_value content = NapiCreateString(env, napiEvents[i].GetContent().c_str());
         napi_value timestamp = NapiCreateString(env, napiEvents[i].GetTimestamp().c_str());
+        if (eventId == nullptr || version == nullptr || content == nullptr || timestamp == nullptr) {
+            SGLOGE("fail to create napi value for event property");
+            return nullptr;
+        }
         napi_set_named_property(env, item, "eventId", eventId);
         napi_set_named_property(env, item, "version", version);
         napi_set_named_property(env, item, "content", content);

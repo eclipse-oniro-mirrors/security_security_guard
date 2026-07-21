@@ -1212,8 +1212,8 @@ static napi_value GenerateEvent(napi_env env, const NapiSecurityEvent &event)
 
 static bool InitUvWorkCallbackEnv(const SubscriberOAWorker &subscriberOAWorkerData, napi_handle_scope *scope)
 {
-    napi_open_handle_scope(subscriberOAWorkerData.env, scope);
-    if (scope == nullptr) {
+    napi_status status = napi_open_handle_scope(subscriberOAWorkerData.env, scope);
+    if (status != napi_ok || scope == nullptr) {
         SGLOGE("fail to open scope");
         return false;
     }
@@ -1245,10 +1245,18 @@ static void SendEventOnSecEventsChanged(const SubscriberOAWorker &subscriberOAWo
         if (isFound) {
             napi_value result[ARGS_SIZE_ONE] = {nullptr};
             result[PARAMZERO] = GenerateEvent(subscriberOAWorkerData.env, subscriberOAWorkerData.event);
+            if (result[PARAMZERO] == nullptr) {
+                napi_close_handle_scope(subscriberOAWorkerData.env, scope);
+                return;
+            }
             napi_value undefined = nullptr;
             napi_get_undefined(subscriberOAWorkerData.env, &undefined);
             napi_value callback = nullptr;
-            napi_get_reference_value(subscriberOAWorkerData.env, subscriberOAWorkerData.ref, &callback);
+            if (napi_get_reference_value(subscriberOAWorkerData.env, subscriberOAWorkerData.ref,
+                &callback) != napi_ok || callback == nullptr) {
+                napi_close_handle_scope(subscriberOAWorkerData.env, scope);
+                return;
+            }
             napi_value resultOut = nullptr;
             napi_status ok = napi_call_function(subscriberOAWorkerData.env, undefined, callback, ARGS_SIZE_ONE,
                 &result[0], &resultOut);
