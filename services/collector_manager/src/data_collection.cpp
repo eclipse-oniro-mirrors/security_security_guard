@@ -269,7 +269,7 @@ int DataCollection::UnsubscribeCollectors(const std::vector<int64_t> &eventIds)
 
 void DataCollection::CloseLib()
 {
-    std::lock_guard<std::mutex> lock(closeLibmutex_);
+    std::lock_guard<ffrt::mutex> lock(closeLibmutex_);
     for (auto &it : needCloseLibMap_) {
         it.second.UnLoadLib();
     }
@@ -286,7 +286,7 @@ int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared
         return FAILED;
     }
     {
-        std::lock_guard<std::mutex> lock(closeLibmutex_);
+        std::lock_guard<ffrt::mutex> lock(closeLibmutex_);
         needCloseLibMap_.emplace(eventId, loader);
     }
     ICollector* collector = loader.CallGetCollector();
@@ -428,7 +428,7 @@ ErrorCode DataCollection::LoadCollector(std::string path, const SecurityEventRul
         return FAILED;
     }
     {
-        std::lock_guard<std::mutex> lock(closeLibmutex_);
+        std::lock_guard<ffrt::mutex> lock(closeLibmutex_);
         needCloseLibMap_.emplace(ruler.GetEventId(), loader);
     }
     ICollector* collector = loader.CallGetCollector();
