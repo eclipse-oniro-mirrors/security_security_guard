@@ -102,6 +102,7 @@ private:
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::map<std::string,  sptr<IRemoteObject>> clientCallBacks_ {};
     std::atomic<int32_t> tokenBucket_{};
+    std::atomic<bool> isStopTokenBucketTask_ {false};
 };
 } // namespace OHOS::Security::SecurityGuard
 #endif // SECURITY_GUARD_DATA_COLLECT_MANAGER_SERVICE_H

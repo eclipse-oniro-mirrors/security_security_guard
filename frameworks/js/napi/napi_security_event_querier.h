@@ -37,7 +37,8 @@ public:
     static napi_value NapiGetNamedProperty(const napi_env env, const napi_value &object, const std::string &name);
     static napi_value NapiCreateString(const napi_env env, const std::string &value);
     static napi_value NapiCreateInt64(const napi_env env, int64_t value);
-    static void DestoryWork(uv_work_t *work);
+    static napi_value ConvertEventsToJsArray(const napi_env env,
+    const std::vector<SecurityCollector::SecurityEvent> &napiEvents);
     void RunCallback(QuerySecurityEventContext *context, CALLBACK_FUNC callback, RELEASE_FUNC release);
     void OnQuery(const std::vector<SecurityCollector::SecurityEvent> &events) override;
     void OnComplete() override;

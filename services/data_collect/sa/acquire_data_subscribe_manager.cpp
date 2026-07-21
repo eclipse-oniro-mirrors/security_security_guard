@@ -650,22 +650,23 @@ int AcquireDataSubscribeManager::BatchUploadEvent(const SecurityCollector::Event
 
 int AcquireDataSubscribeManager::UploadEventImmediately(const SecurityCollector::Event &event)
 {
-    auto task = [event]() {
-        AcquireDataSubscribeManager::GetInstance().UploadEventTask(event);
-        g_crucialTaskCount.fetch_sub(1);
-    };
     if (g_crucialTaskCount.load() > UPLOAD_EVENT_TASK_MAX_COUNT) {
         SGLOGI("immediately subed event be discarded id is %{public}" PRId64, event.eventId);
         return SUCCESS;
     }
+    g_crucialTaskCount.fetch_add(1);
+    auto task = [event]() {
+        AcquireDataSubscribeManager::GetInstance().UploadEventTask(event);
+        g_crucialTaskCount.fetch_sub(1);
+    };
     {
         std::lock_guard<ffrt::mutex> lock(queueMutex_);
         if (crucialQueue_ == nullptr) {
+            g_crucialTaskCount.fetch_sub(1);
             return SUCCESS;
         }
         crucialQueue_->submit(task);
     }
-    g_crucialTaskCount.fetch_add(1);
     return SUCCESS;
 }
 
@@ -705,8 +706,12 @@ bool AcquireDataSubscribeManager::IsFindFlag(const std::set<std::string> &eventS
     if (sessionsMap_.find(clientId) == sessionsMap_.end()) {
         return false;
     }
-    if (sessionsMap_.at(clientId)->eventFilters.find(eventId) == sessionsMap_.at(clientId)->eventFilters.end() ||
-        sessionsMap_.at(clientId)->eventFilters.at(eventId).empty()) {
+    auto session = sessionsMap_.at(clientId);
+    if (session == nullptr) {
+        return false;
+    }
+    if (session->eventFilters.find(eventId) == session->eventFilters.end() ||
+        session->eventFilters.at(eventId).empty()) {
         return true;
     }
     if (eventSubscribes.find(clientId) != eventSubscribes.end()) {
@@ -717,7 +722,7 @@ bool AcquireDataSubscribeManager::IsFindFlag(const std::set<std::string> &eventS
 
 bool AcquireDataSubscribeManager::PublishEventToSub(const SecurityCollector::Event &event)
 {
-    static uint32_t eventCount = 0;
+    static std::atomic<uint32_t> eventCount {0};
     ++eventCount;
     if (eventCount >= PUBLISH_EVENT_TO_SUB_STEP_COUNT) {
         ffrt::this_task::sleep_for(std::chrono::milliseconds(PUBLISH_EVENT_TO_SUB_STEP_TIME));

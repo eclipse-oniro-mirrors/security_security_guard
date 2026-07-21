@@ -45,7 +45,11 @@ private:
     std::set<int64_t> FindEventIds(const sptr<IRemoteObject> &remote);
     int32_t GetAppSubscribeCount(const std::string &appName);
     int32_t GetAppSubscribeCount(const std::string &appName, int64_t eventId);
-    void CleanSubscriber(const sptr<IRemoteObject> &remote) { unsubscribeHandler_(remote); }
+    bool CleanSubscriber(const sptr<IRemoteObject> &remote)
+    {
+        unsubscribeHandler_(remote);
+        return true;
+    }
     void NotifySubscriber(const Event &event);
 
     class CollectorListenner : public ICollectorFwk {

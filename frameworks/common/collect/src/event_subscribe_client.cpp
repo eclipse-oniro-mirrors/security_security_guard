@@ -30,24 +30,19 @@ namespace {
 void EventSubscribeClient::Deleter(EventSubscribeClient *client)
 {
     SGLOGI("enter EventSubscribeClient Deleter");
+    if (client == nullptr) {
+        return;
+    }
     auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
-    if (registry == nullptr) {
-        SGLOGE("GetSystemAbilityManager error");
-        return;
-    }
-    auto object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
-    auto proxy = iface_cast<DataCollectManagerIdl>(object);
-    if (proxy == nullptr) {
-        SGLOGE("proxy is null");
-        return;
-    }
-    int32_t ret = proxy->DestoryClient(client->eventGroup_, client->clientId_);
-    if (ret != SUCCESS) {
-        SGLOGI("DeleteClient result, ret=%{public}d", ret);
-        return;
-    }
-    if (client->deathRecipient_ != nullptr) {
-        object->RemoveDeathRecipient(client->deathRecipient_);
+    if (registry != nullptr) {
+        auto object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
+        auto proxy = iface_cast<DataCollectManagerIdl>(object);
+        if (proxy != nullptr) {
+            proxy->DestoryClient(client->eventGroup_, client->clientId_);
+            if (client->deathRecipient_ != nullptr) {
+                object->RemoveDeathRecipient(client->deathRecipient_);
+            }
+        }
     }
     delete client;
 }

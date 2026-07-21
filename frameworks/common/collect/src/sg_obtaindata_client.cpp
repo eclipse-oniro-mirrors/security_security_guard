@@ -31,7 +31,7 @@ static std::mutex g_mutex;
 static int32_t RequestSecurityEventInfoAsyncImpl(const DeviceIdentify *devId, const char *eventJson,
     RequestSecurityEventInfoCallBack callback)
 {
-    if (devId == nullptr || eventJson == nullptr || devId->length >= DEVICE_ID_MAX_LEN) {
+    if (devId == nullptr || eventJson == nullptr || callback == nullptr ||devId->length >= DEVICE_ID_MAX_LEN) {
         return BAD_PARAM;
     }
     std::unique_lock<std::mutex> lock(g_mutex);

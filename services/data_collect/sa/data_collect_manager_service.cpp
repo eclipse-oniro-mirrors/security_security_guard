@@ -133,7 +133,7 @@ void DataCollectManagerService::OnStart()
     }
     AcquireDataSubscribeManager::GetInstance().StartClearEventCache();
     auto tokenBucketTask = [this]() {
-        while (true) {
+        while (!isStopTokenBucketTask_.load()) {
             if (tokenBucket_.load() < TOKEN_BUCKET_MAX_SIZE) {
                 tokenBucket_.fetch_add(TOKEN_BUCKET_STEP_SIZE);
             }
@@ -146,6 +146,7 @@ void DataCollectManagerService::OnStart()
 void DataCollectManagerService::OnStop()
 {
     SecurityCollector::DataCollection::GetInstance().CloseLib();
+    isStopTokenBucketTask_.store(true);
     AcquireDataSubscribeManager::GetInstance().StopClearEventCache();
     AcquireDataSubscribeManager::GetInstance().DeInitDeviceId();
     AcquireDataSubscribeManager::GetInstance().DeInitEventQueue();
@@ -1098,13 +1099,6 @@ ErrCode DataCollectManagerService::CreatClient(const std::string &eventGroup, co
         SGLOGE("cb is null");
         return NULL_OBJECT;
     }
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (clientCallBacks_.find(clientId) != clientCallBacks_.end()) {
-            SGLOGE("clientId exist");
-            return BAD_PARAM;
-        }
-    }
     SgSubscribeEvent event {};
     ret = AcquireDataSubscribeManager::GetInstance().CreatClient(eventGroup, clientId, cb);
     if (ret != SUCCESS) {
@@ -1113,10 +1107,16 @@ ErrCode DataCollectManagerService::CreatClient(const std::string &eventGroup, co
     }
     ret = SetDeathCallBack(event, cb);
     if (ret != SUCCESS) {
+        AcquireDataSubscribeManager::GetInstance().DestoryClient(eventGroup, clientId);
         return ret;
     }
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (clientCallBacks_.find(clientId) != clientCallBacks_.end()) {
+            SGLOGE("clientId exist");
+            AcquireDataSubscribeManager::GetInstance().DestoryClient(eventGroup, clientId);
+            return BAD_PARAM;
+        }
         clientCallBacks_[clientId] = cb;
     }
     return SUCCESS;

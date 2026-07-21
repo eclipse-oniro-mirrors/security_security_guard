@@ -87,8 +87,14 @@ void SecurityCollectorManagerService::OnStart()
 
 void SecurityCollectorManagerService::OnStop()
 {
+    static std::atomic<bool> isStopping(false);
+    if (isStopping.exchange(true)) {
+        return;
+    }
     g_flag = false;
-    g_mainThread.join();
+    if (g_mainThread.joinable()) {
+        g_mainThread.join();
+    }
 }
 
 int SecurityCollectorManagerService::Dump(int fd, const std::vector<std::u16string>& args)
@@ -158,8 +164,7 @@ int32_t SecurityCollectorManagerService::Unsubscribe(const sptr<IRemoteObject> &
         LOGE("Unsubscriber event failed, subscriber count is 0");
         return FAILED;
     }
-    CleanSubscriber(callback);
-
+    bool result = CleanSubscriber(callback);
     ScUnsubscribeEvent subEvent;
     subEvent.pid = IPCSkeleton::GetCallingPid();
     subEvent.ret = SUCCESS;
@@ -167,6 +172,9 @@ int32_t SecurityCollectorManagerService::Unsubscribe(const sptr<IRemoteObject> &
     ReportScUnsubscribeEvent(subEvent);
 
     LOGI("Out unsubscribe");
+    if (!result) {
+        return SUCCESS;
+    }
     g_refCount.fetch_sub(1);
     return SUCCESS;
 }
@@ -275,12 +283,13 @@ int32_t SecurityCollectorManagerService::CollectorStop(const SecurityCollectorSu
     return SUCCESS;
 }
 
-void SecurityCollectorManagerService::CleanSubscriber(const sptr<IRemoteObject> &remote)
+bool SecurityCollectorManagerService::CleanSubscriber(const sptr<IRemoteObject> &remote)
 {
     LOGI("Clean Subscribe ");
     UnsetDeathRecipient(remote);
-    SecurityCollectorSubscriberManager::GetInstance().UnsubscribeCollector(remote);
+    bool removed = SecurityCollectorSubscriberManager::GetInstance().UnsubscribeCollector(remote);
     SecurityCollectorSubscriberManager::GetInstance().RemoveAllFilter();
+    return removed;
 }
 
 bool SecurityCollectorManagerService::SetDeathRecipient(const sptr<IRemoteObject> &remote)
@@ -307,7 +316,6 @@ void SecurityCollectorManagerService::UnsetDeathRecipient(const sptr<IRemoteObje
 
 void SecurityCollectorManagerService::SubscriberDeathRecipient::OnRemoteDied(const wptr<IRemoteObject> &remote)
 {
-    g_refCount.fetch_sub(1);
     LOGD("SecurityCollectorManagerService In");
     if (remote == nullptr) {
         LOGE("remote object is nullptr");
@@ -323,7 +331,9 @@ void SecurityCollectorManagerService::SubscriberDeathRecipient::OnRemoteDied(con
         LOGE("service is nullptr");
         return;
     }
-    service->CleanSubscriber(object);
+    if (service->CleanSubscriber(object)) {
+        g_refCount.fetch_sub(1);
+    }
     LOGD("SecurityCollectorManagerService out");
 }
 

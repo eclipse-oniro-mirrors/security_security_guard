@@ -174,12 +174,13 @@ int64_t DatabaseHelper::CountAllEvent()
 
 int64_t DatabaseHelper::CountEventByEventId(int64_t eventId)
 {
-    int64_t count;
+    int64_t count = 0;
     GenericValues conditions;
     conditions.Put(EVENT_ID, std::to_string(eventId));
     int ret = Count(count, dbTable_, conditions);
     if (ret != SUCCESS) {
         SGLOGE("failed to count event, eventId=%{public}" PRId64 ", ret=%{public}d", eventId, ret);
+        count = 0;
     }
     return count;
 }
@@ -247,7 +248,7 @@ int DatabaseHelper::QueryEventBase(const GenericValues &conditions, std::vector<
                 .eventId = row.GetInt64(EVENT_ID),
                 .date = row.GetString(DATE),
                 .content = row.GetString(CONTENT),
-                .userId = row.GetInt64(USER_ID),
+                .userId = static_cast<int32_t>(row.GetInt64(USER_ID)),
                 .deviceId = row.GetString(DEVICE_ID)
             }
         );

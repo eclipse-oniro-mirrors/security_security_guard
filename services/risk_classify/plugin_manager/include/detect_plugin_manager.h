@@ -74,8 +74,8 @@ private:
         std::string GetPluginName() { return pluginName_; };
 
     private:
-        void *handle_;
-        IDetectPlugin *instance_;
+        void *handle_ = nullptr;
+        IDetectPlugin *instance_ = nullptr;
         std::string pluginName_;
     };
 

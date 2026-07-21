@@ -347,7 +347,7 @@ static napi_value NapiReportSecurityInfo(napi_env env, napi_callback_info info)
 
 static bool IsNum(const std::string &s)
 {
-    return std::all_of(s.begin(), s.end(), isdigit);
+    return std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isdigit(c); });
 }
 
 static napi_value GetConditionsTime(napi_env env, napi_value object, const std::string &key, std::string &value)
@@ -418,6 +418,7 @@ static napi_value GenerateSecurityModelResult(napi_env env, RequestSecurityModel
     napi_value ret = NapiCreateObject(env);
     if (ret == nullptr) {
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi create object error ."));
+        return nullptr;
     }
     napi_value deviceId = NapiCreateString(env, context->result.devId.c_str());
     napi_value modelId = NapiCreateUint32(env, context->result.modelId);
@@ -490,13 +491,13 @@ static napi_value ParseModelId(napi_env env, const std::string &modelNameStr, ui
 static std::string ParseOptionalString(napi_env env, napi_value object, const std::string &key, uint32_t maxLen)
 {
     bool hasProperty = false;
-    NAPI_CALL(env, napi_has_named_property(env, object, key.c_str(), &hasProperty));
+    NAPI_CALL_BASE(env, napi_has_named_property(env, object, key.c_str(), &hasProperty), "");
     if (!hasProperty) {
         SGLOGD("no %{public}s param", key.c_str());
         return "";
     }
     napi_value value = nullptr;
-    NAPI_CALL(env, napi_get_named_property(env, object, key.c_str(), &value));
+    NAPI_CALL_BASE(env, napi_get_named_property(env, object, key.c_str(), &value), "");
     if (value == nullptr) {
         SGLOGE("get %{public}s failed", key.c_str());
         return "";
@@ -568,9 +569,18 @@ static napi_value NapiGetModelResult(napi_env env, napi_callback_info info)
         return nullptr;
     }
     napi_value resourceName = NapiCreateString(env, "NapiGetModelResult");
-    NAPI_CALL(env, napi_create_async_work(env, nullptr, resourceName, RequestSecurityModelResultExecute,
-        RequestSecurityModelResultComplete, static_cast<void *>(context), &context->asyncWork));
-    NAPI_CALL(env, napi_queue_async_work(env, context->asyncWork));
+    if (napi_create_async_work(env, nullptr, resourceName, RequestSecurityModelResultExecute,
+        RequestSecurityModelResultComplete, static_cast<void *>(context), &context->asyncWork) != napi_ok) {
+        delete context;
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi_create_async_work failed"));
+        return nullptr;
+    }
+    if (napi_queue_async_work(env, context->asyncWork) != napi_ok) {
+        napi_delete_async_work(env, context->asyncWork);
+        delete context;
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi_queue_async_work failed"));
+        return nullptr;
+    }
     return promise;
 #else
     napi_throw(env, GenerateBusinessError(env, API_SUPPORT_ERROR));
@@ -663,10 +673,18 @@ static napi_value NapiUpdatePolicyFile(napi_env env, napi_callback_info info)
         return nullptr;
     }
     napi_value resourceName = NapiCreateString(env, "NapiUpdatePolicyFile");
-    NAPI_CALL(env, napi_create_async_work(env, nullptr, resourceName, UpdatePolicyExecute,
-        UpdatePolicyComplete, static_cast<void *>(context), &context->asyncWork));
-    NAPI_CALL(env, napi_queue_async_work(env, context->asyncWork));
-
+    if (napi_create_async_work(env, nullptr, resourceName, UpdatePolicyExecute,
+        UpdatePolicyComplete, static_cast<void *>(context), &context->asyncWork) != napi_ok) {
+        delete context;
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi_create_async_work failed"));
+        return nullptr;
+    }
+    if (napi_queue_async_work(env, context->asyncWork) != napi_ok) {
+        napi_delete_async_work(env, context->asyncWork);
+        delete context;
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi_queue_async_work failed"));
+        return nullptr;
+    }
     return promise;
 }
 
@@ -920,7 +938,7 @@ static int32_t ParseQueryParamsAndCreateContext(napi_env env, napi_callback_info
     }
     context->env = env;
     context->threadId = getproctid();
-    napi_create_reference(env, argv[index], 1, &context->ref);
+    NAPI_CALL_BASE(env, napi_create_reference(env, argv[index], 1, &context->ref), BAD_PARAM);
     return SUCCESS;
 }
 
@@ -929,7 +947,11 @@ static napi_value NapiQuerySecurityEvent(napi_env env, napi_callback_info info)
     std::vector<SecurityEventRuler> rules;
     QuerySecurityEventContext *context = nullptr;
     int32_t ret = ParseQueryParamsAndCreateContext(env, info, rules, context);
-    if (ret != SUCCESS || context == nullptr) {
+    if (context == nullptr) {
+        return nullptr;
+    }
+    if (ret != SUCCESS) {
+        delete context;
         return nullptr;
     }
     auto querier = std::make_shared<NapiSecurityEventQuerier>(context, [] (const napi_env env, const napi_ref ref) {
@@ -1081,12 +1103,19 @@ static bool CompareOnAndOffRef(const napi_env env, napi_ref subscriberRef, napi_
     if (!IsCurrentThread(threadId)) {
         return false;
     }
-    napi_value subscriberCallback;
-    napi_get_reference_value(env, subscriberRef, &subscriberCallback);
-    napi_value unsubscriberCallback;
-    napi_get_reference_value(env, unsubscriberRef, &unsubscriberCallback);
+    napi_value subscriberCallback = nullptr;
+    napi_value unsubscriberCallback = nullptr;
+    if (napi_get_reference_value(env, subscriberRef, &subscriberCallback) != napi_ok || subscriberCallback == nullptr) {
+        return false;
+    }
+    if (napi_get_reference_value(env, unsubscriberRef, &unsubscriberCallback) != napi_ok ||
+        unsubscriberCallback == nullptr) {
+        return false;
+    }
     bool result = false;
-    napi_strict_equals(env, subscriberCallback, unsubscriberCallback, &result);
+    if (napi_strict_equals(env, subscriberCallback, unsubscriberCallback, &result) != napi_ok) {
+        return false;
+    }
     return result;
 }
 
@@ -1169,6 +1198,7 @@ static napi_value GenerateEvent(napi_env env, const NapiSecurityEvent &event)
     napi_value ret = NapiCreateObject(env);
     if (ret == nullptr) {
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "napi create object error ."));
+        return nullptr;
     }
     napi_value eventId = NapiCreateInt64(env, event.eventId);
     napi_value version = NapiCreateString(env, event.version);

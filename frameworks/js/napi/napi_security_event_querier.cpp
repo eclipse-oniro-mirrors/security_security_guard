@@ -81,7 +81,13 @@ void NapiSecurityEventQuerier::RunCallback(QuerySecurityEventContext *context, C
     auto tmpContext = std::make_shared<QuerySecurityEventContext>(context);
     auto task = [tmpContext, callback, release]() {
         napi_handle_scope scope = nullptr;
-        napi_open_handle_scope(tmpContext->env, &scope);
+        napi_status status = napi_open_handle_scope(tmpContext->env, &scope);
+        if (status != napi_ok) {
+            SGLOGE("napi_open_handle_scope failed");
+            if (release != nullptr) {
+                release(tmpContext->threadId);
+            }
+        }
         if (scope == nullptr) {
             return;
         }
@@ -94,7 +100,39 @@ void NapiSecurityEventQuerier::RunCallback(QuerySecurityEventContext *context, C
             release(tmpContext->threadId);
         }
     };
-    napi_send_event(tmpContext->env, task, napi_eprio_high, "NapiSecurityEventQuerier::RunCallback");
+    if (napi_send_event(tmpContext->env, task, napi_eprio_high, "NapiSecurityEventQuerier::RunCallback") != napi_ok) {
+        SGLOGE("napi_send_event failed");
+    }
+}
+
+napi_value NapiSecurityEventQuerier::ConvertEventsToJsArray(const napi_env env,
+    const std::vector<SecurityCollector::SecurityEvent> &napiEvents)
+{
+    napi_value eventJsArray = nullptr;
+    napi_create_array_with_length(env, napiEvents.size(), &eventJsArray);
+    auto len = napiEvents.size();
+    for (size_t i = 0; i < len; i++) {
+        napi_value item = nullptr;
+        napi_status status = napi_create_object(env, &item);
+        if (status != napi_ok) {
+            SGLOGE("napi_create_object failed, %{public}d", status);
+            return nullptr;
+        }
+        napi_value eventId = NapiCreateInt64(env, napiEvents[i].GetEventId());
+        napi_value version = NapiCreateString(env, napiEvents[i].GetVersion().c_str());
+        napi_value content = NapiCreateString(env, napiEvents[i].GetContent().c_str());
+        napi_value timestamp = NapiCreateString(env, napiEvents[i].GetTimestamp().c_str());
+        napi_set_named_property(env, item, "eventId", eventId);
+        napi_set_named_property(env, item, "version", version);
+        napi_set_named_property(env, item, "content", content);
+        napi_set_named_property(env, item, "timestamp", timestamp);
+        status = napi_set_element(env, eventJsArray, i, item);
+        if (status != napi_ok) {
+            SGLOGE("napi_set_element failed, %{public}d", status);
+            return nullptr;
+        }
+    }
+    return eventJsArray;
 }
 
 void NapiSecurityEventQuerier::OnQuery(const std::vector<SecurityCollector::SecurityEvent> &events)
@@ -109,34 +147,22 @@ void NapiSecurityEventQuerier::OnQuery(const std::vector<SecurityCollector::Secu
             if (threadId != getproctid() || !NapiRequestDataManager::GetInstance().GetDataCallback(env)) {
                 return;
             }
-            napi_value eventJsArray = nullptr;
-            napi_create_array_with_length(env, napiEvents.size(), &eventJsArray);
-            auto len = napiEvents.size();
-            for (size_t i = 0; i < len; i++) {
-                napi_value item = nullptr;
-                napi_status status = napi_create_object(env, &item);
-                if (status != napi_ok) {
-                    SGLOGE("napi_create_object failed, %{public}d", status);
-                    return;
-                }
-                napi_value eventId = NapiCreateInt64(env, napiEvents[i].GetEventId());
-                napi_value version = NapiCreateString(env, napiEvents[i].GetVersion().c_str());
-                napi_value content = NapiCreateString(env, napiEvents[i].GetContent().c_str());
-                napi_value timestamp = NapiCreateString(env, napiEvents[i].GetTimestamp().c_str());
-                napi_set_named_property(env, item, "eventId", eventId);
-                napi_set_named_property(env, item, "version", version);
-                napi_set_named_property(env, item, "content", content);
-                napi_set_named_property(env, item, "timestamp", timestamp);
-                status = napi_set_element(env, eventJsArray, i, item);
-                if (status != napi_ok) {
-                    SGLOGE("napi_set_element failed, %{public}d", status);
-                    return;
-                }
+            napi_value eventJsArray = ConvertEventsToJsArray(env, napiEvents);
+            if (eventJsArray == nullptr) {
+                return;
             }
             napi_value argv[1] = {eventJsArray};
             napi_value querier = nullptr;
             napi_get_reference_value(env, ref, &querier);
+            if (querier == nullptr) {
+                SGLOGE("napi_get_reference_value failed");
+                return;
+            }
             napi_value onQuery = NapiGetNamedProperty(env, querier, ON_QUERY_ATTR);
+            if (onQuery == nullptr) {
+                SGLOGE("NapiGetNamedProperty failed onQuery");
+                return;
+            }
             napi_value ret = nullptr;
             SGLOGD("NAPI begin call OnQuery.");
             napi_status res = napi_call_function(env, querier, onQuery, 1, argv, &ret);
@@ -154,7 +180,15 @@ void NapiSecurityEventQuerier::OnComplete()
         SGLOGD("NAPI OnComplete Callback.");
         napi_value querier = nullptr;
         napi_get_reference_value(env, ref, &querier);
+        if (querier == nullptr) {
+            SGLOGE("napi_get_reference_value failed");
+            return;
+        }
         napi_value onComplete = NapiGetNamedProperty(env, querier, ON_COMPLETE_ATTR);
+        if (onComplete == nullptr) {
+            SGLOGE("NapiGetNamedProperty failed for onComplete");
+            return;
+        }
         napi_value ret = nullptr;
         napi_status status = napi_call_function(env, querier, onComplete, 0, nullptr, &ret);
         if (status != napi_ok) {
@@ -182,11 +216,19 @@ void NapiSecurityEventQuerier::OnError(const std::string &message)
         napi_value argv[1] = {jsMessage};
         napi_value querier = nullptr;
         napi_get_reference_value(env, ref, &querier);
-        napi_value onQuery = NapiGetNamedProperty(env, querier, ON_ERROR_ATTR);
+        if (querier == nullptr) {
+            SGLOGE("napi_get_reference_value failed");
+            return;
+        }
+        napi_value onError = NapiGetNamedProperty(env, querier, ON_ERROR_ATTR);
+        if (onError == nullptr) {
+            SGLOGE("NapiGetNamedProperty failed for onError");
+            return;
+        }
         napi_value ret = nullptr;
-        napi_status status = napi_call_function(env, querier, onQuery, 1, argv, &ret);
+        napi_status status = napi_call_function(env, querier, onError, 1, argv, &ret);
         if (status != napi_ok) {
-            SGLOGE("failed to call OnQuery JS function.");
+            SGLOGE("failed to call onError JS function.");
         }
         SGLOGD("NAPI OnError END.");
     },  [this] (pid_t threadId) {
