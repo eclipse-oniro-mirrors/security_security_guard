@@ -55,7 +55,7 @@ private:
     virtual ErrorCode CheckFileStream(std::ifstream &stream);
     virtual bool IsCollectorStarted(int64_t eventId);
     ffrt::recursive_mutex mutex_;
-    std::mutex closeLibmutex_;
+    ffrt::mutex closeLibmutex_;
     std::unordered_map<int64_t, LibLoader> eventIdToLoaderMap_;
     std::unordered_map<int64_t, LibLoader> needCloseLibMap_;
     std::unordered_map<int64_t, uint32_t> eventIdToSubscribeCount_;
