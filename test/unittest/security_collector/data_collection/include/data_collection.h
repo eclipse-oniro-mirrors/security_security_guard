@@ -44,7 +44,6 @@ public:
     virtual ErrorCode GetCollectorType(int64_t eventId, int32_t& collectorType);
     virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
         std::vector<SecurityEvent> &events);
-    virtual bool SecurityGuardSubscribeCollector(const std::vector<int64_t>& eventIds);
     virtual void CloseLib();
 private:
     DataCollection() = default;

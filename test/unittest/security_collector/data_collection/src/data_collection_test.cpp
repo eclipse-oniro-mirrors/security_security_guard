@@ -201,53 +201,6 @@ public:
     MOCK_METHOD2(GetCollectorPath, ErrorCode(int64_t eventId, std::string& path));
 };
 
-HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector01, testing::ext::TestSize.Level0)
-{
-    std::vector<int64_t> eventIds;
-    MockMyClass myOb;
-    EXPECT_TRUE(myOb.SecurityGuardSubscribeCollector(eventIds));
-}
-
-HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector04, testing::ext::TestSize.Level0)
-{
-    std::vector<int64_t> eventIds {1};
-    MockMyClass myOb;
-    std::shared_ptr<SecurityCollector::ICollectorFwk> api;
-    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
-    EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(SUCCESS));
-    EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
-    EXPECT_TRUE(myOb.SecurityGuardSubscribeCollector(eventIds));
-}
-
-HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector02, testing::ext::TestSize.Level0)
-{
-    std::vector<int64_t> eventIds {1};
-    MockMyClass myOb;
-    std::shared_ptr<SecurityCollector::ICollectorFwk> api;
-    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
-    EXPECT_CALL(myOb, LoadCollector(1, "", api)).WillOnce(Return(FAILED));
-    EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
-    EXPECT_TRUE(myOb.SecurityGuardSubscribeCollector(eventIds));
-}
-
-HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector03, testing::ext::TestSize.Level0)
-{
-    std::vector<int64_t> eventIds {1};
-    MockMyClass myOb;
-    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(FAILED));
-    EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
-    EXPECT_TRUE(myOb.SecurityGuardSubscribeCollector(eventIds));
-}
-
-HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector05, testing::ext::TestSize.Level0)
-{
-    std::vector<int64_t> eventIds {1};
-    MockMyClass myOb;
-    std::shared_ptr<SecurityCollector::ICollectorFwk> api = std::make_shared<TestFwk> ();
-    EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(true));
-    EXPECT_TRUE(myOb.SecurityGuardSubscribeCollector(eventIds));
-}
-
 HWTEST_F(DataCollectionTest, SecurityGuardSubscribeCollector06, testing::ext::TestSize.Level0)
 {
     MockQuerySecurityEventClass myOb;

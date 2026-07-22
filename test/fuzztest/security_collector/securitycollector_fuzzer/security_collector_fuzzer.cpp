@@ -79,7 +79,6 @@ void DataCollectionFuzzTest(const uint8_t* data, size_t size)
     DataCollection::GetInstance().GetCollectorPath(eventId, string);
     DataCollection::GetInstance().CheckFileStream(stream);
     DataCollection::GetInstance().IsCollectorStarted(eventId);
-    DataCollection::GetInstance().SecurityGuardSubscribeCollector(eventIds);
 }
 
 void LibLoaderFuzzTest(const uint8_t* data, size_t size)
