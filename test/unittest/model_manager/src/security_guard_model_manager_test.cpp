@@ -272,6 +272,9 @@ HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerGetResult004, TestSize.L
     EXPECT_EQ(manager.GetResult(8888, "test"), "unknown");
     EXPECT_TRUE(ModelManager::GetInstance().InitModel(8888) != SUCCESS);
 }
+class ModelResultListener : public IModelResultListener {
+    void OnChange(std::string result) {};
+};
 
 HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerSubscribeResult002, TestSize.Level0)
 {
@@ -280,7 +283,14 @@ HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerSubscribeResult002, Test
     .WillOnce([](uint32_t modelId) {
         return SUCCESS;
     });
-    EXPECT_EQ(manager.SubscribeResult(111, nullptr), FAILED);
+    auto listener = std::make_shared<ModelResultListener>();
+    EXPECT_EQ(manager.SubscribeResult(111, listener), FAILED);
+}
+
+HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerSubscribeResult003, TestSize.Level0)
+{
+    MockMyModelManager manager {};
+    EXPECT_EQ(manager.SubscribeResult(111, nullptr), BAD_PARAM);
 }
 
 HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerStartSecurityModel003, TestSize.Level0)

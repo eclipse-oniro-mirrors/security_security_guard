@@ -21,6 +21,10 @@ namespace Security::SecurityGuard {
 
 Statement::Statement(sqlite3* db, const std::string &sql) : db_(db), sql_(sql)
 {
+    if (db == nullptr) {
+        SGLOGE("db is nullptr");
+        return;
+    }
     if (sqlite3_prepare_v2(db, sql.c_str(), sql.size(), &statement_, nullptr) != SQLITE_OK) {
         SGLOGE("Cannot prepare, errorMsg: %{public}s", sqlite3_errmsg(db_));
     }

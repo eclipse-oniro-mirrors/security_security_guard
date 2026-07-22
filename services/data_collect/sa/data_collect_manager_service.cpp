@@ -83,7 +83,7 @@ namespace {
         {"RemoveFilter", {QUERY_SECURITY_EVENT_PERMISSION}},
         {"QuerySecurityEventById", {QUERY_AUDIT_EVENT_PERMISSION}}
     };
-    std::mutex g_configCacheMutex;
+    ffrt::mutex g_configCacheMutex;
     std::unordered_set<std::string> g_configCacheFilesSet;
     constexpr uint32_t FINISH = 0;
     constexpr uint32_t CONTINUE = 1;
@@ -202,11 +202,12 @@ ErrCode DataCollectManagerService::RequestDataSubmit(int64_t eventId, const std:
     if (ret != SUCCESS) {
         return ret;
     }
-    if (tokenBucket_.load() <= 0) {
+    int32_t prev = tokenBucket_.fetch_sub(1);
+    if (prev <= 0) {
+        tokenBucket_.fetch_add(1);
         DataStatistics::GetInstance().IncrementRequestDataSubmit();
         return FAILED;
     }
-    tokenBucket_.fetch_sub(1);
     SecurityCollector::Event event {};
     event.eventId = eventId;
     event.version = version;
@@ -391,7 +392,7 @@ ErrCode DataCollectManagerService::Unsubscribe(const SecurityCollector::Security
         return ret;
     }
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<ffrt::mutex> lock(mutex_);
         if (deathRecipient_ != nullptr) {
             cb->RemoveDeathRecipient(deathRecipient_);
         }
@@ -796,7 +797,7 @@ bool DataCollectManagerService::ParseTrustListFile(const std::string &trustListF
     }
 
     for (const auto &ele : jsonObj["trust_list_config"]) {
-        if (!ele.contains("name")) {
+        if (!ele.contains("name") || !ele["name"].is_string()) {
             return false;
         }
         g_configCacheFilesSet.emplace(ele["name"]);
@@ -813,7 +814,7 @@ ErrCode DataCollectManagerService::ConfigUpdate(int fd, const std::string& name)
         return code;
     }
     {
-        std::lock_guard<std::mutex> lock(g_configCacheMutex);
+        std::lock_guard<ffrt::mutex> lock(g_configCacheMutex);
         if (!ParseTrustListFile(TRUST_LIST_FILE_PATH)) {
             return BAD_PARAM;
         }
@@ -960,7 +961,7 @@ ErrCode DataCollectManagerService::RemoveFilter(const SecurityEventFilter &subsc
 
 int32_t DataCollectManagerService::SetDeathCallBack(SgSubscribeEvent event, const sptr<IRemoteObject> &callback)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<ffrt::mutex> lock(mutex_);
     if (deathRecipient_ == nullptr) {
         deathRecipient_ = new (std::nothrow) SubscriberDeathRecipient(this);
         if (deathRecipient_ == nullptr) {
@@ -1055,20 +1056,17 @@ ErrCode DataCollectManagerService::DestoryClient(const std::string &eventGroup, 
         return ret;
     }
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<ffrt::mutex> lock(mutex_);
         auto iter = clientCallBacks_.find(clientId);
         if (iter == clientCallBacks_.end()) {
             SGLOGE("clientId not exist");
             return BAD_PARAM;
         }
-    }
-    ret = AcquireDataSubscribeManager::GetInstance().DestoryClient(eventGroup, clientId);
-    if (ret != SUCCESS) {
-        SGLOGI("AcquireDataSubscribeManager, DestoryClient ret=%{public}d", ret);
-        return ret;
-    }
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
+        ret = AcquireDataSubscribeManager::GetInstance().DestoryClient(eventGroup, clientId);
+        if (ret != SUCCESS) {
+            SGLOGI("AcquireDataSubscribeManager, DestoryClient ret=%{public}d", ret);
+            return ret;
+        }
         if (deathRecipient_ != nullptr) {
             clientCallBacks_.at(clientId)->RemoveDeathRecipient(deathRecipient_);
         }
@@ -1111,7 +1109,7 @@ ErrCode DataCollectManagerService::CreatClient(const std::string &eventGroup, co
         return ret;
     }
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<ffrt::mutex> lock(mutex_);
         if (clientCallBacks_.find(clientId) != clientCallBacks_.end()) {
             SGLOGE("clientId exist");
             AcquireDataSubscribeManager::GetInstance().DestoryClient(eventGroup, clientId);

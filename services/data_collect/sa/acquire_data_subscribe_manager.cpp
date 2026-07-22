@@ -521,6 +521,7 @@ void AcquireDataSubscribeManager::DeInitDeviceId()
 
 void AcquireDataSubscribeManager::InitEventQueue()
 {
+    std::lock_guard<ffrt::mutex> lock(queueMutex_);
     if (queue_ != nullptr) {
         SGLOGI("InitEventQueue queue_ already init");
         return;
@@ -745,6 +746,9 @@ bool AcquireDataSubscribeManager::PublishEventToSub(const SecurityCollector::Eve
     bool flag = false;
     std::lock_guard<ffrt::mutex> lock(sessionMutex_);
     for (auto &it : sessionsMap_) {
+        if (it.second == nullptr) {
+            continue;
+        }
         if (it.second->subEvents.find(event.eventId) == it.second->subEvents.end()) {
             continue;
         }
@@ -946,13 +950,6 @@ int AcquireDataSubscribeManager::CreatClient(const std::string &eventGroup, cons
         SGLOGE("IsExceedLimited error");
         return ret;
     }
-    {
-        std::lock_guard<ffrt::mutex> lock(sessionMutex_);
-        if (sessionsMap_.find(clientId) != sessionsMap_.end()) {
-            SGLOGE("current clientId exist");
-            return BAD_PARAM;
-        }
-    }
     auto session = std::make_shared<ClientSession>();
     session->clientId = clientId;
     session->callback = cb;
@@ -960,6 +957,10 @@ int AcquireDataSubscribeManager::CreatClient(const std::string &eventGroup, cons
     session->eventGroup = eventGroup;
     {
         std::lock_guard<ffrt::mutex> lock(sessionMutex_);
+        if (sessionsMap_.find(clientId) != sessionsMap_.end()) {
+            SGLOGE("current clientId exist");
+            return BAD_PARAM;
+        }
         sessionsMap_[clientId] = session;
     }
     return SUCCESS;

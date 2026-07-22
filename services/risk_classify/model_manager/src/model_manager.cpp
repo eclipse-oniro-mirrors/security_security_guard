@@ -137,6 +137,10 @@ std::string ModelManager::GetResult(uint32_t modelId, const std::string &param)
 
 int32_t ModelManager::SubscribeResult(uint32_t modelId, std::shared_ptr<IModelResultListener> listener)
 {
+    if (listener == nullptr) {
+        SGLOGE("listener is null, modelId=%{public}u", modelId);
+        return BAD_PARAM;
+    }
     int32_t ret = InitModel(modelId);
     if (ret != SUCCESS) {
         return ret;

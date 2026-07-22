@@ -132,7 +132,6 @@ private:
     ffrt::mutex clearCachemutex_ {};
     ffrt::mutex userIdMutex_ {};
     ffrt::mutex queueMutex_ {};
-    ffrt::mutex dbQueueMutex_ {};
     std::string deviceId_ {};
     int32_t userId_ {-1};
     ffrt::mutex sessionMutex_{};

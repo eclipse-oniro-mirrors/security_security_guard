@@ -15,7 +15,7 @@
 
 #ifndef SECURITY_GUARD_EVENT_STORE_H
 #define SECURITY_GUARD_EVENT_STORE_H
-
+#include "ffrt.h"
 #include "sg_sqlite_helper.h"
 #include "i_model_info.h"
 #include "store_define.h"
@@ -47,6 +47,7 @@ public:
 
 private:
     int IsExistStore();
+    ffrt::mutex storeMutex_;
     std::shared_ptr<SgSqliteHelper> store_;
 };
 }  // OHOS::Security::SecurityGuard
