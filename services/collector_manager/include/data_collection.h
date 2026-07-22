@@ -41,9 +41,7 @@ public:
     int SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
     int UnsubscribeCollectors(const std::vector<int64_t> &eventIds);
     ErrorCode GetCollectorType(int64_t eventId, int32_t &collectorType);
-    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
-                               std::vector<SecurityEvent> &events);
-    bool SecurityGuardSubscribeCollector(const std::vector<int64_t> &eventIds);
+    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers, std::vector<SecurityEvent> &events);
     void CloseLib();
 private:
     DataCollection() = default;

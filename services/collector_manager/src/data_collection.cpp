@@ -67,31 +67,6 @@ bool DataCollection::StartCollectors(const std::vector<int64_t>& eventIds, std::
     return true;
 }
 
-bool DataCollection::SecurityGuardSubscribeCollector(const std::vector<int64_t>& eventIds)
-{
-    LOGI("Start to subscribe collectors start");
-    for (int64_t eventId : eventIds) {
-        LOGI("StartCollectors eventId is 0x%{public}" PRIx64, eventId);
-        if (IsCollectorStarted(eventId)) {
-            LOGI("Collector already started, eventId is 0x%{public}" PRIx64, eventId);
-            continue;
-        }
-        std::string collectorPath;
-        int ret = GetCollectorPath(eventId, collectorPath);
-        if (ret != SUCCESS) {
-            LOGE("GetCollectorPath failed, eventId is 0x%{public}" PRIx64, eventId);
-            continue;
-        }
-        ret = LoadCollector(eventId, collectorPath, nullptr);
-        if (ret != SUCCESS) {
-            LOGE("LoadCollector failed, eventId is 0x%{public}" PRIx64, eventId);
-            continue;
-        }
-    }
-    LOGD("SubscribeCollectors finish");
-    return true;
-}
-
 bool DataCollection::IsCollectorStarted(int64_t eventId)
 {
     std::lock_guard<ffrt::recursive_mutex> lock(mutex_);
