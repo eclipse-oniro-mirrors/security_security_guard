@@ -370,7 +370,7 @@ void SecurityCollectorManagerService::ExecuteOnNotifyByTask(const sptr<IRemoteOb
     }
 }
 
-int32_t SecurityCollectorManagerService::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+int32_t SecurityCollectorManagerService::QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events)
 {
     g_refCount.fetch_add(1);
@@ -385,6 +385,28 @@ int32_t SecurityCollectorManagerService::QuerySecurityEvent(const std::vector<Se
 
     if (DataCollection::GetInstance().QuerySecurityEvent(rulers, events) != SUCCESS) {
         LOGI("QuerySecurityEvent error");
+        g_refCount.fetch_sub(1);
+        return READ_ERR;
+    }
+    g_refCount.fetch_sub(1);
+    return SUCCESS;
+}
+
+int32_t SecurityCollectorManagerService::QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    g_refCount.fetch_add(1);
+    LOGD("begin QuerySecurityEventBatch");
+    AccessToken::AccessTokenID callerToken = IPCSkeleton::GetCallingTokenID();
+    int code = AccessToken::AccessTokenKit::VerifyAccessToken(callerToken, QUERY_EVENT_PERMISSION);
+    if (code != AccessToken::PermissionState::PERMISSION_GRANTED) {
+        LOGE("caller no permission");
+        g_refCount.fetch_sub(1);
+        return NO_PERMISSION;
+    }
+
+    if (DataCollection::GetInstance().QuerySecurityEventBatch(rulers, events, failedEventIds) != SUCCESS) {
+        LOGI("QuerySecurityEventBatch error");
         g_refCount.fetch_sub(1);
         return READ_ERR;
     }

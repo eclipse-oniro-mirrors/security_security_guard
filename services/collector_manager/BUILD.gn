@@ -66,6 +66,7 @@ ohos_shared_library("security_collector_manager") {
   ]
 
   deps = [
+    "${sg_root_dir}/frameworks/common/collector:libsg_collector_sdk",
   ]
 
   external_deps = [

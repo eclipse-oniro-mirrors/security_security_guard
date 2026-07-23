@@ -164,7 +164,7 @@ int32_t SecurityCollectorManagerProxy::CollectorStop(const SecurityCollectorSubs
     return ret;
 }
 
-int32_t SecurityCollectorManagerProxy::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+int32_t SecurityCollectorManagerProxy::QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events)
 {
     LOGD("enter SecurityCollectorManagerProxy QuerySecurityEvent");
@@ -219,5 +219,98 @@ int32_t SecurityCollectorManagerProxy::QuerySecurityEvent(const std::vector<Secu
         events.emplace_back(*event);
     }
     return SUCCESS;
+}
+
+int32_t SecurityCollectorManagerProxy::WriteQueryBatchRequest(MessageParcel &data,
+    const std::vector<SecurityEventRuler> &rulers)
+{
+    if (!data.WriteInterfaceToken(GetDescriptor())) {
+        LOGE("WriteInterfaceToken error");
+        return WRITE_ERR;
+    }
+    if (rulers.size() > MAX_QUERY_EVENT_SIZE) {
+        LOGE("rulers size exceeds limit, size=%{public}zu", rulers.size());
+        return BAD_PARAM;
+    }
+    if (!data.WriteUint32(rulers.size())) {
+        LOGE("failed to WriteInt32 for parcelable vector size");
+        return WRITE_ERR;
+    }
+    for (const auto &ruler : rulers) {
+        if (!data.WriteParcelable(&ruler)) {
+            LOGE("failed to WriteParcelable for parcelable");
+            return WRITE_ERR;
+        }
+    }
+    return SUCCESS;
+}
+int32_t SecurityCollectorManagerProxy::ReadQueryBatchReply(MessageParcel &reply, std::vector<SecurityEvent> &events,
+    std::vector<int64_t> &failedEventIds)
+{
+    int32_t result = FAILED;
+    if (!reply.ReadInt32(result)) {
+        LOGE("Read result failed");
+        return FAILED;
+    }
+    uint32_t eventSize = 0;
+    if (!reply.ReadUint32(eventSize)) {
+        LOGE("failed to get the event size");
+        return BAD_PARAM;
+    }
+    if (eventSize > MAX_QUERY_EVENT_SIZE) {
+        LOGE("events size exceeds limit, size=%{public}u", eventSize);
+        return BAD_PARAM;
+    }
+    for (uint32_t index = 0; index < eventSize; index++) {
+        std::shared_ptr<SecurityEvent> event(reply.ReadParcelable<SecurityEvent>());
+        if (event == nullptr) {
+            LOGE("failed read security event");
+            return BAD_PARAM;
+        }
+        events.emplace_back(*event);
+    }
+
+    uint32_t failedSize = 0;
+    if (!reply.ReadUint32(failedSize)) {
+        LOGE("failed to get the failed event size");
+        return BAD_PARAM;
+    }
+    if (failedSize > MAX_QUERY_EVENT_SIZE) {
+        LOGE("failedEventIds size exceeds limit, size=%{public}u", failedSize);
+        return BAD_PARAM;
+    }
+    for (uint32_t index = 0; index < failedSize; index++) {
+        int64_t id = 0;
+        if (!reply.ReadInt64(id)) {
+            LOGE("read failedEventIds failed");
+            return BAD_PARAM;
+        }
+        failedEventIds.push_back(id);
+    }
+    return result;
+}
+
+int32_t SecurityCollectorManagerProxy::QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    LOGD("enter SecurityCollectorManagerProxy QuerySecurityEventBatch");
+    MessageParcel data;
+    MessageParcel reply;
+    int32_t ret = WriteQueryBatchRequest(data, rulers);
+    if (ret != SUCCESS) {
+        return ret;
+    }
+    MessageOption option = { MessageOption::TF_SYNC };
+    sptr<IRemoteObject> remote = Remote();
+    if (remote == nullptr) {
+        LOGE("Remote error");
+        return NULL_OBJECT;
+    }
+    ret = remote->SendRequest(CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    if (ret != ERR_NONE) {
+        LOGE("ret=%{public}d", ret);
+        return ret;
+    }
+    return ReadQueryBatchReply(reply, events, failedEventIds);
 }
 }

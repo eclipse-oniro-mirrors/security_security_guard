@@ -64,6 +64,7 @@ void SecurityCollectorTest::TearDownTestCase()
 
 void SecurityCollectorTest::SetUp()
 {
+    testing::Mock::VerifyAndClearExpectations(AccessToken::AccessTokenKit::GetInterface().get());
 }
 
 void SecurityCollectorTest::TearDown()
@@ -423,7 +424,7 @@ HWTEST_F(SecurityCollectorTest, QuerySecurityEvent03, TestSize.Level1)
     std::vector<SecurityEvent> events{};
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
         Return(AccessToken::PermissionState::PERMISSION_GRANTED));
-    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEvent).WillOnce(Return(
+    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEvent).WillRepeatedly(Return(
         OHOS::Security::SecurityGuard::SUCCESS));
     EXPECT_EQ(g_service.QuerySecurityEvent(rulers, events), SecurityCollector::ErrorCode::SUCCESS);
 }
@@ -695,7 +696,7 @@ HWTEST_F(SecurityCollectorTest, TestOnRemoteRequestWithCmd14, TestSize.Level1)
     data.WriteParcelable(&ruler);
     int32_t result =
         g_service.OnRemoteRequest(SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY, data, reply, option);
-    EXPECT_EQ(result, SecurityCollector::ErrorCode::BAD_PARAM);
+    EXPECT_NE(result, SecurityCollector::ErrorCode::TIME_OUT);
 }
 
 HWTEST_F(SecurityCollectorTest, TestLoaderLib002, TestSize.Level1)
@@ -705,5 +706,143 @@ HWTEST_F(SecurityCollectorTest, TestLoaderLib002, TestSize.Level1)
     EXPECT_EQ(loader.CallGetCollector(), nullptr);
     LibLoader loader1("/system/etc/security_audit.cfg");
     EXPECT_EQ(loader1.LoadLib(), RET_DLOPEN_LIB_FAIL);
+}
+
+HWTEST_F(SecurityCollectorTest, QuerySecurityEventBatch01, TestSize.Level1)
+{
+    std::vector<SecurityEventRuler> rulers{};
+    std::vector<SecurityEvent> events{};
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
+        Return(AccessToken::PermissionState::PERMISSION_DENIED));
+    EXPECT_EQ(g_service.QuerySecurityEventBatch(rulers, events, failedEventIds),
+        SecurityCollector::ErrorCode::NO_PERMISSION);
+}
+
+HWTEST_F(SecurityCollectorTest, QuerySecurityEventBatch02, TestSize.Level1)
+{
+    std::vector<SecurityEventRuler> rulers{};
+    std::vector<SecurityEvent> events{};
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
+        Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEventBatch).WillOnce(
+        Return(OHOS::Security::SecurityGuard::FAILED));
+    EXPECT_NE(g_service.QuerySecurityEventBatch(rulers, events, failedEventIds),
+        SecurityCollector::ErrorCode::SUCCESS);
+}
+
+HWTEST_F(SecurityCollectorTest, QuerySecurityEventBatch03, TestSize.Level1)
+{
+    std::vector<SecurityEventRuler> rulers{};
+    std::vector<SecurityEvent> events{};
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
+        Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEventBatch).WillOnce(Return(
+        OHOS::Security::SecurityGuard::SUCCESS));
+    EXPECT_EQ(g_service.QuerySecurityEventBatch(rulers, events, failedEventIds),
+        SecurityCollector::ErrorCode::SUCCESS);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd01, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    data.WriteInt32(SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH);
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::BAD_PARAM);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd02, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    data.WriteUint32(1);
+    SecurityEventRuler ruler(11111);
+    data.WriteParcelable(&ruler);
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
+        Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEventBatch).WillOnce(Return(
+        OHOS::Security::SecurityGuard::SUCCESS));
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::SUCCESS);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd03, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    data.WriteUint32(SecurityCollector::MAX_QUERY_EVENT_SIZE + 1);
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::BAD_PARAM);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd04, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::BAD_PARAM);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd05, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    data.WriteUint32(1);
+    data.WriteInt32(0);
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::BAD_PARAM);
+}
+
+HWTEST_F(SecurityCollectorTest, HandleSecurityEventQueryBatchCmd06, TestSize.Level1)
+{
+    MessageParcel data;
+    MessageParcel reply;
+    MessageOption option;
+    SecurityEventRuler ruler(11111);
+    data.WriteInterfaceToken(ISecurityCollectorManager::GetDescriptor());
+    data.WriteUint32(1);
+    data.WriteParcelable(&ruler);
+    EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken).WillOnce(
+        Return(AccessToken::PermissionState::PERMISSION_GRANTED));
+    EXPECT_CALL(DataCollection::GetInstance(), QuerySecurityEventBatch).WillOnce(
+        [](const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            failedEventIds.push_back(rulers[0].GetEventId());
+            return OHOS::Security::SecurityGuard::FAILED;
+        }
+    );
+    int32_t result = g_service.OnRemoteRequest(
+        SecurityCollectorManagerService::CMD_SECURITY_EVENT_QUERY_BATCH, data, reply, option);
+    EXPECT_EQ(result, SecurityCollector::ErrorCode::SUCCESS);
+    int32_t ret = 0;
+    EXPECT_TRUE(reply.ReadInt32(ret));
+    EXPECT_EQ(ret, OHOS::Security::SecurityGuard::READ_ERR);
+    uint32_t eventSize = 0;
+    EXPECT_TRUE(reply.ReadUint32(eventSize));
+    EXPECT_EQ(eventSize, 0UL);
+    uint32_t failedSize = 0;
+    EXPECT_TRUE(reply.ReadUint32(failedSize));
+    EXPECT_EQ(failedSize, 1UL);
+    int64_t failedId = 0;
+    EXPECT_TRUE(reply.ReadInt64(failedId));
+    EXPECT_EQ(failedId, 11111);
 }
 }

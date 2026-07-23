@@ -28,6 +28,8 @@ public:
     virtual int Subscribe(std::shared_ptr<ICollectorFwk> api, int64_t eventId);
     virtual int Unsubscribe(int64_t eventId);
     virtual int Query(const SecurityEventRuler &ruler, std::vector<SecurityEvent> &events);
+    virtual int BatchQuery(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     virtual int IsStartWithSub();
 };
 } // namespace OHOS::Security::SecurityCollector

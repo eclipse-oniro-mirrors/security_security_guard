@@ -36,8 +36,10 @@ public:
         std::shared_ptr<ICollectorFwk> api) = 0;
     virtual int UnsubscribeCollectors(const std::vector<int64_t>& eventIds) = 0;
     virtual ErrorCode GetCollectorType(int64_t eventId, int32_t& collectorType) = 0;
-    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events) = 0;
+    virtual int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds) = 0;
     virtual int32_t QuerySecurityEventConfig(std::string &result) = 0;
 };
 
@@ -58,8 +60,10 @@ public:
         std::shared_ptr<ICollectorFwk> api));
     MOCK_METHOD1(UnsubscribeCollectors, int(const std::vector<int64_t>& eventIds));
     MOCK_METHOD2(GetCollectorType, ErrorCode(int64_t eventId, int32_t& collectorType));
-    MOCK_METHOD2(QuerySecurityEvent, int32_t(const std::vector<SecurityEventRuler> rulers,
+    MOCK_METHOD2(QuerySecurityEvent, int32_t(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events));
+    MOCK_METHOD3(QuerySecurityEventBatch, int32_t(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds));
     MOCK_METHOD1(QuerySecurityEventConfig, int32_t(std::string &result));
     void CloseLib() {};
 };

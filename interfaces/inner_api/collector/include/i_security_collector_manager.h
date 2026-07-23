@@ -40,6 +40,7 @@ public:
         CMD_COLLECTOR_START = static_cast<uint32_t>(InterfaceCode::CMD_COLLECTOR_START),
         CMD_COLLECTOR_STOP =  static_cast<uint32_t>(InterfaceCode::CMD_COLLECTOR_STOP),
         CMD_SECURITY_EVENT_QUERY = static_cast<uint32_t>(InterfaceCode::CMD_SECURITY_EVENT_QUERY),
+        CMD_SECURITY_EVENT_QUERY_BATCH = static_cast<uint32_t>(InterfaceCode::CMD_SECURITY_EVENT_QUERY_BATCH),
     };
 
     virtual int32_t Subscribe(const SecurityCollectorSubscribeInfo &subscribeInfo,
@@ -49,8 +50,10 @@ public:
         const sptr<IRemoteObject> &callback) = 0;
     virtual int32_t CollectorStop(const SecurityCollectorSubscribeInfo &subscribeInfo,
         const sptr<IRemoteObject> &callback) = 0;
-    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events) = 0;
+    virtual int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds) = 0;
 };
 
 class ISecurityCollectorManagerCallback : public IRemoteBroker {

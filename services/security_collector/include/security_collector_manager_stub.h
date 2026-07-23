@@ -35,6 +35,10 @@ private:
     int32_t HandleStartCmd(MessageParcel &data, MessageParcel &reply);
     int32_t HandleStopCmd(MessageParcel &data, MessageParcel &reply);
     int32_t HandleSecurityEventQueryCmd(MessageParcel &data, MessageParcel &reply);
+    int32_t HandleSecurityEventQueryBatchCmd(MessageParcel &data, MessageParcel &reply);
+    int32_t ReadQueryBatchRequest(MessageParcel &data, std::vector<SecurityEventRuler> &rulers);
+    int32_t WriteQueryBatchReply(MessageParcel &reply, int32_t ret,
+        const std::vector<SecurityCollector::SecurityEvent> &events, const std::vector<int64_t> &failedEventIds);
     std::shared_ptr<ICollectorSubscriber> UnMarshalSubscriber(MessageParcel &data);
 };
 } // namespace OHOS::Security::SecurityCollector

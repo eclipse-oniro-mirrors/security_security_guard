@@ -41,7 +41,9 @@ public:
     int SubscribeCollectorsBySticky(const std::vector<int64_t> &eventIds, std::shared_ptr<ICollectorFwk> api);
     int UnsubscribeCollectors(const std::vector<int64_t> &eventIds);
     ErrorCode GetCollectorType(int64_t eventId, int32_t &collectorType);
-    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers, std::vector<SecurityEvent> &events);
+    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers, std::vector<SecurityEvent> &events);
+    int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     void CloseLib();
 private:
     DataCollection() = default;
@@ -50,6 +52,8 @@ private:
     ErrorCode GetCollectorPath(int64_t eventId, std::string& path);
     ErrorCode CheckFileStream(std::ifstream &stream);
     bool IsCollectorStarted(int64_t eventId);
+    int LoadAndQueryBySoPath(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     ffrt::recursive_mutex mutex_;
     ffrt::mutex closeLibmutex_;
     std::unordered_map<int64_t, LibLoader> eventIdToLoaderMap_;

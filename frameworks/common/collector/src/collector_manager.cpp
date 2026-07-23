@@ -145,7 +145,7 @@ void CollectorManager::HandleDecipient()
     eventListeners_.clear();
 }
 
-int32_t CollectorManager::QuerySecurityEventImpl(const std::vector<SecurityEventRuler> rulers,
+int32_t CollectorManager::QuerySecurityEventImpl(const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events)
 {
     auto object = CollectorServiceLoader::GetInstance().LoadCollectorService();
@@ -167,7 +167,7 @@ int32_t CollectorManager::QuerySecurityEventImpl(const std::vector<SecurityEvent
     return SUCCESS;
 }
 
-int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events)
 {
     LOGI("begin collector QuerySecurityEvent");
@@ -175,6 +175,40 @@ int32_t CollectorManager::QuerySecurityEvent(const std::vector<SecurityEventRule
     if (ret == BR_DEAD_REPLY) {
         LOGE("retry collector QuerySecurityEvent");
         return QuerySecurityEventImpl(rulers, events);
+    }
+    return ret;
+}
+
+int32_t CollectorManager::QuerySecurityEventBatchImpl(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    auto object = CollectorServiceLoader::GetInstance().LoadCollectorService();
+    if (object == nullptr) {
+        LOGE("object is null");
+        return NULL_OBJECT;
+    }
+    auto proxy = iface_cast<ISecurityCollectorManager>(object);
+    if (proxy == nullptr) {
+        LOGE("proxy is null");
+        return NULL_OBJECT;
+    }
+
+    int32_t ret = proxy->QuerySecurityEventBatch(rulers, events, failedEventIds);
+    if (ret != SUCCESS) {
+        LOGI("QuerySecurityEventBatch failed, ret=%{public}d", ret);
+        return ret;
+    }
+    return SUCCESS;
+}
+
+int32_t CollectorManager::QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    LOGI("begin collector QuerySecurityEventBatch");
+    int32_t ret = QuerySecurityEventBatchImpl(rulers, events, failedEventIds);
+    if (ret == BR_DEAD_REPLY) {
+        LOGE("retry collector QuerySecurityEventBatch");
+        return QuerySecurityEventBatchImpl(rulers, events, failedEventIds);
     }
     return ret;
 }

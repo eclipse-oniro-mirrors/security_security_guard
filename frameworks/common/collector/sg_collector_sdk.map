@@ -25,6 +25,7 @@
         VTT?for?OHOS::Security::SecurityCollector::SecurityEventRuler*;
         vtable?for?OHOS::Security::SecurityCollector::SecurityEventRuler*;
         OHOS::Security::SecurityCollector::CollectorManager::QuerySecurityEvent*;
+        OHOS::Security::SecurityCollector::CollectorManager::QuerySecurityEventBatch*;
         VTT?for?OHOS::Security::SecurityCollector::SecurityEvent*;
         vtable?for?OHOS::Security::SecurityCollector::SecurityEvent*;
         OHOS::Security::SecurityCollector::SecurityEvent::Unmarshalling*;
@@ -32,6 +33,7 @@
         OHOS::Security::SecurityCollector::ICollectorFwk::GetExtraInfo*;
         OHOS::Security::SecurityCollector::ICollectorFwk::GetEventId*;
         OHOS::Security::SecurityCollector::ICollector::Query*;
+        OHOS::Security::SecurityCollector::ICollector::BatchQuery*;
         OHOS::Security::SecurityCollector::ICollector::Subscribe*;
         OHOS::Security::SecurityCollector::ICollector::Unsubscribe*;
         OHOS::Security::SecurityCollector::ICollector::IsStartWithSub*;

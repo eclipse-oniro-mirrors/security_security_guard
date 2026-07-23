@@ -46,6 +46,7 @@ ohos_fuzztest("RiskAnalysisManagerClibFuzzTest") {
   ]
 
   external_deps = [
+    "cJSON:cjson",
     "c_utils:utils",
     "hilog:libhilog",
     "ipc:ipc_core",

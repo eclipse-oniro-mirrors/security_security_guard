@@ -36,9 +36,14 @@ public:
         const sptr<IRemoteObject> &callback) override;
     int32_t CollectorStop(const SecurityCollectorSubscribeInfo &subscribeInfo,
         const sptr<IRemoteObject> &callback) override;
-    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events) override;
+    int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds) override;
 private:
+    int32_t WriteQueryBatchRequest(MessageParcel &data, const std::vector<SecurityEventRuler> &rulers);
+    int32_t ReadQueryBatchReply(MessageParcel &reply, std::vector<SecurityEvent> &events,
+        std::vector<int64_t> &failedEventIds);
     static inline BrokerDelegator<SecurityCollectorManagerProxy> delegator_;
 };
 } // namespace OHOS::Security::SecurityCollector

@@ -420,7 +420,7 @@ ErrorCode DataCollection::LoadCollector(std::string path, const SecurityEventRul
     return SUCCESS;
 }
 
-int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events)
 {
     LOGD("QuerySecurityEvent start");
@@ -443,6 +443,69 @@ int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler>
         }
     }
     LOGD("QueryCollectors finish");
+    return SUCCESS;
+}
+
+int32_t DataCollection::QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    LOGD("QuerySecurityEventBatch start");
+    if (rulers.empty()) {
+        LOGE("Invalid input parameter");
+        return FAILED;
+    }
+    // 按so路径对rulers分组
+    std::unordered_map<std::string, std::vector<SecurityEventRuler>> soPathToRulers;
+    for (const auto &ruler : rulers) {
+        std::string collectorPath;
+        ErrorCode ret = GetCollectorPath(ruler.GetEventId(), collectorPath);
+        if (ret != SUCCESS) {
+            LOGE("GetCollectorPath failed, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
+            failedEventIds.push_back(ruler.GetEventId());
+            continue;
+        }
+        soPathToRulers[collectorPath].push_back(ruler);
+    }
+    // 按分组批量查询
+    for (const auto &[soPath, groupedRulers] : soPathToRulers) {
+        if (!LoadAndQueryBySoPath(soPath, groupedRulers, events, failedEventIds)) {
+            LOGE("LoadAndQueryBySoPath failed, soPath=%{public}s", soPath.c_str());
+        }
+    }
+    LOGD("QuerySecurityEventBatch finish, failedCount=%{public}zu", failedEventIds.size());
+    return SUCCESS;
+}
+
+int DataCollection::LoadAndQueryBySoPath(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    LOGD("Start LoadAndQueryBySoPath, soPath=%{public}s, rulerCount=%{public}zu", soPath.c_str(), rulers.size());
+    LibLoader loader(soPath);
+    ErrorCode ret = loader.LoadLib();
+    if (ret != SUCCESS) {
+        LOGE("LoadLib error, ret=%{public}d, path=%{public}s", ret, soPath.c_str());
+        return FAILED;
+    }
+    {
+        std::lock_guard<ffrt::mutex> lock(closeLibmutex_);
+        for (const auto &ruler : rulers) {
+            needCloseLibMap_.emplace(ruler.GetEventId(), loader);
+        }
+    }
+    ICollector* collector = loader.CallGetCollector();
+    if (collector == nullptr) {
+        LOGE("CallGetCollector error");
+        for (const auto &ruler : rulers) {
+            failedEventIds.push_back(ruler.GetEventId());
+        }
+        return FAILED;
+    }
+    int result = collector->BatchQuery(rulers, events, failedEventIds);
+    if (result != 0) {
+        LOGE("BatchQuery failed, result=%{public}d", result);
+        return result;
+    }
+    LOGD("End LoadAndQueryBySoPath");
     return SUCCESS;
 }
 }
