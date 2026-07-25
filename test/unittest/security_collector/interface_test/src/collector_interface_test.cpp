@@ -231,4 +231,20 @@ HWTEST_F(CollectorInterfaceTest, CollectorStop001, testing::ext::TestSize.Level1
     int ret = manager.CollectorStop(subscriber);
     EXPECT_EQ(ret, SecurityCollector::BAD_PARAM);
 }
+
+/**
+ * @tc.name: QuerySecurityEventBatch001
+ * @tc.desc: CollectorManager QuerySecurityEventBatch
+ * @tc.type: FUNC
+ * @tc.require:
+ */
+HWTEST_F(CollectorInterfaceTest, QuerySecurityEventBatch001, testing::ext::TestSize.Level1)
+{
+    const std::vector<SecurityCollector::SecurityEventRuler> rules;
+    std::vector<SecurityCollector::SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    int ret = SecurityCollector::CollectorManager::GetInstance().QuerySecurityEventBatch(
+        rules, events, failedEventIds);
+    EXPECT_NE(ret, SecurityCollector::SUCCESS);
+}
 }

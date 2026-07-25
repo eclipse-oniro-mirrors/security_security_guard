@@ -20,6 +20,20 @@ int ICollector::Query(const SecurityEventRuler &ruler, std::vector<SecurityEvent
 {
     return 0;
 };
+int ICollector::BatchQuery(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
+{
+    for (const auto &ruler : rulers) {
+        std::vector<SecurityEvent> tempEvents;
+        int ret = Query(ruler, tempEvents);
+        if (ret != 0) {
+            failedEventIds.push_back(ruler.GetEventId());
+            continue;
+        }
+        events.insert(events.end(), tempEvents.begin(), tempEvents.end());
+    }
+    return 0;
+};
 int ICollector::Subscribe(std::shared_ptr<ICollectorFwk> api, int64_t eventId)
 {
     return 0;

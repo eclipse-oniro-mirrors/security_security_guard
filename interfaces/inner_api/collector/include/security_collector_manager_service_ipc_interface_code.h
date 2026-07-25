@@ -26,6 +26,7 @@ enum class SecurityCollectManagerInterfaceCode {
     CMD_COLLECTOR_START = 3,
     CMD_COLLECTOR_STOP = 4,
     CMD_SECURITY_EVENT_QUERY = 5,
+    CMD_SECURITY_EVENT_QUERY_BATCH = 6,
 };
 enum class SecurityCollectManagerCallbackInterfaceCode {
     CMD_COLLECTOR_CALLBACK = 10,

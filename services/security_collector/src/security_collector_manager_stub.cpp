@@ -44,6 +44,9 @@ int32_t SecurityCollectorManagerStub::OnRemoteRequest(uint32_t code, MessageParc
             case CMD_SECURITY_EVENT_QUERY: {
                 return HandleSecurityEventQueryCmd(data, reply);
             }
+            case CMD_SECURITY_EVENT_QUERY_BATCH: {
+                return HandleSecurityEventQueryBatchCmd(data, reply);
+            }
             default: {
                 break;
             }
@@ -200,5 +203,79 @@ int32_t SecurityCollectorManagerStub::HandleSecurityEventQueryCmd(MessageParcel 
         }
     }
     return SUCCESS;
+}
+
+int32_t SecurityCollectorManagerStub::ReadQueryBatchRequest(MessageParcel &data,
+    std::vector<SecurityEventRuler> &rulers)
+{
+    uint32_t size = 0;
+    if (!data.ReadUint32(size)) {
+        LOGE("failed to get the event size");
+        return BAD_PARAM;
+    }
+    if (size > MAX_QUERY_EVENT_SIZE) {
+        LOGE("the ruler size error");
+        return BAD_PARAM;
+    }
+    for (uint32_t index = 0; index < size; index++) {
+        std::shared_ptr<SecurityCollector::SecurityEventRuler> ruler(
+            data.ReadParcelable<SecurityCollector::SecurityEventRuler>());
+        if (ruler == nullptr) {
+            LOGE("failed read security event");
+            return BAD_PARAM;
+        }
+        rulers.emplace_back(*ruler);
+    }
+    return SUCCESS;
+}
+
+int32_t SecurityCollectorManagerStub::WriteQueryBatchReply(MessageParcel &reply, int32_t ret,
+    const std::vector<SecurityCollector::SecurityEvent> &events, const std::vector<int64_t> &failedEventIds)
+{
+    if (!reply.WriteInt32(ret)) {
+        LOGE("failed to WriteInt32 for result");
+        return WRITE_ERR;
+    }
+    if (!reply.WriteUint32(static_cast<uint32_t>(events.size()))) {
+        LOGE("failed to WriteUInt32 for events size");
+        return WRITE_ERR;
+    }
+    for (const auto &event : events) {
+        if (!reply.WriteParcelable(&event)) {
+            LOGE("failed to WriteParcelable for event");
+            return WRITE_ERR;
+        }
+    }
+    if (!reply.WriteUint32(static_cast<uint32_t>(failedEventIds.size()))) {
+        LOGE("failed to WriteUInt32 for failedEventIds size");
+        return WRITE_ERR;
+    }
+    for (const auto &id : failedEventIds) {
+        if (!reply.WriteInt64(id)) {
+            LOGE("failed to WriteInt64 for failedEventId");
+            return WRITE_ERR;
+        }
+    }
+    return SUCCESS;
+}
+
+int32_t SecurityCollectorManagerStub::HandleSecurityEventQueryBatchCmd(MessageParcel &data, MessageParcel &reply)
+{
+    LOGD("%{public}s", __func__);
+    uint32_t expected = sizeof(uint32_t);
+    uint32_t actual = data.GetReadableBytes();
+    if (actual <= expected) {
+        LOGE("actual length error, value=%{public}u", actual);
+        return BAD_PARAM;
+    }
+    std::vector<SecurityCollector::SecurityEventRuler> rulers;
+    int32_t ret = ReadQueryBatchRequest(data, rulers);
+    if (ret != SUCCESS) {
+        return ret;
+    }
+    std::vector<SecurityCollector::SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    ret = QuerySecurityEventBatch(rulers, events, failedEventIds);
+    return WriteQueryBatchReply(reply, ret, events, failedEventIds);
 }
 }

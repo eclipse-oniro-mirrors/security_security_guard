@@ -33,9 +33,49 @@ public:
     std::string GetBeginTime() const { return beginTime_; };
     std::string GetEndTime() const { return endTime_; };
     std::string GetParam() const { return param_; };
-    bool Marshalling(Parcel& parcel) const override { return true; };
-    bool ReadFromParcel(Parcel &parcel) { return true; };
-    static SecurityEventRuler* Unmarshalling(Parcel& parcel) { return {}; };
+    bool Marshalling(Parcel& parcel) const override
+    {
+        if (!parcel.WriteInt64(eventId_)) {
+            return false;
+        }
+        if (!parcel.WriteString(beginTime_)) {
+            return false;
+        }
+        if (!parcel.WriteString(endTime_)) {
+            return false;
+        }
+        if (!parcel.WriteString(param_)) {
+            return false;
+        }
+        return true;
+    };
+
+    bool ReadFromParcel(Parcel &parcel)
+    {
+        if (!parcel.ReadInt64(eventId_)) {
+            return false;
+        }
+        if (!parcel.ReadString(beginTime_)) {
+            return false;
+        }
+        if (!parcel.ReadString(endTime_)) {
+            return false;
+        }
+        if (!parcel.ReadString(param_)) {
+            return false;
+        }
+        return true;
+    };
+
+    static SecurityEventRuler* Unmarshalling(Parcel& parcel)
+    {
+        SecurityEventRuler *ruler = new (std::nothrow) SecurityEventRuler();
+        if (ruler != nullptr && !ruler->ReadFromParcel(parcel)) {
+            delete ruler;
+            ruler = nullptr;
+        }
+        return ruler;
+    };
 
 private:
     int64_t eventId_;

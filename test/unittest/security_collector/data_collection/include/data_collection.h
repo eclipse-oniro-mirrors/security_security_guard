@@ -42,14 +42,18 @@ public:
         std::shared_ptr<ICollectorFwk> api);
     virtual int UnsubscribeCollectors(const std::vector<int64_t>& eventIds);
     virtual ErrorCode GetCollectorType(int64_t eventId, int32_t& collectorType);
-    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    virtual int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events);
+    virtual int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     virtual void CloseLib();
 private:
     DataCollection() = default;
     virtual int LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
     virtual ErrorCode LoadCollector(std::string path, const SecurityEventRuler &ruler,
                                     std::vector<SecurityEvent> &events);
+    virtual int LoadAndQueryBySoPath(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     virtual ErrorCode GetCollectorPath(int64_t eventId, std::string& path);
     virtual ErrorCode CheckFileStream(std::ifstream &stream);
     virtual bool IsCollectorStarted(int64_t eventId);

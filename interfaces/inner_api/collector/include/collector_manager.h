@@ -34,16 +34,20 @@ public:
     };
     int32_t Subscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber);
     int32_t Unsubscribe(const std::shared_ptr<ICollectorSubscriber> &subscriber);
-    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> rulers,
+    int32_t QuerySecurityEvent(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events);
+    int32_t QuerySecurityEventBatch(const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     int32_t CollectorStart(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
     int32_t CollectorStop(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
 private:
     void HandleDecipient();
     int32_t SubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber);
     int32_t UnsubscribeImpl(const std::shared_ptr<ICollectorSubscriber> &subscriber);
-    int32_t QuerySecurityEventImpl(const std::vector<SecurityEventRuler> rulers,
+    int32_t QuerySecurityEventImpl(const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events);
+    int32_t QuerySecurityEventBatchImpl(const std::vector<SecurityEventRuler> &rulers,
+    std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     int32_t CollectorStartImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
     int32_t CollectorStopImpl(const SecurityCollector::SecurityCollectorSubscribeInfo &subscriber);
     std::mutex mutex_{};

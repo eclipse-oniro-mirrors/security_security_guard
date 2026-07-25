@@ -523,32 +523,102 @@ ErrCode DataCollectManagerService::QuerySecurityEvent(const std::vector<Security
         return NULL_OBJECT;
     }
     auto task = [proxy, rulers, eventGroup] {
-        std::string errEventIds;
-        EventGroupCfg config {};
-        if (!ConfigDataManager::GetInstance().GetEventGroupConfig(eventGroup, config)) {
-            SGLOGE("get event group config fail group = %{public}s", eventGroup.c_str());
-            return;
-        }
-        for (auto &ruler : rulers) {
-            if (config.eventList.count(ruler.GetEventId()) == 0) {
-                SGLOGE("eventid not in eventid list");
-                errEventIds.append(std::to_string(ruler.GetEventId()) + " ");
-                continue;
-            }
-            if (!QueryEventByRuler(proxy, ruler)) {
-                errEventIds.append(std::to_string(ruler.GetEventId()) + " ");
-            }
-        }
-        if (!errEventIds.empty()) {
-            std::string message = "QuerySecurityEvent " + errEventIds + "failed";
-            SGLOGE("QuerySecurityEvent failed");
-            proxy->OnError(message);
-            return;
-        }
-        proxy->OnComplete();
+        HandleQuerySecurityEvent(proxy, rulers, eventGroup);
     };
     ffrt::submit(task);
     return SUCCESS;
+}
+
+DataCollectManagerService::ClassifiedRulers DataCollectManagerService::ClassifyRulers(
+    const std::vector<SecurityCollector::SecurityEventRuler> &rulers, const EventGroupCfg &config)
+{
+    ClassifiedRulers result;
+    for (const auto &ruler : rulers) {
+        if (config.eventList.find(ruler.GetEventId()) == config.eventList.end()) {
+            SGLOGE("eventid not in eventid list");
+            result.invalidEventIds.push_back(ruler.GetEventId());
+            continue;
+        }
+        EventCfg cfg;
+        if (!ConfigDataManager::GetInstance().GetEventConfig(ruler.GetEventId(), cfg)) {
+            SGLOGE("GetEventConfig error, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
+            result.invalidEventIds.push_back(ruler.GetEventId());
+            continue;
+        }
+        if (cfg.eventType == 1) { // query in collector
+            if (cfg.prog == "security_guard") {
+                result.securityGuardRulers.push_back(ruler);
+            } else {
+                result.securityCollectorRulers.push_back(ruler);
+            }
+        } else { // query in db
+            result.dbRulers.push_back(ruler);
+        }
+    }
+    return result;
+}
+
+void DataCollectManagerService::HandleQuerySecurityEvent(sptr<ISecurityEventQueryCallback> proxy,
+    const std::vector<SecurityCollector::SecurityEventRuler> &rulers, const std::string &eventGroup)
+{
+    EventGroupCfg config {};
+    if (!ConfigDataManager::GetInstance().GetEventGroupConfig(eventGroup, config)) {
+        SGLOGE("get event group config fail group = %{public}s", eventGroup.c_str());
+        return;
+    }
+
+    auto classified = ClassifyRulers(rulers, config);
+    std::vector<int64_t> failedIds = classified.invalidEventIds;
+
+    if (!classified.securityGuardRulers.empty()) {
+        auto ids = QuerySecurityGuardBatchAndCallback(classified.securityGuardRulers, proxy);
+        failedIds.insert(failedIds.end(), ids.begin(), ids.end());
+    }
+    if (!classified.securityCollectorRulers.empty()) {
+        auto ids = QuerySecurityCollectorBatchAndCallback(classified.securityCollectorRulers, proxy);
+        failedIds.insert(failedIds.end(), ids.begin(), ids.end());
+    }
+    for (auto &ruler : classified.dbRulers) {
+        if (!QueryEventByRuler(proxy, ruler)) {
+            failedIds.push_back(ruler.GetEventId());
+        }
+    }
+
+    if (!failedIds.empty()) {
+        std::string errEventIds;
+        for (int64_t id : failedIds) {
+            errEventIds.append(std::to_string(id) + " ");
+        }
+        std::string message = "QuerySecurityEvent " + errEventIds + "failed";
+        SGLOGE("QuerySecurityEvent failed");
+        proxy->OnError(message);
+        return;
+    }
+    proxy->OnComplete();
+}
+std::vector<int64_t> DataCollectManagerService::QuerySecurityGuardBatchAndCallback(
+    const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
+    const sptr<ISecurityEventQueryCallback> &proxy)
+{
+    std::vector<SecurityCollector::SecurityEvent> replyEvents;
+    std::vector<int64_t> failedIds;
+    SecurityCollector::DataCollection::GetInstance().QuerySecurityEventBatch(rulers, replyEvents, failedIds);
+    if (!replyEvents.empty()) {
+        QuerySecurityEventCallBack(proxy, replyEvents);
+    }
+    return failedIds;
+}
+std::vector<int64_t> DataCollectManagerService::QuerySecurityCollectorBatchAndCallback(
+    const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
+    const sptr<ISecurityEventQueryCallback> &proxy)
+{
+    std::vector<SecurityCollector::SecurityEvent> replyEvents;
+    std::vector<int64_t> failedIds;
+    SecurityCollector::CollectorManager::GetInstance().QuerySecurityEventBatch(rulers, replyEvents, failedIds);
+    if (!replyEvents.empty()) {
+        QuerySecurityEventCallBack(proxy, replyEvents);
+    }
+    return failedIds;
 }
 
 void DataCollectManagerService::SubscriberDeathRecipient::OnRemoteDied(const wptr<IRemoteObject> &remote)

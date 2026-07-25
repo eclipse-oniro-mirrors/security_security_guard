@@ -71,9 +71,11 @@ void DataCollectionFuzzTest(const uint8_t* data, size_t size)
     rulers.emplace_back(ruler);
     std::vector<SecurityEvent> events{};
     std::ifstream stream{string};
+    std::vector<int64_t> failedEventIds;
     DataCollection::GetInstance().StopCollectors(eventIds);
     DataCollection::GetInstance().GetCollectorType(eventId, collectorType);
     DataCollection::GetInstance().QuerySecurityEvent(rulers, events);
+    DataCollection::GetInstance().QuerySecurityEventBatch(rulers, events, failedEventIds);
     DataCollection::GetInstance().LoadCollector(eventId, string, collectorListenner);
     DataCollection::GetInstance().LoadCollector(string, ruler, events);
     DataCollection::GetInstance().GetCollectorPath(eventId, string);

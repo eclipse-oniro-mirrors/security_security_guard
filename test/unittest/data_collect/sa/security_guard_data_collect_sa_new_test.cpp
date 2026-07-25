@@ -63,6 +63,9 @@ void SecurityGuardDataCollectSaNewTest::SetUpTestCase() {}
 
 void SecurityGuardDataCollectSaNewTest::TearDownTestCase()
 {
+    testing::Mock::VerifyAndClearExpectations(&SecurityCollector::CollectorManager::GetInstance());
+    testing::Mock::VerifyAndClearExpectations(&DatabaseManager::GetInstance());
+    testing::Mock::VerifyAndClearExpectations(&SecurityCollector::DataCollection::GetInstance());
     DataFormat::DelInterface();
     AccessToken::AccessTokenKit::DelInterface();
     AccessToken::TokenIdKit::DelInterface();
@@ -1105,5 +1108,353 @@ HWTEST_F(SecurityGuardDataCollectSaNewTest, SubscriberEventOnSgStart_SubscribeFa
     EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), SubscribeCollectors).WillOnce(Return(SUCCESS));
     AcquireDataSubscribeManager::GetInstance().SubscriberEventOnSgStart();
     EXPECT_FALSE(AcquireDataSubscribeManager::GetInstance().eventToListenner_.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_InvalidEventId, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler(99999);
+    EventGroupCfg config;
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler}, config);
+    EXPECT_EQ(result.invalidEventIds.size(), 1u);
+    EXPECT_EQ(result.invalidEventIds[0], 99999);
+    EXPECT_TRUE(result.securityGuardRulers.empty());
+    EXPECT_TRUE(result.securityCollectorRulers.empty());
+    EXPECT_TRUE(result.dbRulers.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_GetEventGroupCfgFail, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    EventGroupCfg config;
+    config.eventList.insert(11111);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {return false; });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler}, config);
+    EXPECT_EQ(result.invalidEventIds.size(), 1u);
+    EXPECT_TRUE(result.securityGuardRulers.empty());
+    EXPECT_TRUE(result.securityCollectorRulers.empty());
+    EXPECT_TRUE(result.dbRulers.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_SecurityGuardRuler, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    EventGroupCfg config;
+    config.eventList.insert(11111);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            cfg.prog = "security_guard";
+            return true;
+        });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler}, config);
+    EXPECT_EQ(result.securityGuardRulers.size(), 1u);
+    EXPECT_TRUE(result.invalidEventIds.empty());
+    EXPECT_TRUE(result.securityCollectorRulers.empty());
+    EXPECT_TRUE(result.dbRulers.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_SecurityCollectorRuler, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    EventGroupCfg config;
+    config.eventList.insert(11111);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            return true;
+        });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler}, config);
+    EXPECT_EQ(result.securityCollectorRulers.size(), 1u);
+    EXPECT_TRUE(result.securityGuardRulers.empty());
+    EXPECT_TRUE(result.invalidEventIds.empty());
+    EXPECT_TRUE(result.dbRulers.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_DbRuler, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    EventGroupCfg config;
+    config.eventList.insert(11111);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 0;
+            return true;
+        });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler}, config);
+    EXPECT_EQ(result.dbRulers.size(), 1u);
+    EXPECT_TRUE(result.securityGuardRulers.empty());
+    EXPECT_TRUE(result.securityCollectorRulers.empty());
+    EXPECT_TRUE(result.invalidEventIds.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, ClassifyRulers_MixedRulers, TestSize.Level0)
+{
+    SecurityCollector::SecurityEventRuler ruler1(11111);
+    SecurityCollector::SecurityEventRuler ruler2(22222);
+    SecurityCollector::SecurityEventRuler ruler3(33333);
+    SecurityCollector::SecurityEventRuler ruler4(99999);
+    EventGroupCfg config;
+    config.eventList.insert(11111);
+    config.eventList.insert(22222);
+    config.eventList.insert(33333);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            cfg.prog = "security_guard";
+            return true;
+        })
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            return true;
+        })
+        .WillOnce([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 0;
+            return true;
+        });
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto result = service.ClassifyRulers({ruler1, ruler2, ruler3, ruler4}, config);
+    EXPECT_EQ(result.invalidEventIds.size(), 1u);
+    EXPECT_EQ(result.invalidEventIds[0], 99999);
+    EXPECT_EQ(result.securityGuardRulers.size(), 1u);
+    EXPECT_EQ(result.securityCollectorRulers.size(), 1u);
+    EXPECT_EQ(result.dbRulers.size(), 1u);
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_ConfigFail, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig).WillOnce(Return(false));
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(nullptr, {ruler}, "invalidGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_AllSucceed, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig)
+        .WillOnce([](const std::string &groupName, EventGroupCfg &config) {
+            config.eventList.insert(11111);
+            return true;
+        });
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillRepeatedly([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 0;
+            return true;
+        });
+    EXPECT_CALL(DatabaseManager::GetInstance(), QueryEventByEventId(_, _))
+        .WillOnce([](int64_t eventId, std::vector<SecEvent> &events) {
+            SecEvent event{};
+            event.eventId = eventId;
+            events.emplace_back(event);
+            return true;
+        });
+    EXPECT_CALL(*obj, SendRequest).Times(2);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(
+        iface_cast<ISecurityEventQueryCallback>(obj), {ruler}, "testGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_SecurityGuardBatch, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig)
+        .WillOnce([](const std::string &groupName, EventGroupCfg &config) {
+            config.eventList.insert(11111);
+            return true;
+        });
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillRepeatedly([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            cfg.prog = "security_guard";
+            return true;
+        });
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            SecurityCollector::SecurityEvent event(11111, "1.0", "content");
+            events.emplace_back(event);
+            return SUCCESS;
+        });
+    EXPECT_CALL(*obj, SendRequest).Times(2);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(
+        iface_cast<ISecurityEventQueryCallback>(obj), {ruler}, "testGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_SecurityCollectorBatch, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig)
+        .WillOnce([](const std::string &groupName, EventGroupCfg &config) {
+            config.eventList.insert(11111);
+            return true;
+        });
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillRepeatedly([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 1;
+            return true;
+        });
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            SecurityCollector::SecurityEvent event(11111, "1.0", "content");
+            events.emplace_back(event);
+            return SUCCESS;
+        });
+    EXPECT_CALL(*obj, SendRequest).Times(1);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(
+        iface_cast<ISecurityEventQueryCallback>(obj), {ruler}, "testGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_DbRulerFail, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig)
+        .WillOnce([](const std::string &groupName, EventGroupCfg &config) {
+            config.eventList.insert(11111);
+            return true;
+        });
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillRepeatedly([](int64_t eventId, EventCfg &cfg) {
+            cfg.eventType = 0;
+            return true;
+        });
+    EXPECT_CALL(DatabaseManager::GetInstance(), QueryEventByEventId(_, _))
+        .WillOnce(Return(false));
+    EXPECT_CALL(*obj, SendRequest).Times(1);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(
+        iface_cast<ISecurityEventQueryCallback>(obj), {ruler}, "testGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_MixedWithFailures, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventGroupConfig)
+        .WillOnce([](const std::string &groupName, EventGroupCfg &config) {
+            config.eventList.insert(11111);
+            config.eventList.insert(22222);
+            return true;
+        });
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig)
+        .WillRepeatedly([](int64_t eventId, EventCfg &cfg) {
+            if (eventId == 11111) {
+                cfg.eventType = 1;
+                cfg.prog = "security_guard";
+            } else {
+                cfg.eventType = 0;
+            }
+            return true;
+        });
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            failedEventIds.push_back(11111);
+            return SUCCESS;
+        });
+    EXPECT_CALL(DatabaseManager::GetInstance(), QueryEventByEventId(_, _))
+        .WillOnce(Return(false));
+    EXPECT_CALL(*obj, SendRequest).Times(1);
+    SecurityCollector::SecurityEventRuler ruler1(11111);
+    SecurityCollector::SecurityEventRuler ruler2(22222);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    service.HandleQuerySecurityEvent(
+        iface_cast<ISecurityEventQueryCallback>(obj), {ruler1, ruler2}, "testGroup");
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, QuerySecurityGuardBatchAndCallback_EmptyReply, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            return SUCCESS;
+        });
+
+    EXPECT_CALL(*obj, SendRequest).Times(0);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto failedIds = service.QuerySecurityGuardBatchAndCallback(
+        {ruler}, iface_cast<ISecurityEventQueryCallback>(obj));
+    EXPECT_TRUE(failedIds.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, QuerySecurityGuardBatchAndCallback_WithEvents, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            SecurityCollector::SecurityEvent event(11111, "1.0", "content");
+            events.emplace_back(event);
+            failedEventIds.push_back(22222);
+            return SUCCESS;
+        });
+    EXPECT_CALL(*obj, SendRequest).Times(1);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto failedIds = service.QuerySecurityGuardBatchAndCallback(
+        {ruler}, iface_cast<ISecurityEventQueryCallback>(obj));
+    EXPECT_EQ(failedIds.size(), 1u);
+    EXPECT_EQ(failedIds[0], 22222);
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, QuerySecurityCollectordBatchAndCallback_EmptyReply, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(SecurityCollector::CollectorManager::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            return SUCCESS;
+        });
+
+    EXPECT_CALL(*obj, SendRequest).Times(0);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto failedIds = service.QuerySecurityCollectorBatchAndCallback(
+        {ruler}, iface_cast<ISecurityEventQueryCallback>(obj));
+    EXPECT_TRUE(failedIds.empty());
+}
+
+HWTEST_F(SecurityGuardDataCollectSaTest, QuerySecurityCollectordBatchAndCallback_WithEvents, TestSize.Level0)
+{
+    sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    EXPECT_TRUE(obj != nullptr);
+    EXPECT_CALL(SecurityCollector::CollectorManager::GetInstance(), QuerySecurityEventBatch(_, _, _))
+        .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
+                    std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            SecurityCollector::SecurityEvent event(11111, "1.0", "content");
+            events.emplace_back(event);
+            failedEventIds.push_back(33333);
+            return SUCCESS;
+        });
+    EXPECT_CALL(*obj, SendRequest).Times(1);
+    SecurityCollector::SecurityEventRuler ruler(11111);
+    DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
+    auto failedIds = service.QuerySecurityCollectorBatchAndCallback(
+        {ruler}, iface_cast<ISecurityEventQueryCallback>(obj));
+    EXPECT_EQ(failedIds.size(), 1u);
+    EXPECT_EQ(failedIds[0], 33333);
 }
 }

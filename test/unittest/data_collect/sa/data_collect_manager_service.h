@@ -55,7 +55,7 @@ public:
         const sptr<IRemoteObject> &cb) override;
     ErrCode CollectorStop(const SecurityCollector::SecurityCollectorSubscribeInfo &subscribeInfo,
         const sptr<IRemoteObject> &cb) override;
-        ErrCode ConfigUpdate(int fd, const std::string& name) override;
+    ErrCode ConfigUpdate(int fd, const std::string& name) override;
     ErrCode QuerySecurityEventConfig(std::string &result) override;
     ErrCode AddFilter(const SecurityEventFilter &subscribeMute, const std::string &clientId) override;
     ErrCode RemoveFilter(const SecurityEventFilter &subscribeMute, const std::string &clientId) override;
@@ -97,6 +97,22 @@ private:
     int32_t SetDeathCallBack(SgSubscribeEvent event, const sptr<IRemoteObject> &callback);
     static void QuerySecurityEventCallBack(sptr<ISecurityEventQueryCallback> proxy,
         std::vector<SecurityCollector::SecurityEvent> events);
+    struct ClassifiedRulers {
+        std::vector<SecurityCollector::SecurityEventRuler> securityGuardRulers;
+        std::vector<SecurityCollector::SecurityEventRuler> securityCollectorRulers;
+        std::vector<SecurityCollector::SecurityEventRuler> dbRulers;
+        std::vector<int64_t> invalidEventIds;
+    };
+    static ClassifiedRulers ClassifyRulers(const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
+        const EventGroupCfg &config);
+    static void HandleQuerySecurityEvent(sptr<ISecurityEventQueryCallback> proxy,
+        const std::vector<SecurityCollector::SecurityEventRuler> &rulers, const std::string &eventGroup);
+    static std::vector<int64_t> QuerySecurityGuardBatchAndCallback(
+        const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
+        const sptr<ISecurityEventQueryCallback> &proxy);
+    static std::vector<int64_t> QuerySecurityCollectorBatchAndCallback(
+        const std::vector<SecurityCollector::SecurityEventRuler> &rulers,
+        const sptr<ISecurityEventQueryCallback> &proxy);
     ffrt::mutex mutex_ {};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::map<std::string,  sptr<IRemoteObject>> clientCallBacks_ {};

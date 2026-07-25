@@ -412,4 +412,152 @@ HWTEST_F(DataCollectionTest, SubscribeCollectorsBySticky05, testing::ext::TestSi
     EXPECT_CALL(myOb, IsCollectorStarted).WillOnce(Return(false));
     EXPECT_NE(myOb.SubscribeCollectorsBySticky(eventIds, api), SUCCESS);
 }
+
+class MockBatchQueryClass : public DataCollection {
+public:
+    MOCK_METHOD4(LoadAndQueryBySoPath, int(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds));
+    MOCK_METHOD2(GetCollectorPath, ErrorCode(int64_t eventId, std::string& path));
+};
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch01, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    std::vector<SecurityEventRuler> rulers;
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), FAILED);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch02, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    SecurityEventRuler rule(11111);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(rule);
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(FAILED));
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), SUCCESS);
+    EXPECT_EQ(failedEventIds.size(), 1UL);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch03, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    SecurityEventRuler rule(11111);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(rule);
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
+    EXPECT_CALL(myOb, LoadAndQueryBySoPath).WillOnce(Return(SUCCESS));
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), SUCCESS);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch04, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    SecurityEventRuler rule1(11111);
+    SecurityEventRuler rule2(22222);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(rule1);
+    rulers.emplace_back(rule2);
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(myOb, GetCollectorPath)
+        .WillOnce(Return(SUCCESS))
+        .WillOnce(Return(FAILED));
+    EXPECT_CALL(myOb, LoadAndQueryBySoPath).WillOnce(Return(FAILED));
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), SUCCESS);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch05, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    SecurityEventRuler rule1(11111);
+    SecurityEventRuler rule2(22222);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(rule1);
+    rulers.emplace_back(rule2);
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(myOb, GetCollectorPath)
+        .WillOnce(Return(FAILED))
+        .WillOnce(Return(FAILED));
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), SUCCESS);
+    EXPECT_EQ(failedEventIds.size(), 2UL);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatch06, testing::ext::TestSize.Level0)
+{
+    MockBatchQueryClass myOb;
+    SecurityEventRuler rule(11111);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(rule);
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    EXPECT_CALL(myOb, GetCollectorPath).WillOnce(Return(SUCCESS));
+    EXPECT_CALL(myOb, LoadAndQueryBySoPath).WillOnce([](const std::string &soPath,
+        const std::vector<SecurityEventRuler> &rulers,
+        std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
+            for (const auto &r : rulers) {
+                failedEventIds.push_back(r.GetEventId());
+            }
+            return FAILED;
+        });
+    EXPECT_EQ(myOb.QuerySecurityEventBatch(rulers, events, failedEventIds), SUCCESS);
+    EXPECT_EQ(failedEventIds.size(), 1UL);
+}
+
+HWTEST_F(DataCollectionTest, ICollectorBatchQuery01, testing::ext::TestSize.Level0)
+{
+    TestCollector collector;
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    SecurityEventRuler ruler1(11111);
+    SecurityEventRuler ruler2(22222);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(ruler1);
+    rulers.emplace_back(ruler2);
+    EXPECT_EQ(collector.BatchQuery(rulers, events, failedEventIds), 0);
+}
+
+HWTEST_F(DataCollectionTest, ICollectorBatchQuery02, testing::ext::TestSize.Level0)
+{
+    TestCollector collector;
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    std::vector<SecurityEventRuler> rulers;
+    EXPECT_EQ(collector.BatchQuery(rulers, events, failedEventIds), 0);
+}
+
+HWTEST_F(DataCollectionTest, ICollectorBatchQuery03, testing::ext::TestSize.Level0)
+{
+    class MixexCollector : public SecurityCollector::ICollector {
+    public:
+        int queryCallCount_ = 0;
+        int Start(std::shared_ptr<ICollectorFwk> api) override { return 0; };
+        int Stop() override { return 0; };
+        int Query(const SecurityEventRuler &ruler, std::vector<SecurityEvent> &events) override {
+            queryCallCount_++;
+            if (queryCallCount_ == 1) {
+                events.emplace_back(SecurityEvent(11111, "v1", "content1"));
+                return 0;
+            }
+            return -1;
+        };
+    };
+    MixexCollector collector;
+    std::vector<SecurityEvent> events;
+    std::vector<int64_t> failedEventIds;
+    SecurityEventRuler ruler1(11111);
+    SecurityEventRuler ruler2(22222);
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(ruler1);
+    rulers.emplace_back(ruler2);
+    EXPECT_EQ(collector.BatchQuery(rulers, events, failedEventIds), 0);
+    EXPECT_EQ(events.size(), 1UL);
+    EXPECT_EQ(failedEventIds.size(), 1UL);
+}
 }
