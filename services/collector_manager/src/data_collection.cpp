@@ -468,7 +468,7 @@ int32_t DataCollection::QuerySecurityEventBatch(const std::vector<SecurityEventR
     }
     // 按分组批量查询
     for (const auto &[soPath, groupedRulers] : soPathToRulers) {
-        if (!LoadAndQueryBySoPath(soPath, groupedRulers, events, failedEventIds)) {
+        if (LoadAndQueryBySoPath(soPath, groupedRulers, events, failedEventIds) != SUCCESS) {
             LOGE("LoadAndQueryBySoPath failed, soPath=%{public}s", soPath.c_str());
         }
     }
