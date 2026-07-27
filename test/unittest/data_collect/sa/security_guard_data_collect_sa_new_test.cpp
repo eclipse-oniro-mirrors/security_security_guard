@@ -1307,7 +1307,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_SecurityCollec
             cfg.eventType = 1;
             return true;
         });
-    EXPECT_CALL(SecurityCollector::DataCollection::GetInstance(), QuerySecurityEventBatch(_, _, _))
+    EXPECT_CALL(SecurityCollector::CollectorManager::GetInstance(), QuerySecurityEventBatch(_, _, _))
         .WillOnce([](const std::vector<SecurityEventRuler> &rulers,
                     std::vector<SecurityCollector::SecurityEvent> &events, std::vector<int64_t> &failedEventIds) {
             SecurityCollector::SecurityEvent event(11111, "1.0", "content");
