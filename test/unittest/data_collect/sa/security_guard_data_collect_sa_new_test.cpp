@@ -1314,7 +1314,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, HandleQuerySecurityEvent_SecurityCollec
             events.emplace_back(event);
             return SUCCESS;
         });
-    EXPECT_CALL(*obj, SendRequest).Times(1);
+    EXPECT_CALL(*obj, SendRequest).Times(2);
     SecurityCollector::SecurityEventRuler ruler(11111);
     DataCollectManagerService service(DATA_COLLECT_MANAGER_SA_ID, true);
     service.HandleQuerySecurityEvent(
