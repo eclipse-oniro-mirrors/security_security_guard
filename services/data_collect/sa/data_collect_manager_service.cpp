@@ -48,6 +48,7 @@
 #include "security_guard_utils.h"
 #include "system_ability_definition.h"
 #include "ffrt.h"
+#include "ffrt_inner.h"
 #include "risk_event_rdb_helper.h"
 #include "model_manager.h"
 #include "config_define.h"
@@ -93,6 +94,7 @@ namespace {
     constexpr int32_t TOKEN_BUCKET_MAX_SIZE = 12000;
     constexpr int32_t TOKEN_BUCKET_STEP_SIZE = 20;
     constexpr int32_t TOKEN_BUCKET_INTERVAL_TIME = 1000;
+    ffrt::thread g_tokenBucketThread {};
 }
 
 REGISTER_SYSTEM_ABILITY_BY_ID(DataCollectManagerService, DATA_COLLECT_MANAGER_SA_ID, true);
@@ -140,13 +142,16 @@ void DataCollectManagerService::OnStart()
             ffrt::this_task::sleep_for(std::chrono::milliseconds(TOKEN_BUCKET_INTERVAL_TIME));
         }
     };
-    ffrt::submit(tokenBucketTask);
+    g_tokenBucketThread = ffrt::thread(tokenBucketTask);
 }
 
 void DataCollectManagerService::OnStop()
 {
     SecurityCollector::DataCollection::GetInstance().CloseLib();
     isStopTokenBucketTask_.store(true);
+    if (g_tokenBucketThread.joinable()) {
+        g_tokenBucketThread.join();
+    }
     AcquireDataSubscribeManager::GetInstance().StopClearEventCache();
     AcquireDataSubscribeManager::GetInstance().DeInitDeviceId();
     AcquireDataSubscribeManager::GetInstance().DeInitEventQueue();
@@ -535,7 +540,7 @@ DataCollectManagerService::ClassifiedRulers DataCollectManagerService::ClassifyR
     ClassifiedRulers result;
     for (const auto &ruler : rulers) {
         if (config.eventList.find(ruler.GetEventId()) == config.eventList.end()) {
-            SGLOGE("eventid not in eventid list");
+            SGLOGE("eventid not in eventid list eventId=%{public}" PRId64, ruler.GetEventId());
             result.invalidEventIds.push_back(ruler.GetEventId());
             continue;
         }
@@ -775,7 +780,7 @@ int32_t DataCollectManagerService::IsEventGroupHasPublicPermission(const std::st
     }
     for (int64_t eventId : eventIds) {
         if (config.eventList.count(eventId) == 0) {
-            SGLOGE("eventid not in eventid list");
+            SGLOGE("eventid not in eventid list eventId=%{public}" PRId64, eventId);
             return BAD_PARAM;
         }
     }

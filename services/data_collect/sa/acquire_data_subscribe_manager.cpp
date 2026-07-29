@@ -27,6 +27,7 @@
 #include "device_manager.h"
 #endif
 #include "ffrt.h"
+ #include "ffrt_inner.h"
 #include "event_define.h"
 #include "i_model_info.h"
 #include "config_data_manager.h"
@@ -63,6 +64,8 @@ namespace {
     constexpr int64_t FILE_EVENT_ID = 0x01C000007;
     constexpr uint32_t PUBLISH_EVENT_TO_SUB_STEP_COUNT = 100;
     constexpr int64_t PUBLISH_EVENT_TO_SUB_STEP_TIME = 100;
+    ffrt::thread g_tokenBucketThread {};
+    ffrt::thread g_cleanEventCacheThread {};
 }
 
 #ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
@@ -431,13 +434,18 @@ void AcquireDataSubscribeManager::StartClearEventCache()
             ffrt::this_task::sleep_for(std::chrono::milliseconds(MAX_DURATION_TEN_SECOND));
         }
     };
-    ffrt::submit(task);
+    g_cleanEventCacheThread = ffrt::thread(task);
 }
 
 void AcquireDataSubscribeManager::StopClearEventCache()
 {
-    std::lock_guard<ffrt::mutex> lock(clearCachemutex_);
-    isStopClearCache_ = true;
+    {
+        std::lock_guard<ffrt::mutex> lock(clearCachemutex_);
+        isStopClearCache_ = true;
+    }
+    if (g_cleanEventCacheThread.joinable()) {
+        g_cleanEventCacheThread.join();
+    }
 }
 
 void AcquireDataSubscribeManager::ClearEventCache()
@@ -547,12 +555,15 @@ void AcquireDataSubscribeManager::StartTokenBucketTask()
             ffrt::this_task::sleep_for(std::chrono::milliseconds(TOKEN_BUCKET_INTERVAL_TIME));
         }
     };
-    ffrt::submit(task);
+    g_tokenBucketThread = ffrt::thread(task);
 }
 
 void AcquireDataSubscribeManager::StopTokenBucketTask()
 {
     isStopTokenBucketTask_ = true;
+    if (g_tokenBucketThread.joinable()) {
+        g_tokenBucketThread.join();
+    }
 }
 
 void AcquireDataSubscribeManager::NotifySub(sptr<IRemoteObject> obj, const SecurityCollector::Event &events)

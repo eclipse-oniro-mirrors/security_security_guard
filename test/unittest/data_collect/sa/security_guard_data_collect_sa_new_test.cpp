@@ -659,9 +659,12 @@ HWTEST_F(SecurityGuardDataCollectSaNewTest, StartClearEventCache_IsStopTrue_Test
 {
     AcquireDataSubscribeManager::GetInstance().StartClearEventCache();
     AcquireDataSubscribeManager::GetInstance().isStopClearCache_ = true;
+    AcquireDataSubscribeManager::GetInstance().StopClearEventCache();
     AcquireDataSubscribeManager::GetInstance().StartClearEventCache();
     AcquireDataSubscribeManager::GetInstance().isStopClearCache_ = false;
+    AcquireDataSubscribeManager::GetInstance().StopClearEventCache();
     AcquireDataSubscribeManager::GetInstance().StartClearEventCache();
+    AcquireDataSubscribeManager::GetInstance().StopClearEventCache();
 }
 
 HWTEST_F(SecurityGuardDataCollectSaNewTest, UploadEventToStore_QueueNotNull_Test, TestSize.Level0)
