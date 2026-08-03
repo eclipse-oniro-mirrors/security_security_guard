@@ -83,7 +83,7 @@ bool ConfigSubscriber::UpdateConfig(const std::string &file)
     if (file != CONFIG_CACHE_FILES[EVENT_CFG_INDEX] && file != CONFIG_CACHE_FILES[MODEL_CFG_INDEX]) {
         GetUpdateFileDstPath(file, dstPath);
         if (!dstPath.empty()) {
-            SGLOGI("UpdateConfig, tmp path=%{public}s, dstPath=%{public}s.", file.c_str(), dstPath.c_str());
+            SGLOGI("UpdateConfig, tmp path=%{private}s, dstPath=%{private}s.", file.c_str(), dstPath.c_str());
             isSuccess = SecurityGuardUtils::CopyFile(file, dstPath);
         }
     }
@@ -91,7 +91,7 @@ bool ConfigSubscriber::UpdateConfig(const std::string &file)
     event.path = file;
     event.time = SecurityGuardUtils::GetDate();
     event.ret = isSuccess ? SUCCESS : FAILED;
-    SGLOGD("file path=%{public}s, TIME=%{public}s, ret=%{public}d", event.path.c_str(), event.time.c_str(), event.ret);
+    SGLOGD("file path=%{private}s, TIME=%{public}s, ret=%{public}d", event.path.c_str(), event.time.c_str(), event.ret);
     BigData::ReportConfigUpdateEvent(event);
     if (isSuccess) {
         std::string name;

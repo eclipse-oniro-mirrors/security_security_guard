@@ -30,7 +30,7 @@ bool EventGroupConfig::Load(int mode)
             path = CONFIG_PRESET_FILES[EVENT_GROUP_CFG_INDEX];
         }
     }
-    SGLOGD("path=%{public}s", path.c_str());
+    SGLOGD("path=%{private}s", path.c_str());
     if (path.empty()) {
         SGLOGE("path is empty");
         return false;

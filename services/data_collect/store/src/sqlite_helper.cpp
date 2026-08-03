@@ -37,8 +37,8 @@ void SqliteHelper::Open() __attribute__ ((no_sanitize("cfi")))
         return;
     }
     if (dbName_.empty() || dbPath_.empty() || currentVersion_ < 0) {
-        SGLOGE("param invalid, dbName: %{public}s, "
-            "dbPath: %{public}s, currentVersion: %{public}d",
+        SGLOGE("param invalid, dbName: %{private}s, "
+            "dbPath: %{private}s, currentVersion: %{public}d",
             dbName_.c_str(), dbPath_.c_str(), currentVersion_);
         return;
     }

@@ -174,7 +174,7 @@ static int32_t FillingRequestResult(const OHOS::Security::SecurityGuard::Securit
     }
     result->resultLen = cppResult.result.length();
 
-    SGLOGD("modelId=%{public}u, result=%{public}s", cppResult.modelId, cppResult.result.c_str());
+    SGLOGD("modelId=%{public}u, result=%{private}s", cppResult.modelId, cppResult.result.c_str());
     return SUCCESS;
 }
 

@@ -24,7 +24,7 @@ bool ReadFileToStr(const std::string &fileName, const std::ios::pos_type fileMax
     SGLOGI("Start read file.");
     std::string realPath;
     if (!PathToRealPath(fileName, realPath)) {
-        SGLOGE("Check file path failed, fileName: %{public}s", fileName.c_str());
+        SGLOGE("Check file path failed, fileName: %{private}s", fileName.c_str());
         return false;
     }
     std::ifstream stream(realPath, std::ios::in);

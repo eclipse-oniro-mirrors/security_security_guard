@@ -59,7 +59,7 @@ void DetectPluginManager::LoadPlugin(const PluginCfg &pluginCfg)
 {
     void *handle = dlopen(pluginCfg.pluginPath.c_str(), RTLD_LAZY);
     if (handle == nullptr) {
-        SGLOGE("Plugin open failed, pluginName: %{public}s, reason: %{public}s",
+        SGLOGE("Plugin open failed, pluginName: %{private}s, reason: %{public}s",
             pluginCfg.pluginName.c_str(), dlerror());
         return;
     }
@@ -78,7 +78,7 @@ void DetectPluginManager::LoadPlugin(const PluginCfg &pluginCfg)
     }
     detectPluginAttrs->SetInstance(instance);
     if (!instance->Init()) {
-        SGLOGE("Plugin init failed, pluginName: %{public}s", pluginCfg.pluginName.c_str());
+        SGLOGE("Plugin init failed, pluginName: %{private}s", pluginCfg.pluginName.c_str());
         return;
     }
     for (const int64_t& eventId : pluginCfg.depEventIds) {
@@ -98,7 +98,7 @@ void DetectPluginManager::LoadPlugin(const PluginCfg &pluginCfg)
         std::lock_guard<ffrt::mutex> lock(mutex_);
         eventIdMap_[sepcialId].emplace_back(detectPluginAttrs);
     }
-    SGLOGI("Load plugin success, pluginName: %{public}s", pluginCfg.pluginName.c_str());
+    SGLOGI("Load plugin success, pluginName: %{private}s", pluginCfg.pluginName.c_str());
 }
 
 void DetectPluginManager::SubscribeEvent(int64_t eventId)
@@ -187,7 +187,7 @@ bool DetectPluginManager::CheckPluginNameAndSize(PluginCfg &newPlugin)
 
     const std::string path = PLUGIN_PREFIX_PATH + newPlugin.pluginName;
     if (!PathToRealPath(path, newPlugin.pluginPath) || newPlugin.pluginPath.find(PLUGIN_PREFIX_PATH) != 0) {
-        SGLOGE("Check plugin path failed, pluginName: %{public}s", newPlugin.pluginName.c_str());
+        SGLOGE("Check plugin path failed, pluginName: %{private}s", newPlugin.pluginName.c_str());
         return false;
     }
     auto it = std::find_if(plugins_.begin(), plugins_.end(),
@@ -238,7 +238,7 @@ void DetectPluginManager::DispatchEvent(const SecurityCollector::Event &event)
     for (auto& detectPlugin : it->second) {
         detectPlugin->GetInstance()->HandleEvent(event.eventId, event.content,
             AssembleMetadata(event));
-        SGLOGD("Event distributed successfully, eventId: 0x%{public}" PRIx64 ", pluginName: %{public}s",
+        SGLOGD("Event distributed successfully, eventId: 0x%{public}" PRIx64 ", pluginName: %{private}s",
             event.eventId, detectPlugin->GetPluginName().c_str());
     }
 }

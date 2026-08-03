@@ -257,7 +257,7 @@ int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared
     LibLoader loader(path);
     ErrorCode ret = loader.LoadLib();
     if (ret != SUCCESS) {
-        LOGE("LoadLib error, ret=%{public}d, path : %{public}s", ret, path.c_str());
+        LOGE("LoadLib error, ret=%{public}d, path : %{private}s", ret, path.c_str());
         return FAILED;
     }
     {
@@ -469,7 +469,7 @@ int32_t DataCollection::QuerySecurityEventBatch(const std::vector<SecurityEventR
     // 按分组批量查询
     for (const auto &[soPath, groupedRulers] : soPathToRulers) {
         if (LoadAndQueryBySoPath(soPath, groupedRulers, events, failedEventIds) != SUCCESS) {
-            LOGE("LoadAndQueryBySoPath failed, soPath=%{public}s", soPath.c_str());
+            LOGE("LoadAndQueryBySoPath failed, soPath=%{private}s", soPath.c_str());
         }
     }
     LOGD("QuerySecurityEventBatch finish, failedCount=%{public}zu", failedEventIds.size());
@@ -479,11 +479,11 @@ int32_t DataCollection::QuerySecurityEventBatch(const std::vector<SecurityEventR
 int DataCollection::LoadAndQueryBySoPath(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
     std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds)
 {
-    LOGD("Start LoadAndQueryBySoPath, soPath=%{public}s, rulerCount=%{public}zu", soPath.c_str(), rulers.size());
+    LOGD("Start LoadAndQueryBySoPath, soPath=%{private}s, rulerCount=%{public}zu", soPath.c_str(), rulers.size());
     LibLoader loader(soPath);
     ErrorCode ret = loader.LoadLib();
     if (ret != SUCCESS) {
-        LOGE("LoadLib error, ret=%{public}d, path=%{public}s", ret, soPath.c_str());
+        LOGE("LoadLib error, ret=%{public}d, path=%{private}s", ret, soPath.c_str());
         return FAILED;
     }
     {
