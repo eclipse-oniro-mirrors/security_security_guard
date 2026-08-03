@@ -117,7 +117,7 @@ int32_t SecurityCollectorManagerService::Subscribe(const SecurityCollectorSubscr
     }
     Event event = subscribeInfo.GetEvent();
     LOGI("in subscribe, subscribinfo: duration:%{public}" PRId64 ", isNotify:%{public}d, eventid:%{public}" PRId64 ","
-        "version:%{public}s, extra:%{public}s", subscribeInfo.GetDuration(), (int)subscribeInfo.IsNotify(),
+        "version:%{public}s, extra:%{private}s", subscribeInfo.GetDuration(), (int)subscribeInfo.IsNotify(),
         event.eventId, event.version.c_str(), event.extra.c_str());
     if (!SetDeathRecipient(callback)) {
         g_refCount.fetch_sub(1);

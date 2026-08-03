@@ -282,7 +282,7 @@ int DataCollection::LoadCollector(int64_t eventId, std::string path, std::shared
     LibLoader loader(path);
     ErrorCode ret = loader.LoadLib();
     if (ret != SUCCESS) {
-        LOGE("LoadLib error, ret=%{public}d, path : %{public}s", ret, path.c_str());
+        LOGE("LoadLib error, ret=%{public}d, path : %{private}s", ret, path.c_str());
         return FAILED;
     }
     {
