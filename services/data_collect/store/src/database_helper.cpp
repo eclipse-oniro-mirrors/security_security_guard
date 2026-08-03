@@ -343,6 +343,11 @@ void DatabaseHelper::CommitEvent()
 
 void DatabaseHelper::BeginTransactionEvent()
 {
-    BeginTransaction();
+    int ret = BeginTransaction();
+    if (ret != SUCCESS) {
+        SGLOGW("BeginTransactionEvent fail retry again");
+        RollBack();
+        BeginTransaction();
+    }
 }
 } // namespace OHOS::Security::SecurityGuard

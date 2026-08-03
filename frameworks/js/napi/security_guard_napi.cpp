@@ -115,7 +115,7 @@ static napi_value NapiCreateString(const napi_env env, const std::string &value)
 {
     napi_value result = nullptr;
     napi_status status = napi_create_string_utf8(env, value.c_str(), NAPI_AUTO_LENGTH, &result);
-    SGLOGD("create napi value of string type, value is %{public}s.", value.c_str());
+    SGLOGD("create napi value of string type, value is %{private}s.", value.c_str());
     if (status != napi_ok || result == nullptr) {
         SGLOGE("failed to create napi value of string type.");
     }

@@ -40,7 +40,7 @@ bool ModelConfig::Load(int mode)
             path = CONFIG_CACHE_FILES[MODEL_CFG_INDEX];
         }
     }
-    SGLOGD("path=%{public}s", path.c_str());
+    SGLOGD("path=%{private}s", path.c_str());
     if (path.empty()) {
         SGLOGE("path is empty");
         return false;
