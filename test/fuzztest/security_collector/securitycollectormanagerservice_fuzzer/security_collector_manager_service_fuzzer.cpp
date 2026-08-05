@@ -91,7 +91,7 @@ void SecurityCollectorManagerServiceFuzzTest(const uint8_t* data, size_t size)
     SecurityCollectorManagerService::GetAppName();
     SecurityCollectorManagerService::HasPermission(string);
     service.CleanSubscriber(obj);
-    service.ExecuteOnNotifyByTask(obj, event);
+    service.ExecuteOnNotifyByTask(nullptr, event);
 }
 
 void SecurityCollectorRunManagerFuzzTest(const uint8_t* data, size_t size)
