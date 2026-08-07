@@ -822,7 +822,7 @@ ErrCode DataCollectManagerService::ConfigUpdate(int fd, const std::string& name)
     }
 
     const std::string &realPath = CONFIG_ROOT_PATH + "tmp/" + name;
-    SGLOGI("config file is %{public}s, fd is %{public}d", realPath.c_str(), fd);
+    SGLOGI("config file is %{private}s, fd is %{public}d", realPath.c_str(), fd);
     std::string tmpPath = realPath + ".t";
     int32_t ret = WriteRemoteFileToLocal(fd, tmpPath);
     if (ret != SUCCESS) {

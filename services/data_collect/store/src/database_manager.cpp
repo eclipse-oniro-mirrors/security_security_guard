@@ -66,7 +66,6 @@ int DatabaseManager::InsertEvent(uint32_t source, const std::vector<SecEvent>& e
         std::string table = ConfigDataManager::GetInstance().GetTableFromEventId(event.eventId);
         // notify changed
         DbChanged(IDbListener::INSERT, event, eventSubscribes);
-        std::lock_guard<ffrt::mutex> lock(delMutex_);
         // Check whether the upper limit is reached.
         if (table == RISK_TABLE) {
             SGLOGD("risk event insert, eventId=%{public}" PRId64, event.eventId);

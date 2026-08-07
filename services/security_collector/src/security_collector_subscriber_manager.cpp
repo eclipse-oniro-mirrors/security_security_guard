@@ -82,7 +82,7 @@ void SecurityCollectorSubscriberManager::CollectorListenner::OnNotify(const Even
 void SecurityCollectorSubscriberManager::NotifySubscriber(const Event &event)
 {
     std::lock_guard<ffrt::mutex> lock(collectorMutex_);
-    LOGD("publish event: eventid:%{public}" PRId64 ", version:%{public}s, extra:%{public}s",
+    LOGD("publish event: eventid:%{public}" PRId64 ", version:%{public}s, extra:%{private}s",
         event.eventId, event.version.c_str(), event.extra.c_str());
     for (auto iter : event.eventSubscribes) {
         LOGD("publish event: subscribe:%{public}s", iter.c_str());
