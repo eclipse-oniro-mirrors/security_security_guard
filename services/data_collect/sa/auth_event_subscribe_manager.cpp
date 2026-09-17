@@ -109,27 +109,28 @@ void AuthEventSubscribeManager::RemoveSessionLocked(const sptr<AuthEventSessionS
     }
 }
 
-int32_t AuthEventSubscribeManager::CreatAuthEventClient(pid_t callerPid, int32_t callerUid,
-    bool timeoutAllowFlag, const sptr<IRemoteObject> &callback, sptr<IRemoteObject> &sessionRemote)
+int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams &params,
+    sptr<IRemoteObject> &sessionRemote)
 {
-    if (callback == nullptr) {
+    if (params.callback == nullptr) {
         SGLOGE("callback is null");
         return NULL_OBJECT;
     }
     sptr<AuthEventSessionService> session {};
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
-        int32_t code = CheckQuotaLocked(callerPid);
+        int32_t code = CheckQuotaLocked(params.callerPid);
         if (code != SUCCESS) {
             return code;
         }
         for (const auto &item : sessions_) {
-            if (item != nullptr && item->GetCallback() == callback) {
+            if (item != nullptr && item->GetCallback() == params.callback) {
                 SGLOGE("callback already has session");
                 return BAD_PARAM;
             }
         }
-        session = new (std::nothrow) AuthEventSessionService(callerPid, callerUid, timeoutAllowFlag, callback);
+        session = new (std::nothrow) AuthEventSessionService(params.callerPid, params.callerUid,
+            params.defaultTimeoutStrategy, params.defaultTimeouts, params.callback);
         if (session == nullptr) {
             SGLOGE("new session fail");
             return FAILED;
@@ -138,7 +139,7 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(pid_t callerPid, int32_t
     }
     // AddDeathRecipient 是跨进程调用，放锁外执行；失败则回滚会话，避免孤儿会话占用配额
     sptr<AuthEventSessionDeathRecipient> recipient = new (std::nothrow) AuthEventSessionDeathRecipient(session);
-    if (recipient == nullptr || !callback->AddDeathRecipient(recipient)) {
+    if (recipient == nullptr || !params.callback->AddDeathRecipient(recipient)) {
         SGLOGE("add death recipient fail");
         std::lock_guard<ffrt::mutex> lock(mutex_);
         RemoveSessionLocked(session);
@@ -146,7 +147,7 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(pid_t callerPid, int32_t
     }
     session->SetDeathRecipient(recipient);
     sessionRemote = session;
-    SGLOGI("create auth event client, pid=%{public}d", static_cast<int32_t>(callerPid));
+    SGLOGI("create auth event client, pid=%{public}d", static_cast<int32_t>(params.callerPid));
     return SUCCESS;
 }
 
@@ -181,8 +182,10 @@ int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService 
     return SUCCESS;
 }
 
+// 验收: Client 扩展参数 — defaultTimeoutStrategy 保存到会话，供协调者超时处置时读取
+// 验收: HA 打点 — allowFlag=false 时锁外执行 AUTH_BLOCK_RESULT 打点（应用信息+事件信息+发送时间）
 int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
-    bool allowFlag)
+    bool allowFlag, int64_t seqnum)
 {
     if (event.GetContent().size() > MAX_AUTH_EVENT_STR_LEN || event.GetMetadata().size() > MAX_AUTH_EVENT_STR_LEN) {
         SGLOGE("content or metadata too long");
@@ -202,7 +205,7 @@ int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *sessio
         }
         authResults_[event.GetEventId()] = allowFlag;
     }
-    // HA 打点：仅阻断结果上报（耗时接口，锁外执行），应用信息取会话记录
+    (void)seqnum;
     if (!allowFlag) {
         AuthEventReporter::ReportAuthBlockResult(session->GetPid(), session->GetUid(), event);
     }
@@ -284,8 +287,24 @@ void AuthEventSubscribeManager::NotifyAuthEvent(const AuthEvent &event)
             SGLOGE("auth event callback proxy is null");
             continue;
         }
-        proxy->OnAuthEvent(event);
+        proxy->OnAuthEvent(event, 0);
     }
+}
+
+// 供 AuthCoordinator 调用: 查询订阅了指定 eventId 的所有有效 Client 会话
+std::vector<sptr<AuthEventSessionService>> AuthEventSubscribeManager::GetSubscribedSessions(int64_t eventId)
+{
+    std::vector<sptr<AuthEventSessionService>> result;
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    for (const auto &session : sessions_) {
+        if (session == nullptr || !session->IsValid()) {
+            continue;
+        }
+        if (session->IsEventSubscribed(eventId)) {
+            result.push_back(session);
+        }
+    }
+    return result;
 }
 } // namespace OHOS::Security::SecurityGuard
 

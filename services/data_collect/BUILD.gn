@@ -90,6 +90,9 @@ ohos_shared_library("sg_collect_service") {
       "${sg_root_dir}/services/data_collect/sa/auth_event_reporter.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_event_session_service.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_event_subscribe_manager.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_coordinator.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_provider_session_service.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_provider_callback_proxy.cpp",
     ]
   }
 
@@ -124,6 +127,7 @@ ohos_shared_library("sg_collect_service") {
 
   if (security_guard_auth_event_enable) {
     deps += [ "${sg_root_dir}/services/data_collect/idl:auth_event_session_sa_stub" ]
+    deps += [ "${sg_root_dir}/services/data_collect/idl:auth_provider_session_sa_stub" ]
   }
 
   external_deps = [

@@ -28,6 +28,7 @@
 
 #include "auth_event.h"
 #include "auth_event_session_service.h"
+#include "auth_strategy.h"
 
 namespace OHOS::Security::SecurityGuard {
 // 客户端配额：一个进程最多 2 个客户端，一个设备最多 16 个客户端
@@ -41,23 +42,32 @@ constexpr size_t MAX_AUTH_EVENT_RESULT_SIZE = 1024;
 // HAP 应用接入所需权限
 constexpr const char* AUTH_AUDIT_EVENT_PERMISSION = "ohos.permission.kernel.AUTH_AUDIT_EVENT";
 
+// Client 会话创建参数（控制入参 ≤5）
+struct CreateClientParams {
+    pid_t callerPid;
+    int32_t callerUid;
+    AuthStrategy defaultTimeoutStrategy;
+    int32_t defaultTimeouts;
+    sptr<IRemoteObject> callback;
+};
+
 class AuthEventSubscribeManager {
 public:
     static AuthEventSubscribeManager& GetInstance();
 
     // 主接口路径：创建会话对象并经 sessionRemote 下发其远端引用（binder handle 即会话路由）。
-    // timeoutAllowFlag：该客户端的回填超时处置策略（默认放行），会话保存供超时需求（另一需求）消费
-    int32_t CreatAuthEventClient(pid_t callerPid, int32_t callerUid, bool timeoutAllowFlag,
-        const sptr<IRemoteObject> &callback, sptr<IRemoteObject> &sessionRemote);
+    int32_t CreatAuthEventClient(const CreateClientParams &params, sptr<IRemoteObject> &sessionRemote);
     // 会话对象方法路径（AuthEventSessionService 转调，会话有效性以"在会话集合中"为权威判定）
     int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
     int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
-    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, bool allowFlag);
+    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, bool allowFlag, int64_t seqnum);
     int32_t DestroyAuthEventClient(AuthEventSessionService *session);
     // 预留读取口：读取某 eventId 的回填结果
     int32_t GetAuthResult(int64_t eventId, bool &allowFlag);
     // 内部事件源注入入口：按各会话已订阅 eventId 分发推送（本期预留）
     void NotifyAuthEvent(const AuthEvent &event);
+    // 获取订阅了指定 eventId 的所有有效会话（供 AuthCoordinator 调用）
+    std::vector<sptr<AuthEventSessionService>> GetSubscribedSessions(int64_t eventId);
     // 订阅者死亡清理入口（AuthEventSessionDeathRecipient 转调）
     void RemoveSession(const sptr<AuthEventSessionService> &session);
     // 双轨接入校验（主接口 CreatAuthEventClient 与 session 四方法前置共用）：

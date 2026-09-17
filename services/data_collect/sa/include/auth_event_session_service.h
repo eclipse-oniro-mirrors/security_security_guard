@@ -22,6 +22,7 @@
 
 #include "auth_event.h"
 #include "auth_event_session_stub.h"
+#include "auth_strategy.h"
 #include "iremote_object.h"
 #include "nocopyable.h"
 
@@ -33,13 +34,13 @@ namespace OHOS::Security::SecurityGuard {
 // 管理器锁进行（本类自身无锁，IsEventSubscribed 仅允许在管理器锁内调用）。
 class AuthEventSessionService : public AuthEventSessionStub, public NoCopyable {
 public:
-    AuthEventSessionService(pid_t callerPid, int32_t callerUid, bool timeoutAllowFlag,
-        const sptr<IRemoteObject> &callback);
+    AuthEventSessionService(pid_t callerPid, int32_t callerUid, AuthStrategy defaultTimeoutStrategy,
+        int32_t defaultTimeouts, const sptr<IRemoteObject> &callback);
     ~AuthEventSessionService() override = default;
 
     ErrCode Subscribe(int64_t eventId) override;
     ErrCode Unsubscribe(int64_t eventId) override;
-    ErrCode SetAuthResult(const AuthEvent &event, bool allowFlag) override;
+    ErrCode SetAuthResult(const AuthEvent &event, bool allowFlag, int64_t seqnum) override;
     ErrCode Destroy() override;
 
     sptr<IRemoteObject> GetCallback() const
@@ -59,9 +60,14 @@ public:
 
     // 回填超时处置策略（创建会话时由客户端设置，默认放行）。
     // 本期仅保存不消费：超时判断与处置由另一需求承接，届时按会话读取该策略落值。
-    bool GetTimeoutAllowFlag() const
+    AuthStrategy GetTimeoutStrategy() const
     {
-        return timeoutAllowFlag_;
+        return defaultTimeoutStrategy_;
+    }
+
+    int32_t GetDefaultTimeouts() const
+    {
+        return defaultTimeouts_;
     }
 
     // 管理器锁内调用：分发时按 eventId 匹配命中会话
@@ -100,7 +106,8 @@ public:
 private:
     pid_t pid_ {};
     int32_t uid_ {};
-    bool timeoutAllowFlag_ {true};
+    AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
+    int32_t defaultTimeouts_ {400};
     sptr<IRemoteObject> callback_ {};
     std::set<int64_t> eventIds_ {};
     bool valid_ {true};

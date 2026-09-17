@@ -65,6 +65,9 @@
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::Unsubscribe*;
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::SetAuthResult*;
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::DeleteClient*;
+        OHOS::Security::SecurityGuard::AuthProviderSubscribeClient::CreateProvider*;
+        OHOS::Security::SecurityGuard::AuthProviderSubscribeClient::RequestAuthResult*;
+        OHOS::Security::SecurityGuard::AuthProviderSubscribeClient::DeleteProvider*;
         OHOS::Security::SecurityGuard::AuthEvent::Marshalling*;
         OHOS::Security::SecurityGuard::AuthEvent::ReadFromParcel*;
         OHOS::Security::SecurityGuard::AuthEvent::Unmarshalling*;

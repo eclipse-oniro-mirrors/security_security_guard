@@ -77,4 +77,23 @@ int32_t SecurityGuardSdkAdaptor::ConfigUpdate(const SecurityGuard::SecurityConfi
     SGLOGI("enter SecurityGuardSdkAdaptor ConfigUpdate");
     return DataCollectManager::GetInstance().SecurityGuardConfigUpdate(updateInfo.GetFd(), updateInfo.GetFileName());
 }
+
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+int32_t SecurityGuardSdkAdaptor::CreateProvider(AuthProviderCallback callback, const std::string &serviceId,
+    std::shared_ptr<AuthProviderSubscribeClient> &provider)
+{
+    SGLOGI("enter SecurityGuardSdkAdaptor CreateProvider, serviceId=%{public}s", serviceId.c_str());
+    return AuthProviderSubscribeClient::CreateProvider(callback, serviceId, provider);
+}
+
+int32_t SecurityGuardSdkAdaptor::RequestAuthResult(std::shared_ptr<AuthProviderSubscribeClient> provider,
+    const AuthEventInfo &event, AuthResult &result)
+{
+    SGLOGI("enter SecurityGuardSdkAdaptor RequestAuthResult, eventId=%{public}" PRId64, event.GetEventId());
+    if (provider == nullptr) {
+        return BAD_PARAM;
+    }
+    return provider->RequestAuthResult(event, result);
+}
+#endif
 } // OHOS::Security::SecurityGuard

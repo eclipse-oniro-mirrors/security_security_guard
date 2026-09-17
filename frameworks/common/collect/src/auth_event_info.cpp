@@ -1,0 +1,83 @@
+/*
+ * Copyright (c) 2026 Huawei Device Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "auth_event_info.h"
+
+namespace OHOS::Security::SecurityGuard {
+bool AuthEventInfo::Marshalling(Parcel &parcel) const
+{
+    if (!parcel.WriteInt64(eventId_)) {
+        return false;
+    }
+    if (!parcel.WriteString(version_)) {
+        return false;
+    }
+    if (!parcel.WriteString(content_)) {
+        return false;
+    }
+    if (!parcel.WriteInt32(static_cast<int32_t>(clientStatus_.size()))) {
+        return false;
+    }
+    for (const auto &item : clientStatus_) {
+        if (!item.Marshalling(parcel)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool AuthEventInfo::ReadFromParcel(Parcel &parcel)
+{
+    if (!parcel.ReadInt64(eventId_)) {
+        return false;
+    }
+    if (!parcel.ReadString(version_)) {
+        return false;
+    }
+    if (!parcel.ReadString(content_)) {
+        return false;
+    }
+    int32_t size = 0;
+    if (!parcel.ReadInt32(size)) {
+        return false;
+    }
+    if (size < 0) {
+        return false;
+    }
+    clientStatus_.clear();
+    for (int32_t i = 0; i < size; ++i) {
+        auto *item = AuthClientStatus::Unmarshalling(parcel);
+        if (item == nullptr) {
+            return false;
+        }
+        clientStatus_.emplace_back(*item);
+        delete item;
+    }
+    return true;
+}
+
+AuthEventInfo *AuthEventInfo::Unmarshalling(Parcel &parcel)
+{
+    auto *obj = new (std::nothrow) AuthEventInfo();
+    if (obj == nullptr) {
+        return nullptr;
+    }
+    if (!obj->ReadFromParcel(parcel)) {
+        delete obj;
+        return nullptr;
+    }
+    return obj;
+}
+} // namespace OHOS::Security::SecurityGuard

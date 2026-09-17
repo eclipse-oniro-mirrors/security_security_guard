@@ -17,6 +17,6 @@ sequenceable OHOS.Security.SecurityGuard.AuthEvent;
 interface OHOS.Security.SecurityGuard.AuthEventSession {
     void Subscribe([in] long eventId);
     void Unsubscribe([in] long eventId);
-    void SetAuthResult([in] AuthEvent event, [in] boolean allowFlag);
+    void SetAuthResult([in] AuthEvent event, [in] boolean allowFlag, [in] long seqnum);
     void Destroy();
 }

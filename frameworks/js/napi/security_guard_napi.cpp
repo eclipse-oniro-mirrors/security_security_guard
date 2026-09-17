@@ -20,6 +20,7 @@
 #include <map>
 #include <algorithm>
 #include "ffrt.h"
+#include "napi_block_framework.h"
 #include "napi_request_data_manager.h"
 #include "napi_security_event_querier.h"
 #include "security_event.h"
@@ -79,6 +80,15 @@ static const std::unordered_map<int32_t, std::pair<int32_t, std::string>> g_erro
     { NO_SYSTEMCALL, { JS_ERR_NO_SYSTEMCALL, "non-system application uses the system API"} },
     { API_SUPPORT_ERROR, { JS_ERR_API_SUPPORT_ERROR, "API is not supported"} },
     { KERNEL_NOT_SUPPORT, { JS_ERR_API_SUPPORT_ERROR, "kernel version is not supported"} },
+    { AUTH_PROVIDER_INTERNAL_ERROR, { JS_ERR_AUTH_PROVIDER_INTERNAL,
+        "Internal system error. The possible causes as follows: 1.The inter-process IPC call fails."
+        " 2.The system service process is faulty." } },
+    { AUTH_PROVIDER_EXCEED_PROCESS_LIMIT, { JS_ERR_AUTH_PROVIDER_EXCEED_PROCESS,
+        "Provider count of the current process has reached the upper limit." } },
+    { AUTH_PROVIDER_EXCEED_GLOBAL_LIMIT, { JS_ERR_AUTH_PROVIDER_EXCEED_GLOBAL,
+        "Global provider count has reached the upper limit." } },
+    { AUTH_REQUEST_EXCEED_LIMIT, { JS_ERR_AUTH_REQUEST_EXCEED_LIMIT,
+        "Concurrent request count has reached the upper limit." } },
 };
 
 static std::string ConvertToJsErrMsg(int32_t code)
@@ -1438,6 +1448,10 @@ static napi_value SecurityGuardNapiRegister(napi_env env, napi_value exports)
         DECLARE_NAPI_FUNCTION("off", Unsubscribe),
         DECLARE_NAPI_FUNCTION("getModelResult", NapiGetModelResult),
         DECLARE_NAPI_FUNCTION("updatePolicyFile", NapiUpdatePolicyFile),
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+        DECLARE_NAPI_FUNCTION("createAuthProvider", OHOS::Security::SecurityGuard::NapiCreateAuthProvider),
+        DECLARE_NAPI_FUNCTION("destroyAuthProvider", OHOS::Security::SecurityGuard::NapiDestroyAuthProvider),
+#endif
     };
     NAPI_CALL(env, napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc));
     return exports;

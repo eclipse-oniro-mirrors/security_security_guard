@@ -55,12 +55,8 @@ void AuthEventCallbackService::ClearCallBack()
     callback_ = nullptr;
 }
 
-int32_t AuthEventCallbackService::OnAuthEvent(const AuthEvent &event)
+int32_t AuthEventCallbackService::OnAuthEvent(const AuthEvent &event, int64_t seqnum)
 {
-    // 持续持有 notifyMutex_ 贯穿"拷贝回调 + 执行回调"整段。
-    // ClearCallBack 取同一把锁，故其返回后不会有任何 OnAuthEvent 处于拷贝点之后，
-    // 不存在 ClearCallBack 在拷贝与执行之间插入并返回、
-    // 导致回调仍然访问已释放状态的竞态窗口。
     std::lock_guard<ffrt::mutex> execLock(mutexes_->notifyMutex_);
     std::function<void(const AuthEvent &event)> callback;
     {
@@ -71,7 +67,7 @@ int32_t AuthEventCallbackService::OnAuthEvent(const AuthEvent &event)
         SGLOGE("callback is null");
         return FAILED;
     }
-    SGLOGD("OnAuthEvent eventId=%{public}" PRId64, event.GetEventId());
+    SGLOGD("OnAuthEvent eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64, event.GetEventId(), seqnum);
     callback(event);
     return SUCCESS;
 }

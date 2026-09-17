@@ -32,7 +32,7 @@ public:
         CMD_ON_AUTH_EVENT = static_cast<uint32_t>(InterfaceCode::CMD_ON_AUTH_EVENT),
     };
 
-    virtual int32_t OnAuthEvent(const AuthEvent &event) = 0;
+    virtual int32_t OnAuthEvent(const AuthEvent &event, int64_t seqnum) = 0;
 };
 } // namespace OHOS::Security::SecurityGuard
 

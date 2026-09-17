@@ -85,7 +85,8 @@ void AuthEventSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &s
 }
 
 int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
-    std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag)
+    std::shared_ptr<AuthEventSubscribeClient> &client, AuthStrategy defaultTimeoutStrategy,
+    int32_t defaultTimeouts)
 {
     SGLOGI("enter");
     std::lock_guard<ffrt::mutex> lock(g_clientMutex);
@@ -111,14 +112,16 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, timeoutAllowFlag, sessionRemote);
+    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(defaultTimeoutStrategy),
+        defaultTimeouts, sessionRemote);
     if (ret != SUCCESS || sessionRemote == nullptr) {
         SGLOGI("CreatAuthEventClient result, ret=%{public}d", ret);
         return ret != SUCCESS ? ret : FAILED;
     }
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
     client->callback_ = serviceCallback;
-    client->timeoutAllowFlag_ = timeoutAllowFlag;
+    client->defaultTimeoutStrategy_ = defaultTimeoutStrategy;
+    client->defaultTimeouts_ = defaultTimeouts;
     {
         std::lock_guard<ffrt::mutex> memberLock(g_mutex_);
         client->sessionRemote_ = sessionRemote;
@@ -310,7 +313,7 @@ int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
     return SUCCESS;
 }
 
-int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, bool allowFlag)
+int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, bool allowFlag, int64_t seqnum)
 {
     SGLOGI("enter");
     sptr<AuthEventSession> session {};
@@ -326,7 +329,7 @@ int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, bool all
         SGLOGE("session proxy is null");
         return NULL_OBJECT;
     }
-    return session->SetAuthResult(event, allowFlag);
+    return session->SetAuthResult(event, allowFlag, seqnum);
 }
 
 void AuthEventSubscribeClient::DeleteClient()
