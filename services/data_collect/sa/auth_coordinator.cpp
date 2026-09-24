@@ -109,7 +109,7 @@ void AuthCoordinator::RemoveProviderLocked(const sptr<AuthProviderSessionService
 int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
     const sptr<IRemoteObject> &callback, const std::string &serviceId, sptr<IRemoteObject> &providerRemote)
 {
-    SGLOGI("enter, serviceId=%{public}s, pid=%{private}d", serviceId.c_str(),
+    SGLOGI("CreateAuthProvider, serviceId=%{public}s, pid=%{private}d", serviceId.c_str(),
         static_cast<int32_t>(callerPid));
     if (callback == nullptr) {
         SGLOGE("callback is null");
@@ -156,7 +156,7 @@ void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
     if (provider == nullptr) {
         return;
     }
-    SGLOGI("enter, serviceId=%{public}s, pid=%{private}d", provider->GetServiceId().c_str(),
+    SGLOGI("DestroyAuthProvider, serviceId=%{public}s, pid=%{private}d", provider->GetServiceId().c_str(),
         static_cast<int32_t>(provider->GetPid()));
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
@@ -362,7 +362,7 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         return BAD_PARAM;
     }
     int64_t eventId = event.GetEventId();
-    SGLOGI("enter, eventId=%{public}" PRId64, eventId);
+    SGLOGI("RequestAuthResult, eventId=%{public}" PRId64, eventId);
     // 同步检验并发上限
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
@@ -470,7 +470,7 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     if (session == nullptr) {
         return BAD_PARAM;
     }
-    SGLOGD("enter, seqnum=%{public}" PRId64 ", allowFlag=%{public}d",
+    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", allowFlag=%{public}d",
         seqnum, static_cast<int32_t>(allowFlag));
     std::lock_guard<ffrt::mutex> lock(mutex_);
     // 通过 seqnum 查找 eventId

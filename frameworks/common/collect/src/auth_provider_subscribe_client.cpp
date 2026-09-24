@@ -45,7 +45,8 @@ AuthProviderSubscribeClient::~AuthProviderSubscribeClient()
 int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callback,
     const std::string &serviceId, std::shared_ptr<AuthProviderSubscribeClient> &provider)
 {
-    SGLOGI("enter");
+    SGLOGI("CreateProvider, serviceId=%{public}s", serviceId.c_str());
+    
     if (callback == nullptr) {
         SGLOGE("callback is nullptr");
         return NULL_OBJECT;
@@ -93,7 +94,7 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
 int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &event,
     AuthResultCallback callback)
 {
-    SGLOGI("enter");
+    SGLOGI("RequestAuthResult");
     sptr<AuthProviderSession> session {};
     {
         std::lock_guard<ffrt::mutex> lock(g_providerMutex);

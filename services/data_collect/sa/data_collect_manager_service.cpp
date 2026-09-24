@@ -804,7 +804,7 @@ int32_t DataCollectManagerService::IsCallerHasApiPermission(const std::string &a
 ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
     int32_t defaultTimeoutStrategy, int32_t defaultTimeoutMs, sptr<IRemoteObject> &session)
 {
-    SGLOGI("enter, strategy=%{public}d, timeouts=%{public}d", defaultTimeoutStrategy, defaultTimeoutMs);
+    SGLOGI("CreatAuthEventClient, strategy=%{public}d, timeoutMs=%{public}d", defaultTimeoutStrategy, defaultTimeoutMs);
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
@@ -839,7 +839,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
 ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> &cb,
     const std::string &serviceId, sptr<IRemoteObject> &provider)
 {
-    SGLOGI("enter, serviceId=%{public}s", serviceId.c_str());
+    SGLOGI("CreateAuthProvider, serviceId=%{public}s", serviceId.c_str());
     int32_t code = AuthCoordinator::GetInstance().IsProviderAllowed();
     if (code != SUCCESS) {
         return code;

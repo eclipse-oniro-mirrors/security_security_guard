@@ -83,14 +83,14 @@ int32_t SecurityGuardSdkAdaptor::ConfigUpdate(const SecurityGuard::SecurityConfi
 int32_t SecurityGuardSdkAdaptor::CreateProvider(AuthProviderCallback callback, const std::string &serviceId,
     std::shared_ptr<AuthProviderSubscribeClient> &provider)
 {
-    SGLOGI("enter SecurityGuardSdkAdaptor CreateProvider, serviceId=%{public}s", serviceId.c_str());
+    SGLOGI("SecurityGuardSdkAdaptor CreateProvider, serviceId=%{public}s", serviceId.c_str());
     return AuthProviderSubscribeClient::CreateProvider(callback, serviceId, provider);
 }
 
 int32_t SecurityGuardSdkAdaptor::RequestAuthResult(std::shared_ptr<AuthProviderSubscribeClient> provider,
     const AuthEventInfo &event, AuthResultCallback callback)
 {
-    SGLOGI("enter SecurityGuardSdkAdaptor RequestAuthResult, eventId=%{public}" PRId64, event.GetEventId());
+    SGLOGI("SecurityGuardSdkAdaptor RequestAuthResult, eventId=%{public}" PRId64, event.GetEventId());
     if (provider == nullptr) {
         return BAD_PARAM;
     }

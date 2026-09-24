@@ -118,7 +118,7 @@ ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allo
 
 ErrCode AuthEventSessionService::Destroy()
 {
-    SGLOGI("enter");
+    SGLOGI("Destroy");
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;

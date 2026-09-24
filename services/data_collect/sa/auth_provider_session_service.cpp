@@ -69,7 +69,7 @@ ErrCode AuthProviderSessionService::RequestAuthResult(const AuthEventInfo &event
 // Provider 销毁（IDL 生成返回 ErrCode，实际不消费返回值）
 ErrCode AuthProviderSessionService::Destroy()
 {
-    SGLOGI("enter, serviceId=%{public}s", serviceId_.c_str());
+    SGLOGI("Destroy, serviceId=%{public}s", serviceId_.c_str());
     int32_t code = AuthCoordinator::GetInstance().IsProviderAllowed();
     if (code != SUCCESS) {
         SGLOGE("permission denied");
