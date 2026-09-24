@@ -21,7 +21,7 @@ bool AuthClientStatus::Marshalling(Parcel &parcel) const
     if (!parcel.WriteString(clientId_)) {
         return false;
     }
-    if (!parcel.WriteBool(isDegrader_)) {
+    if (!parcel.WriteBool(isDegraded_)) {
         return false;
     }
     return true;
@@ -32,7 +32,7 @@ bool AuthClientStatus::ReadFromParcel(Parcel &parcel)
     if (!parcel.ReadString(clientId_)) {
         return false;
     }
-    if (!parcel.ReadBool(isDegrader_)) {
+    if (!parcel.ReadBool(isDegraded_)) {
         return false;
     }
     return true;

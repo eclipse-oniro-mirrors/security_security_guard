@@ -13,10 +13,11 @@
  * limitations under the License.
  */
 package OHOS.Security.SecurityGuard;
+sequenceable OHOS.IRemoteObject;
 sequenceable OHOS.Security.SecurityGuard.AuthEventInfo;
 sequenceable OHOS.Security.SecurityGuard.AuthResult;
 
 interface OHOS.Security.SecurityGuard.AuthProviderSession {
-    void RequestAuthResult([in] AuthEventInfo event, [in] IRemoteObject resultCallback, [out] AuthResult result);
+    void RequestAuthResult([in] AuthEventInfo event, [in] IRemoteObject resultCallback);
     void Destroy();
 }

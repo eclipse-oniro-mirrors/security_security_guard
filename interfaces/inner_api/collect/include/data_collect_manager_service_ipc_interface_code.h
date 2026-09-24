@@ -46,7 +46,11 @@ enum class AuthEventCallbackInterfaceCode {
 };
 
 enum class AuthProviderCallbackInterfaceCode {
-    CMD_ON_CLIENTS_STATUS_CHANGED = 1,
+    CMD_ON_CLIENT_STATUS_CHANGED = 1,
+};
+
+enum class AuthResultCallbackInterfaceCode {
+    CMD_ON_AUTH_RESULT = 1,
 };
 
 enum class DataCollectManagerCallbackInterfaceCode {

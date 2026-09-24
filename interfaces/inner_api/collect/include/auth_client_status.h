@@ -25,20 +25,20 @@ class AuthClientStatus : public Parcelable {
 public:
     AuthClientStatus() = default;
     AuthClientStatus(const std::string &clientId, bool isDegrader)
-        : clientId_(clientId), isDegrader_(isDegrader) {};
+        : clientId_(clientId), isDegraded_(isDegrader) {};
     ~AuthClientStatus() override = default;
 
     std::string GetClientId() const { return clientId_; };
-    bool IsDegrader() const { return isDegrader_; };
+    bool IsDegraded() const { return isDegraded_; };
     void SetClientId(const std::string &clientId) { clientId_ = clientId; };
-    void SetDegrader(bool isDegrader) { isDegrader_ = isDegrader; };
+    void SetDegraded(bool isDegrader) { isDegraded_ = isDegrader; };
     bool Marshalling(Parcel &parcel) const override;
     bool ReadFromParcel(Parcel &parcel);
     static AuthClientStatus *Unmarshalling(Parcel &parcel);
 
 private:
     std::string clientId_ {};
-    bool isDegrader_ {false};
+    bool isDegraded_ {false};
 };
 } // namespace OHOS::Security::SecurityGuard
 

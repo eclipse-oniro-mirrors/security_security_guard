@@ -22,7 +22,7 @@
 #include "security_guard_log.h"
 
 namespace OHOS::Security::SecurityGuard {
-int32_t AuthProviderCallbackProxy::OnClientsStatusChanged(const std::vector<AuthClientInfo> &clientsInfo)
+int32_t AuthProviderCallbackProxy::OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo)
 {
     MessageParcel data;
     if (!data.WriteInterfaceToken(GetDescriptor())) {
@@ -41,7 +41,7 @@ int32_t AuthProviderCallbackProxy::OnClientsStatusChanged(const std::vector<Auth
     }
     MessageParcel reply;
     MessageOption option(MessageOption::TF_ASYNC);
-    return Remote()->SendRequest(CMD_ON_CLIENTS_STATUS_CHANGED, data, reply, option);
+    return Remote()->SendRequest(CMD_ON_CLIENT_STATUS_CHANGED, data, reply, option);
 }
 } // namespace OHOS::Security::SecurityGuard
 

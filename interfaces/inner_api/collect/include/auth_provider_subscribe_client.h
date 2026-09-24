@@ -16,9 +16,11 @@
 #ifndef SECURITY_GUARD_AUTH_PROVIDER_SUBSCRIBE_CLIENT_H
 #define SECURITY_GUARD_AUTH_PROVIDER_SUBSCRIBE_CLIENT_H
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "auth_client_info.h"
@@ -30,6 +32,8 @@
 namespace OHOS::Security::SecurityGuard {
 class AuthProviderSession;
 using AuthProviderCallback = std::function<void(const std::vector<AuthClientInfo> &clientsInfo)>;
+// SA 聚合完成后经回调通知 kit，kit 收到 AuthResult 后触发 Promise 或 std::function
+using AuthResultCallback = std::function<void(const AuthResult &result)>;
 
 class AuthProviderSubscribeClient {
 private:
@@ -41,7 +45,8 @@ public:
 
     static int32_t CreateProvider(AuthProviderCallback callback, const std::string &serviceId,
         std::shared_ptr<AuthProviderSubscribeClient> &provider);
-    int32_t RequestAuthResult(const AuthEventInfo &event, AuthResult &result);
+    // 返回码: 请求是否被接受；最终阻断策略经回调返回
+    int32_t RequestAuthResult(const AuthEventInfo &event, AuthResultCallback callback);
     void DeleteProvider();
 
 private:
@@ -75,7 +80,7 @@ private:
     sptr<IRemoteObject> sessionRemote_{};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::string serviceId_{};
-    bool deleted_ {false};
+    std::atomic<bool> deleted_ {false};
 };
 } // namespace OHOS::Security::SecurityGuard
 

@@ -27,7 +27,7 @@ public:
     AuthEventCallbackService();
     ~AuthEventCallbackService() override;
     void RegistCallBack(std::function<void(const AuthEvent &event)> callback);
-    int32_t OnAuthEvent(const AuthEvent &event) override;
+    int32_t OnAuthEvent(const AuthEvent &event, int64_t seqnum) override;
     // 清空已注册的回调，并等待本 stub 上所有在途的 OnAuthEvent 执行完毕后返回。
     // 返回后 stub 不会再调用用户回调，此时销毁回调所捕获的状态是安全的。
     // 注意：禁止在用户回调内部（OnAuthEvent 触发的执行流）调用本接口，

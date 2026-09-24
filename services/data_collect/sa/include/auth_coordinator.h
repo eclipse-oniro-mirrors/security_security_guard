@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <future>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "iremote_object.h"
 #include "nocopyable.h"
 
+#include "auth_client_info.h"
 #include "auth_event.h"
 #include "auth_event_info.h"
 #include "auth_event_session_service.h"
@@ -50,33 +52,34 @@ public:
     int32_t CreateAuthProvider(pid_t callerPid, int32_t callerUid, const sptr<IRemoteObject> &callback,
         const std::string &serviceId, sptr<IRemoteObject> &providerRemote);
     void DestroyAuthProvider(AuthProviderSessionService *provider);
+    // IPC 异步应答: 返回码承载校验结果（是否接受请求），最终阻断策略经 resultCallback 回调返回
     int32_t RequestAuthResult(AuthProviderSessionService *provider, const AuthEventInfo &event,
-        const sptr<IRemoteObject> &resultCallback, AuthResult &result);
+        const sptr<IRemoteObject> &resultCallback);
     int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, bool allowFlag, int64_t seqnum);
     void RemoveProvider(const sptr<AuthProviderSessionService> &provider);
-    void NotifyClientsStatusChanged();
+    void NotifyClientStatusChanged();
     static int32_t IsProviderAllowed();
 
 private:
-    // 事件路由上下文 — 按 seqnum 索引，每个客户端独立 seqnum，聚合完成后移除
-    // 等待机制: promise/future（非 condition_variable），promise 被写入值后解除阻塞
+    // 事件路由上下文 — 按 eventId 索引，聚合完成后移除
+    // clientId: 客户端唯一标识（ConstructClientId 生成），用于结果聚合
+    // seqnum: 每客户端每事件独有，用于路由查找
     struct RoutingContext {
         int64_t eventId {0};
         size_t sentClientCount {0};
         size_t defaultDenyCount {0};
         std::map<std::string, AuthStrategy> clientResults;          // clientId → 回填策略
-        std::map<std::string, AuthStrategy> clientTimeoutStrategies; // clientId → 超时处置策略
-        std::map<std::string, std::shared_ptr<ffrt::promise<AuthStrategy>>> clientPromises; // clientId → promise
-        std::shared_ptr<ffrt::promise<AuthResult>> resultPromise;   // 最终结果 promise
-        ffrt::mutex ctxMutex;                                       // ffrt 锁，不混用 std mutex
-        std::atomic<bool> completed {false};
+        std::map<std::string, AuthStrategy> clientTimeoutStrategies; // clientId → 超时策略
+        std::map<std::string, std::shared_ptr<std::promise<AuthStrategy>>> clientPromises; // clientId → promise
+        std::shared_ptr<std::promise<AuthResult>> resultPromise;
+        ffrt::mutex ctxMutex;
+        bool completed {false};
         AuthStrategy mergedAuthStrategy {AuthStrategy::ALLOW};
     };
 
     // DispatchEventToClients 的输出参数集合（控制入参 ≤5）
     struct DispatchResult {
         std::vector<int64_t> seqnums;
-        std::vector<std::string> clientIds;
     };
 
     AuthCoordinator();
@@ -90,18 +93,28 @@ private:
     void DispatchEventToClients(int64_t eventId, int64_t providerUid,
         const std::vector<AuthClientStatus> &clientStatusList,
         RoutingContext &ctx, DispatchResult &result);
+    void NotifyDegradedClient(int64_t eventId, AuthEventSessionService *session);
+    void RegisterNormalClient(int64_t eventId, AuthEventSessionService *session,
+        RoutingContext &ctx, DispatchResult &result,
+        std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets);
+    void PushEventsToClients(int64_t eventId,
+        const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
+        const DispatchResult &result);
+    void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
+    void EvaluateStrictPolicy(RoutingContext &ctx, bool allowFlag, int64_t eventId);
     void HandleTimeout(RoutingContext &ctx);
     void WaitForCompletion(RoutingContext &ctx, AuthResult &result,
-        int64_t seqnum, const std::vector<int64_t> &seqnums);
+        int64_t eventId, const std::vector<int64_t> &seqnums);
     void BuildAuthResult(RoutingContext &ctx, AuthResult &result);
     void NotifyAuthResult(const sptr<IRemoteObject> &callback, const AuthResult &result);
-    void ReportTimeoutHA(int64_t eventId, const std::string &clientId, int64_t timeoutMs);
+    void ReportTimeoutHA(int64_t eventId, int64_t seqnum, int64_t timeoutMs);
     std::vector<AuthClientInfo> CollectClientInfos();
 
     ffrt::mutex mutex_{};
     std::set<sptr<AuthProviderSessionService>> providerSessions_{};
-    std::map<int64_t, RoutingContext> routingContexts_{};  // 按 seqnum 索引
-    std::map<int64_t, int64_t> seqnumToEventId_{};         // seqnum → eventId
+    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{}; // eventId → ctx
+    std::map<int64_t, int64_t> seqnumToEventId_{};                 // seqnum → eventId
+    std::map<int64_t, AuthEventSessionService *> seqnumToSession_{}; // seqnum → session 指针
     std::atomic<int64_t> seqCounter_ {0};
 };
 } // namespace OHOS::Security::SecurityGuard

@@ -21,6 +21,9 @@ bool AuthEvent::Marshalling(Parcel& parcel) const
     if (!parcel.WriteInt64(eventId_)) {
         return false;
     }
+    if (!parcel.WriteInt64(seqnum_)) {
+        return false;
+    }
     if (!parcel.WriteString(content_)) {
         return false;
     }
@@ -33,6 +36,9 @@ bool AuthEvent::Marshalling(Parcel& parcel) const
 bool AuthEvent::ReadFromParcel(Parcel &parcel)
 {
     if (!parcel.ReadInt64(eventId_)) {
+        return false;
+    }
+    if (!parcel.ReadInt64(seqnum_)) {
         return false;
     }
     if (!parcel.ReadString(content_)) {

@@ -38,6 +38,6 @@ interface OHOS.Security.SecurityGuard.DataCollectManagerIdl {
     void QuerySecurityEventById([in] List<SecurityEventRuler> rulers, [in] IRemoteObject cb, [in] String eventGroup);
     void QueryCodeSignInfoByPath([in] int fd, [in] int pid, [inout] String resStr);
     void QueryAllClientsInfo([inout] String resStr);
-    void CreatAuthEventClient([in] IRemoteObject cb, [in] int defaultTimeoutStrategy, [in] int defaultTimeouts, [out] IRemoteObject session);
+    void CreatAuthEventClient([in] IRemoteObject cb, [in] int defaultTimeoutStrategy, [in] int defaultTimeoutMs, [out] IRemoteObject session);
     void CreateAuthProvider([in] IRemoteObject cb, [in] String serviceId, [out] IRemoteObject provider);
 }

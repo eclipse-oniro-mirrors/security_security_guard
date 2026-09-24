@@ -27,7 +27,7 @@ public:
     AuthProviderCallbackService();
     ~AuthProviderCallbackService() override;
     void RegistCallBack(std::function<void(const std::vector<AuthClientInfo> &clientsInfo)> callback);
-    int32_t OnClientsStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) override;
+    int32_t OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) override;
     void ClearCallBack();
 private:
     struct CallbackMutex;

@@ -50,7 +50,7 @@ void AuthProviderCallbackService::ClearCallBack()
     callback_ = nullptr;
 }
 
-int32_t AuthProviderCallbackService::OnClientsStatusChanged(const std::vector<AuthClientInfo> &clientsInfo)
+int32_t AuthProviderCallbackService::OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo)
 {
     std::lock_guard<ffrt::mutex> execLock(mutexes_->notifyMutex_);
     std::function<void(const std::vector<AuthClientInfo> &clientsInfo)> callback;
@@ -62,7 +62,7 @@ int32_t AuthProviderCallbackService::OnClientsStatusChanged(const std::vector<Au
         SGLOGE("callback is null");
         return FAILED;
     }
-    SGLOGD("OnClientsStatusChanged size=%{public}zu", clientsInfo.size());
+    SGLOGD("OnClientStatusChanged size=%{public}zu", clientsInfo.size());
     callback(clientsInfo);
     return SUCCESS;
 }

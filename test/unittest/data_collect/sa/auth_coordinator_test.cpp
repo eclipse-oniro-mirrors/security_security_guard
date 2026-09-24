@@ -126,10 +126,8 @@ HWTEST_F(AuthCoordinatorTest, RequestAuthResultNoClient001, TestSize.Level0)
     auto *provider = static_cast<AuthProviderSessionService *>(providerRemote.GetRefPtr());
 
     AuthEventInfo event(1001, "v1", "content");
-    AuthResult result;
-    int32_t ret = coordinator.RequestAuthResult(provider, event, nullptr, result);
+    int32_t ret = coordinator.RequestAuthResult(provider, event, nullptr);
     EXPECT_EQ(ret, SUCCESS);
-    EXPECT_EQ(result.GetMergedAuthStrategy(), AuthStrategy::ALLOW);
 }
 
 HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
@@ -141,7 +139,7 @@ HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
     params.callerPid = 5000;
     params.callerUid = 5000;
     params.defaultTimeoutStrategy = AuthStrategy::ALLOW;
-    params.defaultTimeouts = TEST_DEFAULT_TIMEOUT_MS;
+    params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
     params.callback = cb;
     manager.CreatAuthEventClient(params, sessionRemote);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());

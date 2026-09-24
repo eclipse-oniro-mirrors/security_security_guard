@@ -76,7 +76,7 @@ public:
     // 会话内方法（Subscribe/Unsubscribe/SetAuthResult/Destroy）由 AuthEventSession.idl
     // 生成的独立会话对象 AuthEventSessionService 承载，不在本服务类。
     ErrCode CreatAuthEventClient(const sptr<IRemoteObject> &cb, int32_t defaultTimeoutStrategy,
-        int32_t defaultTimeouts, sptr<IRemoteObject> &session) override;
+        int32_t defaultTimeoutMs, sptr<IRemoteObject> &session) override;
     ErrCode CreateAuthProvider(const sptr<IRemoteObject> &cb, const std::string &serviceId,
         sptr<IRemoteObject> &provider) override;
 private:

@@ -35,7 +35,7 @@ namespace OHOS::Security::SecurityGuard {
 class AuthEventSessionService : public AuthEventSessionStub, public NoCopyable {
 public:
     AuthEventSessionService(pid_t callerPid, int32_t callerUid, AuthStrategy defaultTimeoutStrategy,
-        int32_t defaultTimeouts, const sptr<IRemoteObject> &callback);
+        int32_t defaultTimeoutMs, const sptr<IRemoteObject> &callback);
     ~AuthEventSessionService() override = default;
 
     ErrCode Subscribe(int64_t eventId) override;
@@ -65,9 +65,15 @@ public:
         return defaultTimeoutStrategy_;
     }
 
-    int32_t GetDefaultTimeouts() const
+    int32_t GetDefaultTimeoutMs() const
     {
-        return defaultTimeouts_;
+        return defaultTimeoutMs_;
+    }
+
+    // 客户端唯一标识，用于结果聚合和状态通知
+    std::string GetClientId() const
+    {
+        return clientId_;
     }
 
     // 管理器锁内调用：分发时按 eventId 匹配命中会话
@@ -106,8 +112,9 @@ public:
 private:
     pid_t pid_ {};
     int32_t uid_ {};
+    std::string clientId_ {};
     AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
-    int32_t defaultTimeouts_ {400};
+    int32_t defaultTimeoutMs_ {400};
     sptr<IRemoteObject> callback_ {};
     std::set<int64_t> eventIds_ {};
     bool valid_ {true};

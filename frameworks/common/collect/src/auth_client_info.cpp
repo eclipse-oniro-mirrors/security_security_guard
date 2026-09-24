@@ -30,7 +30,7 @@ bool AuthClientInfo::Marshalling(Parcel &parcel) const
     if (!parcel.WriteInt32(static_cast<int32_t>(defaultTimeoutStrategy_))) {
         return false;
     }
-    if (!parcel.WriteInt32(defaultTimeouts_)) {
+    if (!parcel.WriteInt32(defaultTimeoutMs_)) {
         return false;
     }
     return true;
@@ -52,7 +52,7 @@ bool AuthClientInfo::ReadFromParcel(Parcel &parcel)
         return false;
     }
     defaultTimeoutStrategy_ = static_cast<AuthStrategy>(strategy);
-    if (!parcel.ReadInt32(defaultTimeouts_)) {
+    if (!parcel.ReadInt32(defaultTimeoutMs_)) {
         return false;
     }
     return true;

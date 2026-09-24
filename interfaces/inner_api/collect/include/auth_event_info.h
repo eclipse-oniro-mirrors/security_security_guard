@@ -35,6 +35,7 @@ public:
     std::string GetVersion() const { return version_; };
     std::string GetContent() const { return content_; };
     std::vector<AuthClientStatus> GetClientStatus() const { return clientStatus_; };
+    void SetEventId(int64_t eventId) { eventId_ = eventId; };
     void SetVersion(const std::string &version) { version_ = version; };
     void SetContent(const std::string &content) { content_ = content; };
     void SetClientStatus(const std::vector<AuthClientStatus> &status) { clientStatus_ = status; };

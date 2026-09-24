@@ -28,10 +28,10 @@ public:
     using InterfaceCode = AuthProviderCallbackInterfaceCode;
     DECLARE_INTERFACE_DESCRIPTOR(u"OHOS.Security.DataCollectManager.AuthProviderCallback");
     enum {
-        CMD_ON_CLIENTS_STATUS_CHANGED = static_cast<uint32_t>(InterfaceCode::CMD_ON_CLIENTS_STATUS_CHANGED),
+        CMD_ON_CLIENT_STATUS_CHANGED = static_cast<uint32_t>(InterfaceCode::CMD_ON_CLIENT_STATUS_CHANGED),
     };
 
-    virtual int32_t OnClientsStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) = 0;
+    virtual int32_t OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) = 0;
 };
 } // namespace OHOS::Security::SecurityGuard
 

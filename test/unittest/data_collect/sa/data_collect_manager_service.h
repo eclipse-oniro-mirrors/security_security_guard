@@ -71,7 +71,7 @@ public:
     ErrCode QueryCodeSignInfoByPath(const int fd, const int pid, std::string &resStr) override;
     ErrCode QueryAllClientsInfo(std::string &resStr) override;
     ErrCode CreatAuthEventClient(const sptr<IRemoteObject> &cb, int32_t defaultTimeoutStrategy,
-        int32_t defaultTimeouts, sptr<IRemoteObject> &session) override;
+        int32_t defaultTimeoutMs, sptr<IRemoteObject> &session) override;
     ErrCode CreateAuthProvider(const sptr<IRemoteObject> &cb, const std::string &serviceId,
         sptr<IRemoteObject> &provider) override;
 private:

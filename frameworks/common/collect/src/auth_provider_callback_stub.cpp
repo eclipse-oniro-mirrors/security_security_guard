@@ -28,7 +28,7 @@ int32_t AuthProviderCallbackStub::OnRemoteRequest(uint32_t code, MessageParcel &
         SGLOGE("Descriptor error");
         return NO_PERMISSION;
     }
-    if (code == AuthProviderCallbackStub::CMD_ON_CLIENTS_STATUS_CHANGED) {
+    if (code == AuthProviderCallbackStub::CMD_ON_CLIENT_STATUS_CHANGED) {
         int32_t size = 0;
         if (!data.ReadInt32(size)) {
             SGLOGE("read size fail");
@@ -48,7 +48,7 @@ int32_t AuthProviderCallbackStub::OnRemoteRequest(uint32_t code, MessageParcel &
             clientsInfo.emplace_back(*item);
             delete item;
         }
-        return OnClientsStatusChanged(clientsInfo);
+        return OnClientStatusChanged(clientsInfo);
     }
     return IPCObjectStub::OnRemoteRequest(code, data, reply, option);
 }

@@ -31,9 +31,9 @@ public:
     ~AuthResult() override = default;
 
     AuthStrategy GetMergedAuthStrategy() const { return mergedAuthStrategy_; };
-    std::vector<ClientAuthResult> GetClientAuthResults() const { return clientAuthResults_; };
+    std::vector<ClientAuthResult> GetClientAuthResult() const { return clientAuthResults_; };
     void SetMergedAuthStrategy(AuthStrategy strategy) { mergedAuthStrategy_ = strategy; };
-    void SetClientAuthResults(const std::vector<ClientAuthResult> &results) { clientAuthResults_ = results; };
+    void SetClientAuthResult(const std::vector<ClientAuthResult> &results) { clientAuthResults_ = results; };
     bool Marshalling(Parcel &parcel) const override;
     bool ReadFromParcel(Parcel &parcel);
     static AuthResult *Unmarshalling(Parcel &parcel);

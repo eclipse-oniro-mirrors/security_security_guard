@@ -47,7 +47,7 @@ struct CreateClientParams {
     pid_t callerPid;
     int32_t callerUid;
     AuthStrategy defaultTimeoutStrategy;
-    int32_t defaultTimeouts;
+    int32_t defaultTimeoutMs;
     sptr<IRemoteObject> callback;
 };
 

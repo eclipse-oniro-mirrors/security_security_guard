@@ -130,7 +130,7 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams
             }
         }
         session = new (std::nothrow) AuthEventSessionService(params.callerPid, params.callerUid,
-            params.defaultTimeoutStrategy, params.defaultTimeouts, params.callback);
+            params.defaultTimeoutStrategy, params.defaultTimeoutMs, params.callback);
         if (session == nullptr) {
             SGLOGE("new session fail");
             return FAILED;

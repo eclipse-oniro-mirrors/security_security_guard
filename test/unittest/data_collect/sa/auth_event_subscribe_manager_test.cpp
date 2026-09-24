@@ -77,7 +77,7 @@ AuthEventSessionService *CreateManagedSession(pid_t pid, int32_t uid, AuthStrate
     params.callerPid = pid;
     params.callerUid = uid;
     params.defaultTimeoutStrategy = timeoutStrategy;
-    params.defaultTimeouts = TEST_DEFAULT_TIMEOUT_MS;
+    params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
     params.callback = cb;
     if (manager.CreatAuthEventClient(params, sessionRemote) != SUCCESS) {
         return nullptr;

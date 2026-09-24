@@ -25,7 +25,7 @@ AuthEventCallbackProxy::AuthEventCallbackProxy(const sptr<IRemoteObject> &impl)
 {
 }
 
-int32_t AuthEventCallbackProxy::OnAuthEvent(const AuthEvent &event)
+int32_t AuthEventCallbackProxy::OnAuthEvent(const AuthEvent &event, int64_t seqnum)
 {
     MessageParcel data;
     MessageParcel reply;

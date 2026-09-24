@@ -27,7 +27,7 @@ class AuthProviderCallbackProxy : public IRemoteProxy<IAuthProviderCallback> {
 public:
     explicit AuthProviderCallbackProxy(const sptr<IRemoteObject> &impl) : IRemoteProxy<IAuthProviderCallback>(impl) {}
     ~AuthProviderCallbackProxy() override = default;
-    int32_t OnClientsStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) override;
+    int32_t OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo) override;
 
 private:
     static inline BrokerDelegator<AuthProviderCallbackProxy> delegator_;

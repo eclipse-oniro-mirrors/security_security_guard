@@ -30,9 +30,9 @@ constexpr int NAPI_CREATE_PROVIDER_ARGS_CNT = 2;
 constexpr int NAPI_DESTROY_PROVIDER_ARGS_CNT = 1;
 constexpr int NAPI_REQUEST_AUTH_RESULT_ARGS_CNT = 1;
 constexpr int SERVICE_ID_MAX_LEN = 256;
-constexpr int CONTENT_MAX_LEN = 4096;
-constexpr int VERSION_MAX_LEN = 64;
-constexpr const char* PROVIDER_CALLBACK_NAME = "onClientsStatusChanged";
+constexpr int NAPI_CONTENT_MAX_LEN = 4096;
+constexpr int NAPI_VERSION_MAX_LEN = 64;
+constexpr const char* PROVIDER_CALLBACK_NAME = "onClientStatusChanged";
 
 napi_value NapiCreateInt32(napi_env env, int32_t value)
 {
@@ -184,14 +184,14 @@ bool ParseOneClientStatus(napi_env env, napi_value item, AuthClientStatus &statu
         return false;
     }
     bool hasDegrader = false;
-    napi_has_named_property(env, item, "isDegrader", &hasDegrader);
+    napi_has_named_property(env, item, "isDegraded", &hasDegrader);
     if (hasDegrader) {
         napi_value degVal = nullptr;
-        napi_get_named_property(env, item, "isDegrader", &degVal);
+        napi_get_named_property(env, item, "isDegraded", &degVal);
         if (degVal != nullptr) {
             bool isDegrader = false;
             napi_get_value_bool(env, degVal, &isDegrader);
-            status.SetDegrader(isDegrader);
+            status.SetDegraded(isDegrader);
         }
     }
     status.SetClientId(clientId);
@@ -205,6 +205,7 @@ void ParseClientStatusArray(napi_env env, napi_value statusArr, AuthEventInfo &i
     if (!isArray) {
         return;
     }
+    std::vector<AuthClientStatus> statusList;
     uint32_t length = 0;
     napi_get_array_length(env, statusArr, &length);
     for (uint32_t i = 0; i < length; ++i) {
@@ -215,9 +216,10 @@ void ParseClientStatusArray(napi_env env, napi_value statusArr, AuthEventInfo &i
         }
         AuthClientStatus status;
         if (ParseOneClientStatus(env, item, status)) {
-            info.clientStatus.push_back(status);
+            statusList.push_back(status);
         }
     }
+    info.SetClientStatus(statusList);
 }
 
 bool ParseAuthEventInfo(napi_env env, napi_value jsObj, AuthEventInfo &info)
@@ -228,19 +230,21 @@ bool ParseAuthEventInfo(napi_env env, napi_value jsObj, AuthEventInfo &info)
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "type of param eventInfo is not object"));
         return false;
     }
-    if (!ParseInt64(env, jsObj, "eventId", info.eventId)) {
+    int64_t eventId = 0;
+    if (!ParseInt64(env, jsObj, "eventId", eventId)) {
         return false;
     }
+    info.SetEventId(eventId);
     std::string version;
-    if (!ParseString(env, jsObj, "version", version, VERSION_MAX_LEN)) {
+    if (!ParseString(env, jsObj, "version", version, NAPI_VERSION_MAX_LEN)) {
         return false;
     }
-    info.version = version;
+    info.SetVersion(version);
     std::string content;
-    if (!ParseString(env, jsObj, "content", content, CONTENT_MAX_LEN)) {
+    if (!ParseString(env, jsObj, "content", content, NAPI_CONTENT_MAX_LEN)) {
         return false;
     }
-    info.content = content;
+    info.SetContent(content);
     bool hasClientStatus = false;
     napi_has_named_property(env, jsObj, "clientStatus", &hasClientStatus);
     if (hasClientStatus) {
@@ -259,7 +263,7 @@ napi_value WrapAuthResult(napi_env env, const AuthResult &result)
     napi_value strategy = NapiCreateInt32(env, static_cast<int32_t>(result.GetMergedAuthStrategy()));
     napi_set_named_property(env, jsResult, "mergedAuthStrategy", strategy);
 
-    auto &clientResults = result.GetClientAuthResults();
+    auto clientResults = result.GetClientAuthResult();
     napi_value jsArray = nullptr;
     napi_create_array_with_length(env, clientResults.size(), &jsArray);
     for (size_t i = 0; i < clientResults.size(); ++i) {
@@ -274,7 +278,7 @@ napi_value WrapAuthResult(napi_env env, const AuthResult &result)
     return jsResult;
 }
 
-void OnClientsStatusChangedCallback(napi_env env, napi_ref callbackRef,
+void OnClientStatusChangedCallback(napi_env env, napi_ref callbackRef,
     const std::vector<AuthClientInfo> &clientsInfo)
 {
     if (env == nullptr || callbackRef == nullptr) {
@@ -293,12 +297,12 @@ void OnClientsStatusChangedCallback(napi_env env, napi_ref callbackRef,
         napi_value clientId = NapiCreateString(env, clientsInfo[i].GetClientId());
         napi_value bundleName = NapiCreateString(env, clientsInfo[i].GetBundleName());
         napi_value strategy = NapiCreateInt32(env, static_cast<int32_t>(clientsInfo[i].GetDefaultTimeoutStrategy()));
-        napi_value timeouts = NapiCreateInt32(env, clientsInfo[i].GetDefaultTimeouts());
+        napi_value timeouts = NapiCreateInt32(env, clientsInfo[i].GetDefaultTimeoutMs());
         napi_set_named_property(env, jsItem, "clientId", clientId);
         napi_set_named_property(env, jsItem, "bundleName", bundleName);
         napi_set_named_property(env, jsItem, "defaultTimeoutStrategy", strategy);
-        napi_set_named_property(env, jsItem, "defaultTimeouts", timeouts);
-        auto &events = clientsInfo[i].GetSubscribedEvents();
+        napi_set_named_property(env, jsItem, "defaultTimeoutMs", timeouts);
+        auto events = clientsInfo[i].GetSubscribedEvents();
         napi_value jsEvents = nullptr;
         napi_create_array_with_length(env, events.size(), &jsEvents);
         for (size_t j = 0; j < events.size(); ++j) {
@@ -316,16 +320,20 @@ void OnClientsStatusChangedCallback(napi_env env, napi_ref callbackRef,
 
 namespace OHOS::Security::SecurityGuard {
 
+// SA 聚合完成后回调 → kit 收到 AuthResult → resolve Promise<AuthResult>
 void RequestAuthResultExecute(napi_env env, void *data)
 {
     auto *context = static_cast<RequestAuthResultContext *>(data);
     if (context == nullptr || context->provider == nullptr) {
         return;
     }
+    // 回调 stub 已在主线程创建，此处直接调 SA
     context->ret = SecurityGuardSdkAdaptor::RequestAuthResult(context->provider, context->eventInfo,
-        context->result);
+        [context](const AuthResult &authResult) {
+            context->result = authResult;
+        });
     if (context->ret != SUCCESS) {
-        SGLOGE("RequestAuthResult failed, ret=%{public}d", context->ret);
+        SGLOGE("RequestAuthResult rejected, ret=%{public}d", context->ret);
     }
 }
 
@@ -336,11 +344,12 @@ void RequestAuthResultComplete(napi_env env, napi_status status, void *data)
         return;
     }
     if (context->ret == SUCCESS) {
+        // 请求被接受，SA 异步聚合完成后经回调 resolve Promise
         napi_value jsResult = WrapAuthResult(env, context->result);
         napi_resolve_deferred(env, context->deferred, jsResult);
     } else {
         napi_value error = GenerateBusinessError(env, context->ret,
-            "RequestAuthResult failed");
+            "RequestAuthResult rejected");
         napi_reject_deferred(env, context->deferred, error);
     }
     napi_delete_async_work(env, context->asyncWork);
@@ -375,6 +384,17 @@ napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info)
     context->env = env;
     context->eventInfo = eventInfo;
     context->provider = provider->provider;
+    // 主线程创建回调 stub（避免 SA 无订阅时立即回调导致 Execute 未完成就触发）
+    context->resultCallback = new (std::nothrow) AuthResultCallbackService();
+    if (context->resultCallback == nullptr) {
+        delete context;
+        napi_throw(env, GenerateBusinessError(env, FAILED, "callback service alloc fail"));
+        return nullptr;
+    }
+    context->resultCallback->RegistCallBack(
+        [context](const AuthResult &authResult) {
+            context->result = authResult;
+        });
 
     napi_value promise = nullptr;
     if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
@@ -457,13 +477,13 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     napi_value callbackMethod = nullptr;
     napi_get_named_property(env, argv[0], PROVIDER_CALLBACK_NAME, &callbackMethod);
     if (callbackMethod == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientsStatusChanged not found"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientStatusChanged not found"));
         return nullptr;
     }
     napi_valuetype methodType;
     napi_typeof(env, callbackMethod, &methodType);
     if (methodType != napi_function) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientsStatusChanged is not function"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientStatusChanged is not function"));
         return nullptr;
     }
     auto *nativeProvider = new (std::nothrow) NapiAuthProvider();
@@ -475,7 +495,7 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     napi_create_reference(env, argv[0], 1, &nativeProvider->callbackRef);
     AuthProviderCallback callback = [env, ref = nativeProvider->callbackRef](
         const std::vector<AuthClientInfo> &clientsInfo) {
-        OnClientsStatusChangedCallback(env, ref, clientsInfo);
+        OnClientStatusChangedCallback(env, ref, clientsInfo);
     };
     std::shared_ptr<AuthProviderSubscribeClient> provider = nullptr;
     int32_t ret = SecurityGuardSdkAdaptor::CreateProvider(callback, serviceId, provider);

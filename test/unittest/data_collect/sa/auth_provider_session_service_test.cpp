@@ -84,8 +84,7 @@ HWTEST_F(AuthProviderSessionServiceTest, RequestAuthResultInvalidProvider001, Te
     AuthProviderSessionService provider(7002, 7002, "svc", cb);
     provider.MarkInvalid();
     AuthEventInfo event(3001, "v1", "content");
-    AuthResult result;
-    ErrCode ret = provider.RequestAuthResult(event, nullptr, result);
+    ErrCode ret = provider.RequestAuthResult(event, nullptr);
     EXPECT_EQ(ret, BAD_PARAM);
 }
 

@@ -17,13 +17,17 @@
 
 #include <cinttypes>
 
+#include "auth_result_callback_service.h"
 #include "data_collect_manager.h"
+#include "data_collect_manager_idl.h"
+#include "auth_provider_session.h"
 #include "ffrt.h"
 #include "i_auth_provider_callback.h"
 #include "ipc_skeleton.h"
 #include "security_guard_define.h"
 #include "security_guard_log.h"
 #include "system_ability_definition.h"
+#include "iservice_registry.h"
 
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 namespace OHOS::Security::SecurityGuard {
@@ -84,7 +88,10 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     return SUCCESS;
 }
 
-int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &event, AuthResult &result)
+// 返回码: 请求是否被接受；最终阻断策略经回调返回
+// SDK 内部创建 AuthResultCallbackService 包装 std::function，作为 IRemoteObject 传给 SA
+int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &event,
+    AuthResultCallback callback)
 {
     SGLOGI("enter");
     sptr<AuthProviderSession> session {};
@@ -100,7 +107,14 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
         SGLOGE("session proxy is null");
         return NULL_OBJECT;
     }
-    return session->RequestAuthResult(event, result);
+    // 创建回调 stub，包装 std::function → SA 聚合完成后经 IPC 回调 → 触发 std::function
+    auto callbackService = new (std::nothrow) AuthResultCallbackService();
+    if (callbackService == nullptr) {
+        SGLOGE("callback service is null");
+        return FAILED;
+    }
+    callbackService->RegistCallBack(callback);
+    return session->RequestAuthResult(event, callbackService->AsObject());
 }
 
 void AuthProviderSubscribeClient::DeleteProvider()

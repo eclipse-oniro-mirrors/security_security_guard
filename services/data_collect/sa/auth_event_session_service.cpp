@@ -16,6 +16,8 @@
 #include "auth_event_session_service.h"
 
 #include <cinttypes>
+#include <chrono>
+#include <string>
 
 #include "ipc_skeleton.h"
 #ifdef HICOLLIE_ENABLE
@@ -39,10 +41,14 @@ constexpr uint32_t XCOLLIE_FLAG = 0;
 }
 
 AuthEventSessionService::AuthEventSessionService(pid_t callerPid, int32_t callerUid,
-    AuthStrategy defaultTimeoutStrategy, int32_t defaultTimeouts, const sptr<IRemoteObject> &callback)
+    AuthStrategy defaultTimeoutStrategy, int32_t defaultTimeoutMs, const sptr<IRemoteObject> &callback)
     : pid_(callerPid), uid_(callerUid), defaultTimeoutStrategy_(defaultTimeoutStrategy),
-      defaultTimeouts_(defaultTimeouts), callback_(callback)
+      defaultTimeoutMs_(defaultTimeoutMs), callback_(callback)
 {
+    // 按 ConstructClientId 范式生成 clientId（时间戳 + 指针 hash）
+    std::string timeStr = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    std::string ptrStr = std::to_string(reinterpret_cast<int64_t>(callback.GetRefPtr()));
+    clientId_ = std::to_string(std::hash<std::string>{}(timeStr + ptrStr));
 }
 
 ErrCode AuthEventSessionService::Subscribe(int64_t eventId)

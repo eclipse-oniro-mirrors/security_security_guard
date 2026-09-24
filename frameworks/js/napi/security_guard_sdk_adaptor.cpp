@@ -14,6 +14,7 @@
  */
 
 #include "security_guard_sdk_adaptor.h"
+#include <cinttypes>
 #include "data_collect_manager.h"
 #include "sg_collect_client.h"
 #include "sg_classify_client.h"
@@ -87,13 +88,13 @@ int32_t SecurityGuardSdkAdaptor::CreateProvider(AuthProviderCallback callback, c
 }
 
 int32_t SecurityGuardSdkAdaptor::RequestAuthResult(std::shared_ptr<AuthProviderSubscribeClient> provider,
-    const AuthEventInfo &event, AuthResult &result)
+    const AuthEventInfo &event, AuthResultCallback callback)
 {
     SGLOGI("enter SecurityGuardSdkAdaptor RequestAuthResult, eventId=%{public}" PRId64, event.GetEventId());
     if (provider == nullptr) {
         return BAD_PARAM;
     }
-    return provider->RequestAuthResult(event, result);
+    return provider->RequestAuthResult(event, callback);
 }
 #endif
 } // OHOS::Security::SecurityGuard

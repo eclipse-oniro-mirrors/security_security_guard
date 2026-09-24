@@ -86,7 +86,7 @@ void AuthEventSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &s
 
 int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     std::shared_ptr<AuthEventSubscribeClient> &client, AuthStrategy defaultTimeoutStrategy,
-    int32_t defaultTimeouts)
+    int32_t defaultTimeoutMs)
 {
     SGLOGI("enter");
     std::lock_guard<ffrt::mutex> lock(g_clientMutex);
@@ -113,7 +113,7 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> sessionRemote = nullptr;
     int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(defaultTimeoutStrategy),
-        defaultTimeouts, sessionRemote);
+        defaultTimeoutMs, sessionRemote);
     if (ret != SUCCESS || sessionRemote == nullptr) {
         SGLOGI("CreatAuthEventClient result, ret=%{public}d", ret);
         return ret != SUCCESS ? ret : FAILED;
@@ -121,7 +121,7 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
     client->callback_ = serviceCallback;
     client->defaultTimeoutStrategy_ = defaultTimeoutStrategy;
-    client->defaultTimeouts_ = defaultTimeouts;
+    client->defaultTimeoutMs_ = defaultTimeoutMs;
     {
         std::lock_guard<ffrt::mutex> memberLock(g_mutex_);
         client->sessionRemote_ = sessionRemote;
@@ -221,7 +221,8 @@ bool AuthEventSubscribeClient::RecoverSession(const std::set<int64_t> &events)
     }
     // 服务端重启后会话丢失，重建会话并获取新的会话对象代理（沿用超时处置策略）
     sptr<IRemoteObject> newSessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(callback_, timeoutAllowFlag_, newSessionRemote);
+    int32_t ret = proxy->CreatAuthEventClient(callback_,
+        static_cast<int32_t>(defaultTimeoutStrategy_), defaultTimeoutMs_, newSessionRemote);
     if (ret != SUCCESS || newSessionRemote == nullptr) {
         SGLOGE("ReCreatClient fail, ret=%{public}d", ret);
         return false;

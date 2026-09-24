@@ -49,7 +49,7 @@ public:
     static int32_t CreateProvider(AuthProviderCallback callback, const std::string &serviceId,
         std::shared_ptr<AuthProviderSubscribeClient> &provider);
     static int32_t RequestAuthResult(std::shared_ptr<AuthProviderSubscribeClient> provider,
-        const AuthEventInfo &event, AuthResult &result);
+        const AuthEventInfo &event, AuthResultCallback callback);
 #endif
 private:
     SecurityGuardSdkAdaptor() = delete;

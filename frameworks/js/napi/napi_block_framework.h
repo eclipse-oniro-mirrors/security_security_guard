@@ -24,6 +24,7 @@
 #include "auth_event_info.h"
 #include "auth_provider_subscribe_client.h"
 #include "auth_result.h"
+#include "auth_result_callback_service.h"
 
 namespace OHOS::Security::SecurityGuard {
 struct NapiAuthProvider {
@@ -32,14 +33,16 @@ struct NapiAuthProvider {
     napi_env env = nullptr;
 };
 
+// SA 聚合完成后经回调通知 kit → kit 收到 AuthResult → resolve Promise<AuthResult>
 struct RequestAuthResultContext {
     napi_env env = nullptr;
     napi_deferred deferred = nullptr;
     napi_async_work asyncWork = nullptr;
     AuthEventInfo eventInfo;
-    AuthResult result;
     int32_t ret = 0;
     std::shared_ptr<AuthProviderSubscribeClient> provider;
+    sptr<AuthResultCallbackService> resultCallback;
+    AuthResult result;
 };
 
 napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info);

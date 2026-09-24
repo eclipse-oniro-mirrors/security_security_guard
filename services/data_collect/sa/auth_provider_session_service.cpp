@@ -17,6 +17,7 @@
 
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 
+#include <cinttypes>
 #include "ipc_skeleton.h"
 #ifdef HICOLLIE_ENABLE
 #include "xcollie/xcollie_define.h"
@@ -42,11 +43,9 @@ AuthProviderSessionService::AuthProviderSessionService(pid_t callerPid, int32_t 
 {
 }
 
-// 验收: Provider 请求鉴权结果
-// 流程: 权限校验 → 会话有效性校验 → pid 归属校验 → 转调 AuthCoordinator::RequestAuthResult
-// 异步返回: IPC 异步返回结果给 sg kit，sg kit 异步返回调用结果给事件提供者
+// IPC 异步应答: 返回码承载校验结果（是否接受请求），最终阻断策略经 resultCallback 回调返回
 ErrCode AuthProviderSessionService::RequestAuthResult(const AuthEventInfo &event,
-    const sptr<IRemoteObject> &resultCallback, AuthResult &result)
+    const sptr<IRemoteObject> &resultCallback)
 {
     SGLOGI("eventId=%{public}" PRId64 ", serviceId=%{public}s", event.GetEventId(), serviceId_.c_str());
     int32_t code = AuthCoordinator::GetInstance().IsProviderAllowed();
@@ -64,25 +63,26 @@ ErrCode AuthProviderSessionService::RequestAuthResult(const AuthEventInfo &event
         return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_RequestAuthResult", XCOLLIE_FLAG);
-    return AuthCoordinator::GetInstance().RequestAuthResult(this, event, resultCallback, result);
+    return AuthCoordinator::GetInstance().RequestAuthResult(this, event, resultCallback);
 }
 
-// 验收: Provider 销毁（幂等，返回 void；销毁后再调 RequestAuthResult → BAD_PARAM）
-void AuthProviderSessionService::Destroy()
+// Provider 销毁（IDL 生成返回 ErrCode，实际不消费返回值）
+ErrCode AuthProviderSessionService::Destroy()
 {
     SGLOGI("enter, serviceId=%{public}s", serviceId_.c_str());
     int32_t code = AuthCoordinator::GetInstance().IsProviderAllowed();
     if (code != SUCCESS) {
         SGLOGE("permission denied");
-        return;
+        return code;
     }
     if (IPCSkeleton::GetCallingPid() != pid_) {
         SGLOGE("provider not belong to caller, callerPid=%{private}d, sessionPid=%{private}d",
             IPCSkeleton::GetCallingPid(), static_cast<int32_t>(pid_));
-        return;
+        return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_DestroyAuthProvider", XCOLLIE_FLAG);
     AuthCoordinator::GetInstance().DestroyAuthProvider(this);
+    return SUCCESS;
 }
 } // namespace OHOS::Security::SecurityGuard
 

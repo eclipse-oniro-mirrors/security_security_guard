@@ -31,9 +31,9 @@ public:
         const std::string &serviceId, const sptr<IRemoteObject> &callback);
     ~AuthProviderSessionService() override = default;
 
-    ErrCode RequestAuthResult(const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback,
-        AuthResult &result) override;
-    void Destroy() override;
+    // IPC 异步应答: 返回码承载校验结果（是否接受请求），最终阻断策略经 resultCallback 回调返回
+    ErrCode RequestAuthResult(const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback) override;
+    ErrCode Destroy() override;
 
     sptr<IRemoteObject> GetCallback() const { return callback_; }
     pid_t GetPid() const { return pid_; }

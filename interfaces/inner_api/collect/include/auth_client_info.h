@@ -33,12 +33,12 @@ public:
     std::string GetBundleName() const { return bundleName_; };
     std::vector<int64_t> GetSubscribedEvents() const { return subscribedEvents_; };
     AuthStrategy GetDefaultTimeoutStrategy() const { return defaultTimeoutStrategy_; };
-    int32_t GetDefaultTimeouts() const { return defaultTimeouts_; };
+    int32_t GetDefaultTimeoutMs() const { return defaultTimeoutMs_; };
     void SetClientId(const std::string &clientId) { clientId_ = clientId; };
     void SetBundleName(const std::string &bundleName) { bundleName_ = bundleName; };
     void SetSubscribedEvents(const std::vector<int64_t> &events) { subscribedEvents_ = events; };
     void SetDefaultTimeoutStrategy(AuthStrategy strategy) { defaultTimeoutStrategy_ = strategy; };
-    void SetDefaultTimeouts(int32_t timeouts) { defaultTimeouts_ = timeouts; };
+    void SetDefaultTimeoutMs(int32_t timeouts) { defaultTimeoutMs_ = timeouts; };
     bool Marshalling(Parcel &parcel) const override;
     bool ReadFromParcel(Parcel &parcel);
     static AuthClientInfo *Unmarshalling(Parcel &parcel);
@@ -48,7 +48,7 @@ private:
     std::string bundleName_ {};
     std::vector<int64_t> subscribedEvents_ {};
     AuthStrategy defaultTimeoutStrategy_ {ALLOW};
-    int32_t defaultTimeouts_ {400};
+    int32_t defaultTimeoutMs_ {400};
 };
 } // namespace OHOS::Security::SecurityGuard
 
