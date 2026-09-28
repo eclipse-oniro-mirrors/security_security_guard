@@ -90,7 +90,7 @@ private:
     std::set<sptr<AuthProviderSessionService>>::iterator FindProviderLocked(
         AuthProviderSessionService *provider);
     void RemoveProviderLocked(const sptr<AuthProviderSessionService> &provider);
-    void DispatchEventToClients(int64_t eventId, int64_t providerUid,
+    void DispatchEventToClients(int64_t eventId,
         const std::vector<AuthClientStatus> &clientStatusList,
         RoutingContext &ctx, DispatchResult &result);
     void NotifyDegradedClient(int64_t eventId, AuthEventSessionService *session);
@@ -112,7 +112,7 @@ private:
 
     ffrt::mutex mutex_{};
     std::set<sptr<AuthProviderSessionService>> providerSessions_{};
-    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{}; // eventId → ctx
+    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{}; // 按 eventId 索引（eventId→Provider 唯一）
     std::map<int64_t, int64_t> seqnumToEventId_{};                 // seqnum → eventId
     std::map<int64_t, AuthEventSessionService *> seqnumToSession_{}; // seqnum → session 指针
     std::atomic<int64_t> seqCounter_ {0};

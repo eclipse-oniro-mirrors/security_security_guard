@@ -266,14 +266,12 @@ void AuthCoordinator::PushEventsToClients(int64_t eventId,
 }
 
 // 事件路由: 逐个 Client 生成独有 seqnum 并推送 OnAuthEvent
-// 降级客户端(isDegraded=true): 从 AuthEventInfo.AuthClientStatus 入参获取，只需通知不参与计数
-void AuthCoordinator::DispatchEventToClients(int64_t eventId, int64_t providerUid,
+void AuthCoordinator::DispatchEventToClients(int64_t eventId,
     const std::vector<AuthClientStatus> &clientStatusList,
     RoutingContext &ctx, DispatchResult &result)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> targets;
-    // 从入参获取降级 clientId 集合
     std::set<std::string> degraderClientIds;
     for (const auto &status : clientStatusList) {
         if (status.IsDegraded()) {
@@ -376,10 +374,7 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
     ctx.eventId = eventId;
     ctx.resultPromise = std::make_shared<std::promise<AuthResult>>();
     DispatchResult dispatchResult;
-    // 事件路由: 查询订阅 Client → 生成 seqnum → 推送 OnAuthEvent → 初始化双计数
-    // 降级客户端从 AuthEventInfo.AuthClientStatus 入参获取
-    DispatchEventToClients(eventId, provider->GetUid(), event.GetClientStatus(),
-        ctx, dispatchResult);
+    DispatchEventToClients(eventId, event.GetClientStatus(), ctx, dispatchResult);
 
     // 无订阅 Client → 默认放行，立即回调
     if (ctx.sentClientCount == 0) {
@@ -390,7 +385,7 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         NotifyAuthResult(resultCallback, result);
         return SUCCESS;
     }
-    // 注册 RoutingContext（按 eventId 索引，用 unique_ptr 避免不可移动问题）
+    // 注册 RoutingContext（按 requestId 索引，避免同一 eventId 多请求覆盖）
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         auto ctxPtr = std::make_unique<RoutingContext>();
@@ -402,7 +397,7 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         ctxPtr->resultPromise = std::move(ctx.resultPromise);
         routingContexts_[eventId] = std::move(ctxPtr);
     }
-    // ffrt 异步任务: lambda 内通过 eventId 查找 RoutingContext（不捕获裸指针，生命周期由 map 管理）
+    // ffrt 异步任务: lambda 内通过 requestId 查找 RoutingContext
     ffrt::submit([this, eventId, seqnums = std::move(dispatchResult.seqnums),
                   resultCallback]() {
         RoutingContext *routingCtx = nullptr;
@@ -500,7 +495,7 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
         promiseIter->second->set_value(strategy);
     }
     DecrementCounters(ctx, clientId);
-    EvaluateStrictPolicy(ctx, strategy, targetEventId);
+    EvaluateStrictPolicy(ctx, strategy, ctx.eventId);
     return SUCCESS;
 }
 
