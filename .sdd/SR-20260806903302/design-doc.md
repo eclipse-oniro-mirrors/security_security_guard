@@ -118,7 +118,7 @@ classDiagram
 | AuthEventSessionService | Client 服务端会话对象，持有 clientId | `services/data_collect/sa/` |
 | AuthResultCallbackService | 回调 stub，包装 std::function，SA 聚合完成后触发 | `frameworks/common/collect/src/` |
 
-### 2.2 双标识体系
+### 2.2 三层标识体系
 
 ```mermaid
 flowchart LR
@@ -126,21 +126,28 @@ flowchart LR
         A["会话创建"] --> B["clientId 生成\nConstructClientId 范式\n时间戳+指针hash"]
         B --> C["clientId 存储\nsession.clientId_"]
     end
-    subgraph 事件级
-        D["事件路由"] --> E["seqnum 生成\n原子计数器递增"]
-        E --> F["seqnum 存储\nseqnumToEventId_\nseqnumToSession_"]
-        F --> G["cJSON 填充 metadata\nseqNum=N"]
+    subgraph 请求级
+        D["Provider发起请求"] --> E["requestId 生成\n全局原子递增"]
+        E --> F["requestId 存储\nroutingContexts_[requestId]=ctx"]
     end
-    C --> H["结果聚合\nclientResults[clientId]\nclientPromises[clientId]"]
-    G --> I["路由查找\nseqnum→eventId→RoutingContext\n→session→clientId"]
-    I --> H
-    H --> J["聚合完成\n清理 seqnum 映射"]
+    subgraph 事件级
+        G["事件路由"] --> H["seqnum 生成\nsession.GenerateSeqnum()\nper-client递增"]
+        H --> I["组合key存储\nclientId_seqnum → requestId\nclientId_seqnum → session"]
+        I --> J["cJSON 填充 metadata\nseqNum=N"]
+    end
+    C --> K["结果聚合\nclientResults[clientId]\nclientPromises[clientId]"]
+    J --> L["路由查找\nclientId+seqnum组合key\n→requestId→RoutingContext\n→session→clientId"]
+    L --> K
+    K --> M["聚合完成\n清理 requestId + 组合key映射"]
 ```
 
-| 标识 | 生成方式 | 用途 | 生命周期 |
-|---|---|---|---|
-| clientId | `ConstructClientId` 范式（时间戳 + 指针 hash） | 结果聚合、状态通知、结果返回 | 会话级 |
-| seqnum | 原子计数器递增，每客户端每事件独立 | 路由查找（seqnum→eventId→ctx→session→clientId） | 事件级 |
+| 标识 | 生成方式 | 用途 | 生命周期 | 唯一性 |
+|---|---|---|---|---|
+| clientId | `ConstructClientId` 范式（时间戳 + 指针 hash） | 结果聚合、状态通知、结果返回 | 会话级 | 全局唯一 |
+| requestId | 全局原子递增 | 隔离同一 eventId 的多次请求（高频并发） | 请求级（400ms） | 全局唯一 |
+| seqnum | `session->GenerateSeqnum()` per-client 递增 | 路由查找（组合 key → requestId → ctx） | 事件级 | **per-client 唯一**，不同客户端可能相同 |
+
+**组合 key 策略**：seqnum per-client 递增，不同客户端可能产生相同值。用 `clientId + "_" + seqnum` 组合作为 `seqnumToRequestId_` 和 `seqnumToSession_` 的 key，避免冲突。
 
 ## 3. 核心流程
 
@@ -205,31 +212,35 @@ sequenceDiagram
 
         Note over AC: ffrt 异步任务
 
+        AC->>AC: 生成 requestId（全局递增）
         AC->>SM: GetSubscribedSessions(eventId)
         SM-->>AC: [session1, session2]
 
         AC->>AC: 从 AuthEventInfo.AuthClientStatus 获取降级 clientId
 
         loop 逐个 Client
-            AC->>AC: 生成独有 seqnum
+            AC->>AC: session.GenerateSeqnum()（per-client 递增）
             AC->>AC: cJSON 填充 metadata seqNum=N
-            AC->>AC: 记录 seqnumToEventId_[seqnum]=eventId
-            AC->>AC: 记录 seqnumToSession_[seqnum]=session
+            AC->>AC: 组合key = clientId + "_" + seqnum
+            AC->>AC: seqnumToRequestId_[组合key] = requestId
+            AC->>AC: seqnumToSession_[组合key] = session
             AC->>AC: sentClientCount++ / defaultDenyCount++
         end
 
         AC->>C1: OnAuthEvent(event, seqnum=1) 同步通知
-        AC->>C2: OnAuthEvent(event, seqnum=2) 同步通知
+        AC->>C2: OnAuthEvent(event, seqnum=1) 同步通知
 
+        AC->>AC: routingContexts_[requestId] = ctx
         AC->>AC: 创建 promise + future.wait_for(400ms)
 
         Note over C1: Client-1 收到事件，生成阻断策略
 
-        C1->>SA: SetAuthResult(event, allowFlag=false, seqnum=1)
-        SA->>AC: 通过 seqnum=1 查找
-        AC->>AC: seqnumToEventId_[1] → eventId
-        AC->>AC: routingContexts_[eventId] → RoutingContext
-        AC->>AC: seqnumToSession_[1] → session → clientId
+        C1->>SA: SetAuthResult(event, DENY, seqnum=1)
+        SA->>AC: 通过 clientId+seqnum 组合key 查找
+        AC->>AC: clientId="clientA", seqnumKey="clientA_1"
+        AC->>AC: seqnumToRequestId_["clientA_1"] → requestId
+        AC->>AC: routingContexts_[requestId] → RoutingContext
+        AC->>AC: seqnumToSession_["clientA_1"] → session → clientId
         AC->>AC: clientResults[clientId] = DENY
         AC->>AC: sentClientCount-- (→1)
 
@@ -330,12 +341,13 @@ stateDiagram-v2
     Completed_Allow --> [*] : 回调 OnAuthResult + 清理映射
 
     note right of Waiting
-        每次收到 SetAuthResult:
-        1. seqnum → eventId → RoutingContext
-        2. seqnumToSession_ → session → clientId
-        3. clientResults[clientId] = strategy
-        4. clientPromises[clientId]->set_value()
-        5. sentClientCount--
+        每次收到 SetAuthResult(seqnum, authStrategy):
+        1. clientId = session.GetClientId()
+        2. seqnumKey = clientId + "_" + seqnum
+        3. seqnumToRequestId_[seqnumKey] → requestId → RoutingContext
+        4. clientResults[clientId] = authStrategy
+        5. clientPromises[clientId]->set_value()
+        6. sentClientCount--
         6. 若 DENY 策略: defaultDenyCount--
     end note
 ```
@@ -349,12 +361,12 @@ flowchart TD
     B -- 是 --> D["获取降级 clientId 集合"]
     D --> E{"遍历订阅 Client"}
     E --> F{"session.GetClientId()\n在降级集合中?"}
-    F -- 是 --> G["生成 seqnum + cJSON 填充"]
+    F -- 是 --> G["session.GenerateSeqnum()\nper-client递增 + cJSON"]
     G --> H["推送 OnAuthEvent"]
     H --> I["不计数\n不创建 promise\n不等待回填"]
     I --> J["继续下一个 Client"]
     F -- 否 --> K["正常参与聚合计数"]
-    K --> L["生成 seqnum + 记录映射"]
+    K --> L["session.GenerateSeqnum()\n组合key=clientId_seqnum\n记录映射"]
     L --> M["sentClientCount++\nDENY策略: defaultDenyCount++"]
     M --> J
     J --> N{"还有 Client?"}
@@ -476,13 +488,15 @@ struct RoutingContext {
     AuthStrategy mergedAuthStrategy;
 };
 
-// 按 eventId 索引（unique_ptr 包装，因 ffrt::mutex 不可移动）
-// ffrt lambda 内通过 eventId + mutex_ 查找，不捕获裸指针（生命周期由 map 管理）
+// 按 requestId 索引（隔离同一 eventId 的高频并发请求）
+// ffrt lambda 内通过 requestId + mutex_ 查找，不捕获裸指针（生命周期由 map 管理）
 map<int64_t, unique_ptr<RoutingContext>> routingContexts_;
 
-// seqnum 路由映射
-map<int64_t, int64_t> seqnumToEventId_;        // seqnum → eventId
-map<int64_t, AuthEventSessionService*> seqnumToSession_; // seqnum → session
+// seqnum per-client 递增，用 clientId+seqnum 组合 key 避免冲突
+map<string, int64_t> seqnumToRequestId_;         // clientId_seqnum → requestId
+map<string, AuthEventSessionService*> seqnumToSession_; // clientId_seqnum → session
+
+atomic<int64_t> requestCounter_ {0};  // requestId 全局递增
 ```
 
 ### 5.3 clientId 生成
@@ -492,6 +506,18 @@ map<int64_t, AuthEventSessionService*> seqnumToSession_; // seqnum → session
 std::string timeStr = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 std::string ptrStr = std::to_string(reinterpret_cast<int64_t>(callback.GetRefPtr()));
 clientId_ = std::to_string(std::hash<std::string>{}(timeStr + ptrStr));
+```
+
+### 5.4 seqnum per-client 递增
+
+```cpp
+// AuthEventSessionService 内 per-client 计数器
+int64_t GenerateSeqnum() { return ++seqnumCounter_; }
+
+// 组合 key 工具函数
+static std::string MakeSeqnumKey(const std::string &clientId, int64_t seqnum) {
+    return clientId + "_" + std::to_string(seqnum);
+}
 ```
 
 ### 5.4 metadata cJSON 序列化
@@ -511,33 +537,40 @@ cJSON_Delete(root);
 输入：eventId, AuthEventInfo.AuthClientStatus[], 已订阅 Client 列表
 输出：AuthResult{mergedAuthStrategy, clientAuthResult[]}
 
+0. 生成 requestId（全局递增，隔离同一 eventId 的并发请求）
+
 1. 从入参 AuthClientStatus 获取降级 clientId 集合
 
 2. 遍历订阅 Client:
    clientId = session.GetClientId()
    IF clientId 在降级集合中:
-     生成 seqnum, cJSON 填充 metadata
-     推送 OnAuthEvent, 不计数, 跳过
+     seqnum = session.GenerateSeqnum()（per-client 递增）
+     cJSON 填充 metadata, 推送 OnAuthEvent, 不计数, 跳过
    ELSE:
-     生成 seqnum, cJSON 填充 metadata
-     记录 seqnumToEventId_[seqnum]=eventId, seqnumToSession_[seqnum]=session
+     seqnum = session.GenerateSeqnum()（per-client 递增）
+     cJSON 填充 metadata
+     seqnumKey = clientId + "_" + seqnum（组合 key 避免冲突）
+     seqnumToRequestId_[seqnumKey] = requestId
+     seqnumToSession_[seqnumKey] = session
      sentClientCount++
      IF defaultTimeoutStrategy==DENY: defaultDenyCount++
 
 3. 推送 OnAuthEvent 给所有 Client（含降级）
 
-4. 注册 RoutingContext 到 routingContexts_[eventId]
+4. 注册 RoutingContext 到 routingContexts_[requestId]
    创建 promise<AuthResult>, future.wait_for(400ms)
 
-5. 每次收到 SetAuthResult(seqnum, allowFlag):
-   seqnum → seqnumToEventId_ → eventId → routingContexts_ → RoutingContext
-   seqnumToSession_[seqnum] → session → clientId
-   clientResults[clientId] = allowFlag ? ALLOW : DENY
-   clientPromises[clientId]->set_value(strategy)
+5. 每次收到 SetAuthResult(seqnum, authStrategy):
+   clientId = session.GetClientId()
+   seqnumKey = clientId + "_" + seqnum
+   seqnumToRequestId_[seqnumKey] → requestId → routingContexts_ → RoutingContext
+   seqnumToSession_[seqnumKey] → session
+   clientResults[clientId] = authStrategy
+   clientPromises[clientId]->set_value(authStrategy)
    sentClientCount--
    IF clientTimeoutStrategies[clientId]==DENY: defaultDenyCount--
 
-   IF allowFlag == false:
+   IF authStrategy == DENY:
      mergedAuthStrategy = DENY → resultPromise->set_value(DENY)
    ELIF sentClientCount==0 且 defaultDenyCount==0:
      mergedAuthStrategy = ALLOW → resultPromise->set_value(ALLOW)
@@ -631,9 +664,9 @@ if (security_guard_auth_event_enable) {
 | 6 | 并发请求超限返回 27000004 |
 | 7 | CreateAuthProvider 异步返回会话标识 |
 | 8 | RequestAuthResult IPC 异步返回，最终结果经回调通知 Promise |
-| 9 | 每个 Client 收到独有 seqnum，metadata 含 cJSON `seqNum=N` |
+| 9 | 每个 Client 收到 per-client seqnum，metadata 含 cJSON `seqNum=N` |
 | 10 | clientId 按 ConstructClientId 范式生成 |
-| 11 | SA 通过 seqnum → eventId → RoutingContext → session → clientId 路由 |
+| 11 | SA 通过 clientId+seqnum 组合 key → requestId → RoutingContext → session → clientId 路由 |
 | 12 | 双计数正确递减 |
 | 13 | 从严策略：任一 DENY 立即阻断 |
 | 14 | 从严策略：全部 ALLOW 才放行 |
