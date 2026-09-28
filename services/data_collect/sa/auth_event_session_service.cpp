@@ -96,10 +96,10 @@ ErrCode AuthEventSessionService::Unsubscribe(int64_t eventId)
 
 // 验收: Client 回填阻断/放行结果
 // 流程: 双轨权限校验 → 会话有效性校验 → pid 归属校验 → 转调 SubscribeManager::SetAuthResult（携带 seqnum 供协调者聚合）
-ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allowFlag, int64_t seqnum)
+ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, int32_t authStrategy, int64_t seqnum)
 {
-    SGLOGI("eventId=%{public}" PRId64 ", allowFlag=%{public}d, seqnum=%{public}" PRId64, event.GetEventId(),
-        static_cast<int32_t>(allowFlag), seqnum);
+    SGLOGI("eventId=%{public}" PRId64 ", authStrategy=%{public}d, seqnum=%{public}" PRId64, event.GetEventId(),
+        static_cast<int32_t>(authStrategy), seqnum);
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
@@ -113,7 +113,7 @@ ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allo
         return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_AuthSessionSetAuthResult", XCOLLIE_FLAG);
-    return AuthEventSubscribeManager::GetInstance().SetAuthResult(this, event, allowFlag, seqnum);
+    return AuthEventSubscribeManager::GetInstance().SetAuthResult(this, event, authStrategy, seqnum);
 }
 
 ErrCode AuthEventSessionService::Destroy()

@@ -55,7 +55,7 @@ public:
     // IPC 异步应答: 返回码承载校验结果（是否接受请求），最终阻断策略经 resultCallback 回调返回
     int32_t RequestAuthResult(AuthProviderSessionService *provider, const AuthEventInfo &event,
         const sptr<IRemoteObject> &resultCallback);
-    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, bool allowFlag, int64_t seqnum);
+    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy, int64_t seqnum);
     void RemoveProvider(const sptr<AuthProviderSessionService> &provider);
     void NotifyClientStatusChanged();
     static int32_t IsProviderAllowed();
@@ -101,7 +101,7 @@ private:
         const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         const DispatchResult &result);
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
-    void EvaluateStrictPolicy(RoutingContext &ctx, bool allowFlag, int64_t eventId);
+    void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
     void HandleTimeout(RoutingContext &ctx);
     void WaitForCompletion(RoutingContext &ctx, AuthResult &result,
         int64_t eventId, const std::vector<int64_t> &seqnums);

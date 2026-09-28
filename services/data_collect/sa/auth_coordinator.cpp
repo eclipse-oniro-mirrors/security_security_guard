@@ -440,9 +440,9 @@ void AuthCoordinator::DecrementCounters(RoutingContext &ctx, const std::string &
 }
 
 // 从严策略判定: 任一 DENY → 立即阻断；全部 ALLOW → 放行
-void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, bool allowFlag, int64_t eventId)
+void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId)
 {
-    if (!allowFlag) {
+    if (authStrategy == AuthStrategy::DENY) {
         ctx.mergedAuthStrategy = AuthStrategy::DENY;
         ctx.completed = true;
         if (ctx.resultPromise != nullptr) {
@@ -465,13 +465,14 @@ void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, bool allowFlag, 
 
 // Client 回填: 通过 seqnum 查找 eventId → RoutingContext → 通过 session 获取 clientId → 聚合
 int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
-    bool allowFlag, int64_t seqnum)
+    int32_t authStrategy, int64_t seqnum)
 {
     if (session == nullptr) {
         return BAD_PARAM;
     }
-    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", allowFlag=%{public}d",
-        seqnum, static_cast<int32_t>(allowFlag));
+    AuthStrategy strategy = static_cast<AuthStrategy>(authStrategy);
+    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", authStrategy=%{public}d",
+        seqnum, authStrategy);
     std::lock_guard<ffrt::mutex> lock(mutex_);
     // 通过 seqnum 查找 eventId
     auto eventIdIter = seqnumToEventId_.find(seqnum);
@@ -493,14 +494,13 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     }
     // 通过 session 获取 clientId
     std::string clientId = session->GetClientId();
-    AuthStrategy strategy = allowFlag ? AuthStrategy::ALLOW : AuthStrategy::DENY;
     ctx.clientResults[clientId] = strategy;
     auto promiseIter = ctx.clientPromises.find(clientId);
     if (promiseIter != ctx.clientPromises.end() && promiseIter->second != nullptr) {
         promiseIter->second->set_value(strategy);
     }
     DecrementCounters(ctx, clientId);
-    EvaluateStrictPolicy(ctx, allowFlag, targetEventId);
+    EvaluateStrictPolicy(ctx, strategy, targetEventId);
     return SUCCESS;
 }
 

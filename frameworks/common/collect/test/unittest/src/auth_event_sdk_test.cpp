@@ -145,14 +145,14 @@ HWTEST_F(AuthEventSdkTest, ClientMethodsBeforeCreate001, TestSize.Level0)
     AuthEvent event(3001, "content", "metadata");
     EXPECT_EQ(client->Subscribe(11), NULL_OBJECT);
     EXPECT_EQ(client->Unsubscribe(11), NULL_OBJECT);
-    EXPECT_EQ(client->SetAuthResult(event, true), NULL_OBJECT);
+    EXPECT_EQ(client->SetAuthResult(event, AuthStrategy::ALLOW), NULL_OBJECT);
     // 幂等 DeleteClient 不崩溃
     client->DeleteClient();
     client->DeleteClient();
     // 已销毁（deleted_ 置位）后各方法返回 BAD_PARAM
     EXPECT_EQ(client->Subscribe(11), BAD_PARAM);
     EXPECT_EQ(client->Unsubscribe(11), BAD_PARAM);
-    EXPECT_EQ(client->SetAuthResult(event, true), BAD_PARAM);
+    EXPECT_EQ(client->SetAuthResult(event, AuthStrategy::ALLOW), BAD_PARAM);
 }
 
 HWTEST_F(AuthEventSdkTest, ClientMethodsWithFakeSession001, TestSize.Level0)
@@ -164,7 +164,7 @@ HWTEST_F(AuthEventSdkTest, ClientMethodsWithFakeSession001, TestSize.Level0)
     AuthEvent event(3002, "content", "metadata");
     EXPECT_NE(client->Subscribe(12), SUCCESS);
     EXPECT_NE(client->Unsubscribe(12), SUCCESS);
-    EXPECT_NE(client->SetAuthResult(event, true), SUCCESS);
+    EXPECT_NE(client->SetAuthResult(event, AuthStrategy::ALLOW), SUCCESS);
     client->DeleteClient();
 }
 

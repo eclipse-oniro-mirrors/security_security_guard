@@ -145,7 +145,7 @@ HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
 
     AuthEvent event(2001);
-    int32_t ret = AuthCoordinator::GetInstance().SetAuthResult(session, event, true, 999);
+    int32_t ret = AuthCoordinator::GetInstance().SetAuthResult(session, event, AuthStrategy::ALLOW, 999);
     EXPECT_EQ(ret, NOT_FOUND);
 }
 

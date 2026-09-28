@@ -60,10 +60,10 @@ public:
     // 会话对象方法路径（AuthEventSessionService 转调，会话有效性以"在会话集合中"为权威判定）
     int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
     int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
-    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, bool allowFlag, int64_t seqnum);
+    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy, int64_t seqnum);
     int32_t DestroyAuthEventClient(AuthEventSessionService *session);
     // 预留读取口：读取某 eventId 的回填结果
-    int32_t GetAuthResult(int64_t eventId, bool &allowFlag);
+    int32_t GetAuthResult(int64_t eventId, AuthStrategy &authStrategy);
     // 内部事件源注入入口：按各会话已订阅 eventId 分发推送（本期预留）
     void NotifyAuthEvent(const AuthEvent &event);
     // 获取订阅了指定 eventId 的所有有效会话（供 AuthCoordinator 调用）
@@ -91,7 +91,7 @@ private:
     // 注册/注销、IPC 推送、HA 打点），外部动作一律"锁内快照、锁外执行"。
     ffrt::mutex mutex_{};
     std::set<sptr<AuthEventSessionService>> sessions_{};
-    std::map<int64_t, bool> authResults_{};
+    std::map<int64_t, AuthStrategy> authResults_{};
     std::vector<int32_t> allowedUids_ {};
 };
 } // namespace OHOS::Security::SecurityGuard
