@@ -80,6 +80,7 @@ private:
     // DispatchEventToClients 的输出参数集合（控制入参 ≤5）
     struct DispatchResult {
         std::vector<int64_t> seqnums;
+        std::vector<std::string> clientIds;  // 与 seqnums 一一对应，用于清理 seqnumKey
     };
 
     AuthCoordinator();
@@ -90,11 +91,17 @@ private:
     std::set<sptr<AuthProviderSessionService>>::iterator FindProviderLocked(
         AuthProviderSessionService *provider);
     void RemoveProviderLocked(const sptr<AuthProviderSessionService> &provider);
-    void DispatchEventToClients(int64_t eventId,
-        const std::vector<AuthClientStatus> &clientStatusList,
-        RoutingContext &ctx, DispatchResult &result);
+    // DispatchEventToClients 入参超过 5，用结构体收拢
+    struct DispatchParams {
+        int64_t requestId;
+        int64_t eventId;
+        const std::vector<AuthClientStatus> &clientStatusList;
+        RoutingContext &ctx;
+        DispatchResult &result;
+    };
+    void DispatchEventToClients(const DispatchParams &params);
     void NotifyDegradedClient(int64_t eventId, AuthEventSessionService *session);
-    void RegisterNormalClient(int64_t eventId, AuthEventSessionService *session,
+    void RegisterNormalClient(int64_t requestId, int64_t eventId, AuthEventSessionService *session,
         RoutingContext &ctx, DispatchResult &result,
         std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets);
     void PushEventsToClients(int64_t eventId,
@@ -104,18 +111,23 @@ private:
     void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
     void HandleTimeout(RoutingContext &ctx);
     void WaitForCompletion(RoutingContext &ctx, AuthResult &result,
-        int64_t eventId, const std::vector<int64_t> &seqnums);
+        int64_t requestId, const std::vector<int64_t> &seqnums,
+        const std::vector<std::string> &clientIds);
     void BuildAuthResult(RoutingContext &ctx, AuthResult &result);
     void NotifyAuthResult(const sptr<IRemoteObject> &callback, const AuthResult &result);
     void ReportTimeoutHA(int64_t eventId, int64_t seqnum, int64_t timeoutMs);
     std::vector<AuthClientInfo> CollectClientInfos();
 
+    // seqnum per-client 递增，不同客户端可能相同，用 clientId+seqnum 组合 key 查找
+    // 组合 key 格式: clientId + "_" + seqnum
+    static std::string MakeSeqnumKey(const std::string &clientId, int64_t seqnum);
+
     ffrt::mutex mutex_{};
     std::set<sptr<AuthProviderSessionService>> providerSessions_{};
-    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{}; // 按 eventId 索引（eventId→Provider 唯一）
-    std::map<int64_t, int64_t> seqnumToEventId_{};                 // seqnum → eventId
-    std::map<int64_t, AuthEventSessionService *> seqnumToSession_{}; // seqnum → session 指针
-    std::atomic<int64_t> seqCounter_ {0};
+    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{};  // requestId → ctx
+    std::map<std::string, int64_t> seqnumToRequestId_{};  // clientId_seqnum → requestId
+    std::map<std::string, AuthEventSessionService *> seqnumToSession_{}; // clientId_seqnum → session
+    std::atomic<int64_t> requestCounter_ {0};
 };
 } // namespace OHOS::Security::SecurityGuard
 

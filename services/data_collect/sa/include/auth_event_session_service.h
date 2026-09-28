@@ -76,6 +76,12 @@ public:
         return clientId_;
     }
 
+    // per-client seqnum 递增（每个客户端接收事件数量的递增数字）
+    int64_t GenerateSeqnum()
+    {
+        return ++seqnumCounter_;
+    }
+
     // 管理器锁内调用：分发时按 eventId 匹配命中会话
     bool IsEventSubscribed(int64_t eventId) const
     {
@@ -113,6 +119,7 @@ private:
     pid_t pid_ {};
     int32_t uid_ {};
     std::string clientId_ {};
+    int64_t seqnumCounter_ {0};  // per-client seqnum 计数器
     AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
     int32_t defaultTimeoutMs_ {400};
     sptr<IRemoteObject> callback_ {};
