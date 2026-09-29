@@ -183,9 +183,8 @@ int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService 
 }
 
 // 验收: Client 扩展参数 — defaultTimeoutStrategy 保存到会话，供协调者超时处置时读取
-// 验收: HA 打点 — allowFlag=false 时锁外执行 AUTH_BLOCK_RESULT 打点（应用信息+事件信息+发送时间）
 int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
-    int32_t authStrategy, int64_t seqnum)
+    int32_t authStrategy)
 {
     AuthStrategy strategy = static_cast<AuthStrategy>(authStrategy);
     if (event.GetContent().size() > MAX_AUTH_EVENT_STR_LEN || event.GetMetadata().size() > MAX_AUTH_EVENT_STR_LEN) {
@@ -206,7 +205,6 @@ int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *sessio
         }
         authResults_[event.GetEventId()] = strategy;
     }
-    (void)seqnum;
     if (strategy == AuthStrategy::DENY) {
         AuthEventReporter::ReportAuthBlockResult(session->GetPid(), session->GetUid(), event);
     }

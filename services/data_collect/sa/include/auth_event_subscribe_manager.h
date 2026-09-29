@@ -60,7 +60,7 @@ public:
     // 会话对象方法路径（AuthEventSessionService 转调，会话有效性以"在会话集合中"为权威判定）
     int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
     int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
-    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy, int64_t seqnum);
+    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy);
     int32_t DestroyAuthEventClient(AuthEventSessionService *session);
     // 预留读取口：读取某 eventId 的回填结果
     int32_t GetAuthResult(int64_t eventId, AuthStrategy &authStrategy);

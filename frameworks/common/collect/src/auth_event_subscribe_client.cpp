@@ -315,9 +315,9 @@ int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
     return SUCCESS;
 }
 
-int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy, int64_t seqnum)
+int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy)
 {
-    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64, event.GetEventId(), seqnum);
+    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64, event.GetEventId(), event.GetSeqnum());
     sptr<AuthEventSession> session {};
     {
         std::lock_guard<ffrt::mutex> lock(g_mutex_);
@@ -331,7 +331,7 @@ int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStra
         SGLOGE("session proxy is null");
         return NULL_OBJECT;
     }
-    return session->SetAuthResult(event, static_cast<int32_t>(authStrategy), seqnum);
+    return session->SetAuthResult(event, static_cast<int32_t>(authStrategy));
 }
 
 void AuthEventSubscribeClient::DeleteClient()

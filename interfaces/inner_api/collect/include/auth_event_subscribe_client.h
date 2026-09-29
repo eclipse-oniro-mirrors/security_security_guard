@@ -50,7 +50,7 @@ public:
         AuthStrategy defaultTimeoutStrategy = AuthStrategy::ALLOW, int32_t defaultTimeoutMs = 400);
     int32_t Subscribe(int64_t eventId);
     int32_t Unsubscribe(int64_t eventId);
-    int32_t SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy, int64_t seqnum);    // 断开已注册的回调，并排空 stub 上所有在途的 OnAuthEvent，
+    int32_t SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy);    // 断开已注册的回调，并排空 stub 上所有在途的 OnAuthEvent，
     // 随后销毁服务端会话。返回后框架不会再触发用户回调，
     // 此时销毁回调所捕获的状态是安全的。
     // 把 client 作为对象成员的调用方无需显式调用本接口；

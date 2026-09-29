@@ -184,7 +184,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission001, TestSize.Lev
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_DENIED));
     AuthEvent event(4001, "content", "metadata");
-    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW, 0), NO_PERMISSION);
+    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW), NO_PERMISSION);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission002, TestSize.Level0)
@@ -200,7 +200,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission002, TestSize.Lev
         static_cast<int32_t>(AuthStrategy::ALLOW), TEST_DEFAULT_TIMEOUT_MS, sessionRemote), SUCCESS);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
     AuthEvent event(4002, "content", "metadata");
-    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW, 0), SUCCESS);
+    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW), SUCCESS);
     AuthStrategy authStrategy = AuthStrategy::ALLOW;
     EXPECT_EQ(AuthEventSubscribeManager::GetInstance().GetAuthResult(4002, authStrategy), SUCCESS);
     EXPECT_TRUE(allowFlag);
@@ -218,7 +218,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SessionApiPermission001, TestSize.Level0
     AuthEvent event(5001, "content", "metadata");
     EXPECT_EQ(session->Subscribe(5001), NO_PERMISSION);
     EXPECT_EQ(session->Unsubscribe(5001), NO_PERMISSION);
-    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW, 0), NO_PERMISSION);
+    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW), NO_PERMISSION);
     EXPECT_EQ(session->Destroy(), NO_PERMISSION);
 }
 
@@ -235,7 +235,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SessionApiPermission002, TestSize.Level0
     AuthEvent event(5002, "content", "metadata");
     EXPECT_EQ(session->Subscribe(5002), BAD_PARAM);
     EXPECT_EQ(session->Unsubscribe(5002), BAD_PARAM);
-    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW), BAD_PARAM);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SubscribeEventIdNotInConfig001, TestSize.Level0)
@@ -374,7 +374,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, InvalidSession004, TestSize.Level0)
     EXPECT_EQ(manager.SubscribeAuthEvent(session, 1004), BAD_PARAM);
     EXPECT_EQ(manager.UnsubscribeAuthEvent(session, 1004), BAD_PARAM);
     AuthEvent event(1004, "content", "metadata");
-    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW), BAD_PARAM);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, PidBound005, TestSize.Level0)
@@ -389,7 +389,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, PidBound005, TestSize.Level0)
     EXPECT_EQ(session->Subscribe(1006), BAD_PARAM);
     EXPECT_EQ(session->Unsubscribe(1006), BAD_PARAM);
     AuthEvent event(1006, "content", "metadata");
-    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(session->SetAuthResult(event, AuthStrategy::ALLOW), BAD_PARAM);
     EXPECT_EQ(session->Destroy(), BAD_PARAM);
     // 归属进程（本进程）的会话操作正常
     auto *ownSession = CreateManagedSession(getpid(), getuid(), AuthStrategy::ALLOW, CreateRemoteObject());
@@ -422,16 +422,16 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResult001, TestSize.Level0)
     auto *stale = CreateManagedSession(9501, 9501 + 100, true, CreateRemoteObject());
     ASSERT_NE(nullptr, stale);
     ASSERT_EQ(manager.DestroyAuthEventClient(stale), SUCCESS);
-    EXPECT_EQ(manager.SetAuthResult(stale, event, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(manager.SetAuthResult(stale, event, AuthStrategy::ALLOW), BAD_PARAM);
 
     auto *session = CreateManagedSession(9502, 9502 + 100, true, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
-    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW, 0), SUCCESS);
+    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW), SUCCESS);
     AuthStrategy authStrategy = AuthStrategy::ALLOW;
     EXPECT_EQ(manager.GetAuthResult(3001, allowFlag), SUCCESS);
     EXPECT_TRUE(allowFlag);
     // 覆盖更新
-    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY, 0), SUCCESS);
+    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY), SUCCESS);
     EXPECT_EQ(manager.GetAuthResult(3001, allowFlag), SUCCESS);
     EXPECT_FALSE(allowFlag);
     // 未设置过的 eventId
@@ -445,9 +445,9 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultTooLong002, TestSize.Level0
     ASSERT_NE(nullptr, session);
     std::string tooLong(MAX_AUTH_EVENT_STR_LEN + 1, 'a');
     AuthEvent longContent(3002, tooLong, "");
-    EXPECT_EQ(manager.SetAuthResult(session, longContent, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(manager.SetAuthResult(session, longContent, AuthStrategy::ALLOW), BAD_PARAM);
     AuthEvent longMetadata(3003, "", tooLong);
-    EXPECT_EQ(manager.SetAuthResult(session, longMetadata, AuthStrategy::ALLOW, 0), BAD_PARAM);
+    EXPECT_EQ(manager.SetAuthResult(session, longMetadata, AuthStrategy::ALLOW), BAD_PARAM);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit001, TestSize.Level0)
@@ -469,11 +469,11 @@ HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit002, TestSize.Level0)
     ASSERT_NE(nullptr, session);
     for (int64_t eventId = 1; eventId <= static_cast<int64_t>(MAX_AUTH_EVENT_RESULT_SIZE); eventId++) {
         AuthEvent event(eventId);
-        ASSERT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW, 0), SUCCESS);
+        ASSERT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW), SUCCESS);
     }
     // 结果状态表容量超限
     AuthEvent overflow(MAX_AUTH_EVENT_RESULT_SIZE + 1);
-    EXPECT_EQ(manager.SetAuthResult(session, overflow, AuthStrategy::ALLOW, 0), FILTER_EXCEED_LIMIT);
+    EXPECT_EQ(manager.SetAuthResult(session, overflow, AuthStrategy::ALLOW), FILTER_EXCEED_LIMIT);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SubscriberDied007, TestSize.Level0)
@@ -502,7 +502,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, AuthBlockResultReport001, TestSize.Level
     auto *session = CreateManagedSession(9703, 9703 + 100, true, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     AuthEvent event(1104, "content", "metadata");
-    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY, 0), SUCCESS);
+    EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY), SUCCESS);
     bool allowFlag = true;
     EXPECT_EQ(manager.GetAuthResult(1104, allowFlag), SUCCESS);
     EXPECT_FALSE(allowFlag);

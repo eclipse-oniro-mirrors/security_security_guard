@@ -55,7 +55,7 @@ public:
     // IPC 异步应答: 返回码承载校验结果（是否接受请求），最终阻断策略经 resultCallback 回调返回
     int32_t RequestAuthResult(AuthProviderSessionService *provider, const AuthEventInfo &event,
         const sptr<IRemoteObject> &resultCallback);
-    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy, int64_t seqnum);
+    int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy);
     void RemoveProvider(const sptr<AuthProviderSessionService> &provider);
     void NotifyClientStatusChanged();
     static int32_t IsProviderAllowed();

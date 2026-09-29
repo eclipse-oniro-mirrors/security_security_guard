@@ -463,18 +463,18 @@ void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy aut
     }
 }
 
-// Client 回填: 通过 seqnum 查找 eventId → RoutingContext → 通过 session 获取 clientId → 聚合
+// Client 回填: 从 event.GetSeqnum() 获取 seqnum → 组合 key 查找 requestId → RoutingContext → 聚合
 int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
-    int32_t authStrategy, int64_t seqnum)
+    int32_t authStrategy)
 {
     if (session == nullptr) {
         return BAD_PARAM;
     }
     AuthStrategy strategy = static_cast<AuthStrategy>(authStrategy);
+    int64_t seqnum = event.GetSeqnum();
     SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", authStrategy=%{public}d",
         seqnum, authStrategy);
     std::lock_guard<ffrt::mutex> lock(mutex_);
-    // seqnum per-client 递增，用 clientId+seqnum 组合 key 查找 requestId
     std::string clientId = session->GetClientId();
     std::string seqnumKey = MakeSeqnumKey(clientId, seqnum);
     auto reqIter = seqnumToRequestId_.find(seqnumKey);
