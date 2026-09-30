@@ -792,6 +792,11 @@ bool AcquireDataSubscribeManager::IsFindFlag(const std::set<std::string> &eventS
     if (session == nullptr) {
         return false;
     }
+
+    if (eventSubscribes.find("defaultFilter") != eventSubscribes.end()) {
+        return false;
+    }
+
     if (session->eventFilters.find(eventId) == session->eventFilters.end() ||
         session->eventFilters.at(eventId).empty()) {
         return true;
