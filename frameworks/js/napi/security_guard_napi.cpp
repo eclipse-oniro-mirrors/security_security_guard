@@ -73,7 +73,7 @@ static ffrt::mutex g_subscribeMutex;
 static ffrt::mutex g_queryMutex;
 std::map<napi_env, std::vector<SubscribeCBInfo *>> g_subscribers;
 
-static const std::unordered_map<int32_t, std::pair<int32_t, std::string>> g_errorStringMap = {
+const std::unordered_map<int32_t, std::pair<int32_t, std::string>> g_errorStringMap = {
     { SUCCESS, { JS_ERR_SUCCESS, "The operation was successful" }},
     { NO_PERMISSION, { JS_ERR_NO_PERMISSION, "check permission fail"} },
     { BAD_PARAM, { JS_ERR_BAD_PARAM, "Parameter error, please make sure using the correct value"} },
@@ -91,7 +91,7 @@ static const std::unordered_map<int32_t, std::pair<int32_t, std::string>> g_erro
         "Concurrent request count has reached the upper limit." } },
 };
 
-static std::string ConvertToJsErrMsg(int32_t code)
+std::string ConvertToJsErrMsg(int32_t code)
 {
     auto iter = g_errorStringMap.find(code);
     if (iter != g_errorStringMap.end()) {
@@ -101,7 +101,7 @@ static std::string ConvertToJsErrMsg(int32_t code)
     }
 }
 
-static int32_t ConvertToJsErrCode(int32_t code)
+int32_t ConvertToJsErrCode(int32_t code)
 {
     auto iter = g_errorStringMap.find(code);
     if (iter != g_errorStringMap.end()) {

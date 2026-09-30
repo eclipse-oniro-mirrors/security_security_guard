@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 
+#include "security_guard_napi.h"
 #include "ffrt.h"
 #include "security_guard_log.h"
 #include "security_guard_sdk_adaptor.h"
@@ -88,8 +89,11 @@ napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &
         napi_get_undefined(env, &result);
         return result;
     }
-    napi_value errCode = NapiCreateInt32(env, code);
-    napi_value errMsg = NapiCreateString(env, msg);
+    // native 错误码转换为 JS 错误码（如 NO_PERMISSION=2 → 201, BAD_PARAM=7 → 401）
+    int32_t jsErrCode = ConvertToJsErrCode(code);
+    napi_value errCode = NapiCreateInt32(env, jsErrCode);
+    std::string errMsgStr = msg.empty() ? ConvertToJsErrMsg(code) : msg;
+    napi_value errMsg = NapiCreateString(env, errMsgStr);
     napi_create_error(env, nullptr, errMsg, &result);
     napi_set_named_property(env, result, "code", errCode);
     napi_set_named_property(env, result, "message", errMsg);

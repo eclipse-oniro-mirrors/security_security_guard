@@ -144,6 +144,10 @@ enum JsErrCode : int32_t {
     JS_ERR_AUTH_REQUEST_EXCEED_LIMIT = 27000004,
 };
 
+// 错误码转换（供 napi_block_framework.cpp 共享使用）
+int32_t ConvertToJsErrCode(int32_t code);
+std::string ConvertToJsErrMsg(int32_t code);
+
 class SubscriberPtr;
 struct CommonAsyncContext {
     CommonAsyncContext() {};
