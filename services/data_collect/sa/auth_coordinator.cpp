@@ -411,6 +411,10 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
             auto it = routingContexts_.find(requestId);
             if (it == routingContexts_.end() || it->second == nullptr) {
                 SGLOGE("routing context not found, requestId=%{public}" PRId64, requestId);
+                // 极端竞态: RoutingContext 已被清理，回调默认 ALLOW 保证 callback 一定触发
+                AuthResult fallback;
+                fallback.SetMergedAuthStrategy(AuthStrategy::ALLOW);
+                NotifyAuthResult(resultCallback, fallback);
                 return;
             }
             routingCtx = it->second.get();
