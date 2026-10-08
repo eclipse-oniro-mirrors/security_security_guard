@@ -49,30 +49,30 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     
     if (callback == nullptr) {
         SGLOGE("callback is nullptr");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
     if (registry == nullptr) {
         SGLOGE("GetSystemAbilityManager error");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     auto object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
     auto proxy = iface_cast<DataCollectManagerIdl>(object);
     if (proxy == nullptr) {
         SGLOGE("proxy is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     auto serviceCallback = new (std::nothrow) AuthProviderCallbackService();
     if (serviceCallback == nullptr) {
         SGLOGE("serviceCallback is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> providerRemote = nullptr;
     int32_t ret = proxy->CreateAuthProvider(serviceCallback, serviceId, providerRemote);
     if (ret != SUCCESS || providerRemote == nullptr) {
         SGLOGI("CreateAuthProvider result, ret=%{public}d", ret);
-        return ret != SUCCESS ? ret : FAILED;
+        return ret != SUCCESS ? ret : AUTH_PROVIDER_INTERNAL_ERROR;
     }
     provider = std::make_shared<AuthProviderSubscribeClient>(ConstructTag {});
     provider->callback_ = serviceCallback;
@@ -106,13 +106,13 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
     }
     if (session == nullptr) {
         SGLOGE("session proxy is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     // 创建回调 stub，包装 std::function → SA 聚合完成后经 IPC 回调 → 触发 std::function
     auto callbackService = new (std::nothrow) AuthResultCallbackService();
     if (callbackService == nullptr) {
         SGLOGE("callback service is null");
-        return FAILED;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     callbackService->RegistCallBack(callback);
     return session->RequestAuthResult(event, callbackService->AsObject());
@@ -174,7 +174,7 @@ int32_t AuthProviderSubscribeClient::SetDeathRecipient(std::shared_ptr<AuthProvi
         provider->deathRecipient_ = new (std::nothrow) DeathRecipient(provider);
         if (provider->deathRecipient_ == nullptr) {
             SGLOGE("deathRecipient_ is nullptr.");
-            return NULL_OBJECT;
+            return BAD_PARAM;
         }
         if (!remote->AddDeathRecipient(provider->deathRecipient_)) {
             SGLOGE("Failed to add death recipient");

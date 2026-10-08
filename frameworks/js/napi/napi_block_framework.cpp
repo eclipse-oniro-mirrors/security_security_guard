@@ -382,7 +382,7 @@ napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info)
     }
     auto *context = new (std::nothrow) RequestAuthResultContext();
     if (context == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, FAILED, "no memory"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "no memory"));
         return nullptr;
     }
     context->env = env;
@@ -392,7 +392,7 @@ napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info)
     context->resultCallback = new (std::nothrow) AuthResultCallbackService();
     if (context->resultCallback == nullptr) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, FAILED, "callback service alloc fail"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "callback service alloc fail"));
         return nullptr;
     }
     context->resultCallback->RegistCallBack(
@@ -403,20 +403,20 @@ napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info)
     napi_value promise = nullptr;
     if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, FAILED, "napi_create_promise failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_create_promise failed"));
         return nullptr;
     }
     napi_value resourceName = NapiCreateString(env, "NapiRequestAuthResult");
     if (napi_create_async_work(env, nullptr, resourceName, RequestAuthResultExecute,
         RequestAuthResultComplete, static_cast<void *>(context), &context->asyncWork) != napi_ok) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, FAILED, "napi_create_async_work failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_create_async_work failed"));
         return nullptr;
     }
     if (napi_queue_async_work(env, context->asyncWork) != napi_ok) {
         napi_delete_async_work(env, context->asyncWork);
         delete context;
-        napi_throw(env, GenerateBusinessError(env, FAILED, "napi_queue_async_work failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_queue_async_work failed"));
         return nullptr;
     }
     return promise;
@@ -492,7 +492,7 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     }
     auto *nativeProvider = new (std::nothrow) NapiAuthProvider();
     if (nativeProvider == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, FAILED, "no memory"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "no memory"));
         return nullptr;
     }
     nativeProvider->env = env;

@@ -811,7 +811,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     }
     if (cb == nullptr) {
         SGLOGE("cb is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_CreatAuthEventClient", XCOLLIE_FLAG);
     CreateClientParams params;
@@ -830,7 +830,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     (void)defaultTimeoutStrategy;
     (void)defaultTimeoutMs;
     session = nullptr;
-    return FAILED;
+    return AUTH_PROVIDER_INTERNAL_ERROR;
 }
 #endif
 
@@ -846,7 +846,7 @@ ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> 
     }
     if (cb == nullptr) {
         SGLOGE("cb is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_CreateAuthProvider", XCOLLIE_FLAG);
     pid_t callerPid = IPCSkeleton::GetCallingPid();
@@ -860,7 +860,7 @@ ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> 
     (void)cb;
     (void)serviceId;
     provider = nullptr;
-    return FAILED;
+    return AUTH_PROVIDER_INTERNAL_ERROR;
 }
 #endif
 

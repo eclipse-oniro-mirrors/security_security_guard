@@ -119,7 +119,7 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
         static_cast<int32_t>(callerPid));
     if (callback == nullptr) {
         SGLOGE("callback is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     sptr<AuthProviderSessionService> provider {};
     {
@@ -146,7 +146,7 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
         SGLOGE("add death recipient fail");
         std::lock_guard<ffrt::mutex> lock(mutex_);
         RemoveProviderLocked(provider);
-        return FAILED;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     provider->SetDeathRecipient(recipient);
     providerRemote = provider;
@@ -484,13 +484,13 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     auto reqIter = seqnumToRequestId_.find(seqnumKey);
     if (reqIter == seqnumToRequestId_.end()) {
         SGLOGE("seqnumKey not found, clientId=%{public}s, seqnum=%{public}" PRId64, clientId.c_str(), seqnum);
-        return NOT_FOUND;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     int64_t requestId = reqIter->second;
     auto ctxIter = routingContexts_.find(requestId);
     if (ctxIter == routingContexts_.end()) {
         SGLOGE("routing context not found, requestId=%{public}" PRId64, requestId);
-        return NOT_FOUND;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     auto &ctx = *(ctxIter->second);
     std::lock_guard<ffrt::mutex> cvLock(ctx.ctxMutex);
