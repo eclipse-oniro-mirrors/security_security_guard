@@ -296,37 +296,47 @@ void OnClientStatusChangedCallback(napi_env env, napi_ref callbackRef,
     if (env == nullptr || callbackRef == nullptr) {
         return;
     }
-    napi_value callbackFunc = nullptr;
-    napi_get_reference_value(env, callbackRef, &callbackFunc);
-    if (callbackFunc == nullptr) {
-        SGLOGE("callback function is null");
-        return;
-    }
-    napi_value jsArray = nullptr;
-    napi_create_array_with_length(env, clientsInfo.size(), &jsArray);
-    for (size_t i = 0; i < clientsInfo.size(); ++i) {
-        napi_value jsItem = NapiCreateObject(env);
-        napi_value clientId = NapiCreateString(env, clientsInfo[i].GetClientId());
-        napi_value bundleName = NapiCreateString(env, clientsInfo[i].GetBundleName());
-        napi_value strategy = NapiCreateInt32(env, static_cast<int32_t>(clientsInfo[i].GetDefaultTimeoutStrategy()));
-        napi_value timeouts = NapiCreateInt32(env, clientsInfo[i].GetDefaultTimeoutMs());
-        napi_set_named_property(env, jsItem, "clientId", clientId);
-        napi_set_named_property(env, jsItem, "bundleName", bundleName);
-        napi_set_named_property(env, jsItem, "defaultTimeoutStrategy", strategy);
-        napi_set_named_property(env, jsItem, "defaultTimeoutMs", timeouts);
-        auto events = clientsInfo[i].GetSubscribedEvents();
-        napi_value jsEvents = nullptr;
-        napi_create_array_with_length(env, events.size(), &jsEvents);
-        for (size_t j = 0; j < events.size(); ++j) {
-            napi_set_element(env, jsEvents, j, NapiCreateInt64(env, events[j]));
+    auto *info = new std::vector<AuthClientInfo>(clientsInfo);
+    auto task = [env, callbackRef, info]() {
+        napi_handle_scope scope = nullptr;
+        napi_open_handle_scope(env, &scope);
+        napi_value callbackFunc = nullptr;
+        napi_get_reference_value(env, callbackRef, &callbackFunc);
+        if (callbackFunc == nullptr) {
+            SGLOGE("callback function is null");
+            napi_close_handle_scope(env, scope);
+            delete info;
+            return;
         }
-        napi_set_named_property(env, jsItem, "subscribedEvents", jsEvents);
-        napi_set_element(env, jsArray, i, jsItem);
-    }
-    napi_value undefined = nullptr;
-    napi_get_undefined(env, &undefined);
-    napi_value returnVal = nullptr;
-    napi_call_function(env, undefined, callbackFunc, 1, &jsArray, &returnVal);
+        napi_value jsArray = nullptr;
+        napi_create_array_with_length(env, info->size(), &jsArray);
+        for (size_t i = 0; i < info->size(); ++i) {
+            napi_value jsItem = NapiCreateObject(env);
+            napi_value clientId = NapiCreateString(env, (*info)[i].GetClientId());
+            napi_value bundleName = NapiCreateString(env, (*info)[i].GetBundleName());
+            napi_value strategy = NapiCreateInt32(env, static_cast<int32_t>((*info)[i].GetDefaultTimeoutStrategy()));
+            napi_value timeouts = NapiCreateInt32(env, (*info)[i].GetDefaultTimeoutMs());
+            napi_set_named_property(env, jsItem, "clientId", clientId);
+            napi_set_named_property(env, jsItem, "bundleName", bundleName);
+            napi_set_named_property(env, jsItem, "defaultTimeoutStrategy", strategy);
+            napi_set_named_property(env, jsItem, "defaultTimeoutMs", timeouts);
+            auto events = (*info)[i].GetSubscribedEvents();
+            napi_value jsEvents = nullptr;
+            napi_create_array_with_length(env, events.size(), &jsEvents);
+            for (size_t j = 0; j < events.size(); ++j) {
+                napi_set_element(env, jsEvents, j, NapiCreateInt64(env, events[j]));
+            }
+            napi_set_named_property(env, jsItem, "subscribedEvents", jsEvents);
+            napi_set_element(env, jsArray, i, jsItem);
+        }
+        napi_value undefined = nullptr;
+        napi_get_undefined(env, &undefined);
+        napi_value returnVal = nullptr;
+        napi_call_function(env, undefined, callbackFunc, 1, &jsArray, &returnVal);
+        napi_close_handle_scope(env, scope);
+        delete info;
+    };
+    napi_send_event(env, task, napi_eprio_high, "OnClientStatusChanged");
 }
 }
 
