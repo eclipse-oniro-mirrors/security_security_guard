@@ -161,7 +161,7 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
     return SUCCESS;
 }
 
-// 验收: Provider 销毁（幂等，返回 void）
+// Provider 销毁（幂等，返回 void）
 void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
 {
     if (provider == nullptr) {
@@ -169,6 +169,8 @@ void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
     }
     SGLOGI("DestroyAuthProvider, serviceId=%{public}s, pid=%{private}d", provider->GetServiceId().c_str(),
         static_cast<int32_t>(provider->GetPid()));
+    // 先 RemoveDeathRecipient 再从集合移除，避免移除后 provider 析构导致 use-after-free
+    sptr<AuthProviderSessionService> keepAlive = nullptr;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         auto iter = FindProviderLocked(provider);
@@ -176,13 +178,14 @@ void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
             SGLOGE("provider not found");
             return;
         }
+        keepAlive = *iter;  // 持有引用防止提前析构
         (*iter)->MarkInvalid();
         RemoveProviderLocked(*iter);
     }
-    if (provider->GetCallback() != nullptr && provider->GetDeathRecipient() != nullptr) {
-        provider->GetCallback()->RemoveDeathRecipient(provider->GetDeathRecipient());
+    if (keepAlive->GetCallback() != nullptr && keepAlive->GetDeathRecipient() != nullptr) {
+        keepAlive->GetCallback()->RemoveDeathRecipient(keepAlive->GetDeathRecipient());
     }
-    SGLOGI("destroy auth provider success, pid=%{private}d", static_cast<int32_t>(provider->GetPid()));
+    SGLOGI("destroy auth provider success, pid=%{private}d", static_cast<int32_t>(keepAlive->GetPid()));
     NotifyClientStatusChanged();
 }
 
