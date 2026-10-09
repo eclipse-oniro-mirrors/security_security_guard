@@ -55,12 +55,12 @@ ErrCode AuthProviderSessionService::RequestAuthResult(const AuthEventInfo &event
     }
     if (!IsValid()) {
         SGLOGE("provider is invalid");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     if (IPCSkeleton::GetCallingPid() != pid_) {
         SGLOGE("provider not belong to caller, callerPid=%{private}d, sessionPid=%{private}d",
             IPCSkeleton::GetCallingPid(), static_cast<int32_t>(pid_));
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     XCollie_Utils xcollie("SGIPC_RequestAuthResult", XCOLLIE_FLAG);
     return AuthCoordinator::GetInstance().RequestAuthResult(this, event, resultCallback);
@@ -78,7 +78,7 @@ ErrCode AuthProviderSessionService::Destroy()
     if (IPCSkeleton::GetCallingPid() != pid_) {
         SGLOGE("provider not belong to caller, callerPid=%{private}d, sessionPid=%{private}d",
             IPCSkeleton::GetCallingPid(), static_cast<int32_t>(pid_));
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     XCollie_Utils xcollie("SGIPC_DestroyAuthProvider", XCOLLIE_FLAG);
     AuthCoordinator::GetInstance().DestroyAuthProvider(this);

@@ -136,7 +136,7 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
         for (const auto &item : providerSessions_) {
             if (item != nullptr && item->GetCallback() == callback) {
                 SGLOGE("callback already has provider");
-                return BAD_PARAM;
+                return AUTH_PROVIDER_INTERNAL_ERROR;
             }
         }
         provider = new (std::nothrow) AuthProviderSessionService(callerPid, callerUid, serviceId, callback);
@@ -369,7 +369,7 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
 {
     if (provider == nullptr || !provider->IsValid()) {
         SGLOGE("provider is null or invalid");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     int64_t eventId = event.GetEventId();
     int64_t requestId = ++requestCounter_;

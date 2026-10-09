@@ -54,18 +54,18 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
     if (registry == nullptr) {
         SGLOGE("GetSystemAbilityManager error");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     auto object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
     auto proxy = iface_cast<DataCollectManagerIdl>(object);
     if (proxy == nullptr) {
         SGLOGE("proxy is null");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     auto serviceCallback = new (std::nothrow) AuthProviderCallbackService();
     if (serviceCallback == nullptr) {
         SGLOGE("serviceCallback is null");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> providerRemote = nullptr;
@@ -100,13 +100,13 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
         std::lock_guard<ffrt::mutex> lock(g_providerMutex);
         if (deleted_) {
             SGLOGE("provider deleted");
-            return BAD_PARAM;
+            return AUTH_PROVIDER_INTERNAL_ERROR;
         }
         session = iface_cast<AuthProviderSession>(sessionRemote_);
     }
     if (session == nullptr) {
         SGLOGE("session proxy is null");
-        return BAD_PARAM;
+        return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     // 创建回调 stub，包装 std::function → SA 聚合完成后经 IPC 回调 → 触发 std::function
     auto callbackService = new (std::nothrow) AuthResultCallbackService();
