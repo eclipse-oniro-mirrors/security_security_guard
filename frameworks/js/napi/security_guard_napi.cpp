@@ -194,12 +194,7 @@ napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &
     } else {
         int32_t jsErrCode = ConvertToJsErrCode(code);
         napi_value errCode = NapiCreateInt32(env, jsErrCode);
-        // 错误消息优先用映射表中的标准消息，映射表中没有时才用传入的 msg
-        std::string errMsgStr = ConvertToJsErrMsg(code);
-        if (errMsgStr == "Unknown error, please reboot your device and try again" && !msg.empty()) {
-            errMsgStr = msg;
-        }
-        napi_value errMsg = NapiCreateString(env, errMsgStr);
+        napi_value errMsg = NapiCreateString(env, msg);
 
         napi_create_error(env, nullptr, errMsg, &result);
         napi_set_named_property(env, result, "code", errCode);

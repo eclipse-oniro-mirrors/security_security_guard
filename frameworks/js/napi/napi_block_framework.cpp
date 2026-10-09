@@ -29,13 +29,13 @@ using namespace OHOS::Security::SecurityGuard;
 #ifndef SECURITY_GUARD_AUTH_EVENT_ENABLE
 napi_value OHOS::Security::SecurityGuard::NapiCreateAuthProvider(napi_env env, napi_callback_info info)
 {
-    napi_throw(env, GenerateBusinessError(env, API_SUPPORT_ERROR, "API is not supported"));
+    napi_throw(env, GenerateBusinessError(env, API_SUPPORT_ERROR));
     return nullptr;
 }
 
 napi_value OHOS::Security::SecurityGuard::NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
 {
-    napi_throw(env, GenerateBusinessError(env, API_SUPPORT_ERROR, "API is not supported"));
+    napi_throw(env, GenerateBusinessError(env, API_SUPPORT_ERROR));
     return nullptr;
 }
 #else
@@ -119,25 +119,25 @@ bool ParseString(napi_env env, napi_value object, const std::string &key, std::s
     napi_has_named_property(env, object, key.c_str(), &hasProperty);
     if (!hasProperty) {
         SGLOGE("no such param %{public}s", key.c_str());
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "no such param " + key));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_value result = nullptr;
     napi_get_named_property(env, object, key.c_str(), &result);
     if (result == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "get key failed."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_valuetype type;
     napi_typeof(env, result, &type);
     if (type != napi_string) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "type of param is not string."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     size_t size = 0;
     napi_get_value_string_utf8(env, result, nullptr, 0, &size);
     if (size >= maxLen) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "param is too long"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     std::vector<char> buf(size + 1, '\0');
@@ -151,19 +151,19 @@ bool ParseInt64(napi_env env, napi_value object, const std::string &key, int64_t
     bool hasProperty = false;
     napi_has_named_property(env, object, key.c_str(), &hasProperty);
     if (!hasProperty) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "no such param " + key));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_value result = nullptr;
     napi_get_named_property(env, object, key.c_str(), &result);
     if (result == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "get key failed."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_valuetype type;
     napi_typeof(env, result, &type);
     if (type != napi_number) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "type of param is not number."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_get_value_int64(env, result, &value);
@@ -175,19 +175,19 @@ bool ParseInt32(napi_env env, napi_value object, const std::string &key, int32_t
     bool hasProperty = false;
     napi_has_named_property(env, object, key.c_str(), &hasProperty);
     if (!hasProperty) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "no such param " + key));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_value result = nullptr;
     napi_get_named_property(env, object, key.c_str(), &result);
     if (result == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "get key failed."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_valuetype type;
     napi_typeof(env, result, &type);
     if (type != napi_number) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "type of param is not number."));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_get_value_int32(env, result, &value);
@@ -244,7 +244,7 @@ bool ParseAuthEventInfo(napi_env env, napi_value jsObj, AuthEventInfo &info)
     napi_valuetype type = napi_undefined;
     napi_typeof(env, jsObj, &type);
     if (type != napi_object) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "type of param eventInfo is not object"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     int64_t eventId = 0;
@@ -381,8 +381,7 @@ void RequestAuthResultComplete(napi_env env, napi_status status, void *data)
         napi_value jsResult = WrapAuthResult(env, context->result);
         napi_resolve_deferred(env, context->deferred, jsResult);
     } else {
-        napi_value error = GenerateBusinessError(env, NormalizeProviderError(context->ret),
-            "RequestAuthResult rejected");
+        napi_value error = GenerateBusinessError(env, NormalizeProviderError(context->ret));
         napi_reject_deferred(env, context->deferred, error);
     }
     napi_delete_async_work(env, context->asyncWork);
@@ -396,13 +395,13 @@ bool ParseCreateProviderParams(napi_env env, napi_callback_info info,
     size_t argc = NAPI_CREATE_PROVIDER_ARGS_CNT;
     napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
     if (argc != NAPI_CREATE_PROVIDER_ARGS_CNT) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "arguments count is not expected"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_valuetype callbackType;
     napi_typeof(env, argv[0], &callbackType);
     if (callbackType != napi_object) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "callback is not object"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     if (!ParseServiceId(env, argv[1], serviceId)) {
@@ -411,13 +410,13 @@ bool ParseCreateProviderParams(napi_env env, napi_callback_info info,
     napi_value callbackMethod = nullptr;
     napi_get_named_property(env, argv[0], PROVIDER_CALLBACK_NAME, &callbackMethod);
     if (callbackMethod == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientStatusChanged not found"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_valuetype methodType;
     napi_typeof(env, callbackMethod, &methodType);
     if (methodType != napi_function) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "onClientStatusChanged is not function"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     napi_create_reference(env, argv[0], 1, &callbackRef);
@@ -432,13 +431,13 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     napi_value thisVar = nullptr;
     napi_get_cb_info(env, info, &argc, argv, &thisVar, nullptr);
     if (argc != NAPI_REQUEST_AUTH_RESULT_ARGS_CNT) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "arguments count is not expected"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return nullptr;
     }
     NapiAuthProvider *provider = nullptr;
     napi_unwrap(env, thisVar, reinterpret_cast<void **>(&provider));
     if (provider == nullptr || provider->provider == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "provider is null or invalid"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return nullptr;
     }
     AuthEventInfo eventInfo;
@@ -447,7 +446,7 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     }
     auto *context = new (std::nothrow) RequestAuthResultContext();
     if (context == nullptr) {
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "no memory"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     context->env = env;
@@ -456,7 +455,7 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     context->resultCallback = new (std::nothrow) AuthResultCallbackService();
     if (context->resultCallback == nullptr) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "callback service alloc fail"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     context->resultCallback->RegistCallBack(
@@ -465,20 +464,20 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     napi_value promise = nullptr;
     if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_create_promise failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     napi_value resourceName = NapiCreateString(env, "NapiRequestAuthResult");
     if (napi_create_async_work(env, nullptr, resourceName, RequestAuthResultExecute,
         RequestAuthResultComplete, static_cast<void *>(context), &context->asyncWork) != napi_ok) {
         delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_create_async_work failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     if (napi_queue_async_work(env, context->asyncWork) != napi_ok) {
         napi_delete_async_work(env, context->asyncWork);
         delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "napi_queue_async_work failed"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     return promise;
@@ -500,7 +499,7 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     auto *nativeProvider = new (std::nothrow) NapiAuthProvider();
     if (nativeProvider == nullptr) {
         if (callbackRef != nullptr) { napi_delete_reference(env, callbackRef); }
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR, "no memory"));
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
     nativeProvider->env = env;
@@ -516,7 +515,7 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
             napi_delete_reference(env, nativeProvider->callbackRef);
         }
         delete nativeProvider;
-        napi_throw(env, GenerateBusinessError(env, NormalizeProviderError(ret), "CreateProvider failed"));
+        napi_throw(env, GenerateBusinessError(env, NormalizeProviderError(ret)));
         return nullptr;
     }
     nativeProvider->provider = provider;
@@ -535,13 +534,13 @@ bool ParseServiceId(napi_env env, napi_value jsVal, std::string &serviceId)
     napi_valuetype type = napi_undefined;
     napi_typeof(env, jsVal, &type);
     if (type != napi_string) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "serviceId is not string"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     size_t size = 0;
     napi_get_value_string_utf8(env, jsVal, nullptr, 0, &size);
     if (size >= SERVICE_ID_MAX_LEN) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "serviceId is too long"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
     std::vector<char> buf(size + 1, '\0');
@@ -573,7 +572,7 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
     napi_value argv[NAPI_DESTROY_PROVIDER_ARGS_CNT] = {nullptr};
     napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
     if (argc != NAPI_DESTROY_PROVIDER_ARGS_CNT) {
-        napi_throw(env, GenerateBusinessError(env, BAD_PARAM, "arguments count is not expected"));
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return nullptr;
     }
     NapiAuthProvider *nativeProvider = nullptr;
