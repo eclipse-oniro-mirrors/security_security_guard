@@ -552,10 +552,8 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
         napi_delete_reference(env, nativeProvider->callbackRef);
         nativeProvider->callbackRef = nullptr;
     }
-    napi_remove_wrap(env, argv[0], reinterpret_cast<void **>(&nativeProvider));
-    if (nativeProvider != nullptr) {
-        delete nativeProvider;
-    }
+    // 不取回指针，不手动 delete，交给 NapiAuthProviderFinalize 在 GC 时释放
+    napi_remove_wrap(env, argv[0], nullptr);
     SGLOGI("destroyAuthProvider success");
     return WrapVoidToJS(env);
 }
