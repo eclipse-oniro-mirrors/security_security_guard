@@ -363,6 +363,48 @@ void AuthCoordinator::WaitForCompletion(RoutingContext &ctx, AuthResult &result,
     SGLOGD("routing context cleaned, requestId=%{public}" PRId64, requestId);
 }
 
+// 注册 RoutingContext 到 routingContexts_[requestId]
+void AuthCoordinator::RegisterRoutingContext(int64_t requestId, RoutingContext &ctx)
+{
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    auto ctxPtr = std::make_unique<RoutingContext>();
+    ctxPtr->eventId = ctx.eventId;
+    ctxPtr->sentClientCount = ctx.sentClientCount;
+    ctxPtr->defaultDenyCount = ctx.defaultDenyCount;
+    ctxPtr->clientTimeoutStrategies = std::move(ctx.clientTimeoutStrategies);
+    ctxPtr->clientPromises = std::move(ctx.clientPromises);
+    ctxPtr->resultPromise = std::move(ctx.resultPromise);
+    routingContexts_[requestId] = std::move(ctxPtr);
+}
+
+// ffrt 异步任务: 等待聚合完成 → 回调通知
+void AuthCoordinator::SubmitAsyncWait(int64_t requestId, std::vector<int64_t> &&seqnums,
+    std::vector<std::string> &&clientIds, const sptr<IRemoteObject> &resultCallback)
+{
+    ffrt::submit([this, requestId, seqnums = std::move(seqnums),
+                  clientIds = std::move(clientIds),
+                  resultCallback]() {
+        RoutingContext *routingCtx = nullptr;
+        {
+            std::lock_guard<ffrt::mutex> lock(mutex_);
+            auto it = routingContexts_.find(requestId);
+            if (it == routingContexts_.end() || it->second == nullptr) {
+                SGLOGE("routing context not found, requestId=%{public}" PRId64, requestId);
+                AuthResult fallback;
+                fallback.SetMergedAuthStrategy(AuthStrategy::ALLOW);
+                NotifyAuthResult(resultCallback, fallback);
+                return;
+            }
+            routingCtx = it->second.get();
+        }
+        AuthResult result;
+        WaitForCompletion(*routingCtx, result, requestId, seqnums, clientIds);
+        NotifyAuthResult(resultCallback, result);
+        SGLOGI("async done, requestId=%{public}" PRId64 ", mergedStrategy=%{public}d",
+            requestId, static_cast<int32_t>(result.GetMergedAuthStrategy()));
+    });
+}
+
 // IPC 异步应答: 返回码承载校验结果（是否接受请求）
 // 最终阻断策略经 resultCallback 回调返回（ffrt 异步任务完成后触发）
 int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
@@ -398,42 +440,9 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         NotifyAuthResult(resultCallback, result);
         return SUCCESS;
     }
-    // 按 requestId 索引（支持同一 eventId 高频并发请求，每次请求独立隔离）
-    {
-        std::lock_guard<ffrt::mutex> lock(mutex_);
-        auto ctxPtr = std::make_unique<RoutingContext>();
-        ctxPtr->eventId = ctx.eventId;
-        ctxPtr->sentClientCount = ctx.sentClientCount;
-        ctxPtr->defaultDenyCount = ctx.defaultDenyCount;
-        ctxPtr->clientTimeoutStrategies = std::move(ctx.clientTimeoutStrategies);
-        ctxPtr->clientPromises = std::move(ctx.clientPromises);
-        ctxPtr->resultPromise = std::move(ctx.resultPromise);
-        routingContexts_[requestId] = std::move(ctxPtr);
-    }
-    // ffrt lambda 内通过 requestId 查找 RoutingContext
-    ffrt::submit([this, requestId, seqnums = std::move(dispatchResult.seqnums),
-                  clientIds = std::move(dispatchResult.clientIds),
-                  resultCallback]() {
-        RoutingContext *routingCtx = nullptr;
-        {
-            std::lock_guard<ffrt::mutex> lock(mutex_);
-            auto it = routingContexts_.find(requestId);
-            if (it == routingContexts_.end() || it->second == nullptr) {
-                SGLOGE("routing context not found, requestId=%{public}" PRId64, requestId);
-                // 极端竞态: RoutingContext 已被清理，回调默认 ALLOW 保证 callback 一定触发
-                AuthResult fallback;
-                fallback.SetMergedAuthStrategy(AuthStrategy::ALLOW);
-                NotifyAuthResult(resultCallback, fallback);
-                return;
-            }
-            routingCtx = it->second.get();
-        }
-        AuthResult result;
-        WaitForCompletion(*routingCtx, result, requestId, seqnums, clientIds);
-        NotifyAuthResult(resultCallback, result);
-        SGLOGI("async done, requestId=%{public}" PRId64 ", mergedStrategy=%{public}d",
-            requestId, static_cast<int32_t>(result.GetMergedAuthStrategy()));
-    });
+    RegisterRoutingContext(requestId, ctx);
+    SubmitAsyncWait(requestId, std::move(dispatchResult.seqnums),
+        std::move(dispatchResult.clientIds), resultCallback);
     SGLOGI("request accepted, eventId=%{public}" PRId64, eventId);
     return SUCCESS;
 }

@@ -110,6 +110,9 @@ private:
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
     void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
     void HandleTimeout(RoutingContext &ctx);
+    void RegisterRoutingContext(int64_t requestId, RoutingContext &ctx);
+    void SubmitAsyncWait(int64_t requestId, std::vector<int64_t> &&seqnums,
+        std::vector<std::string> &&clientIds, const sptr<IRemoteObject> &resultCallback);
     void WaitForCompletion(RoutingContext &ctx, AuthResult &result,
         int64_t requestId, const std::vector<int64_t> &seqnums,
         const std::vector<std::string> &clientIds);
