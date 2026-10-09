@@ -830,7 +830,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     (void)defaultTimeoutStrategy;
     (void)defaultTimeoutMs;
     session = nullptr;
-    return AUTH_PROVIDER_INTERNAL_ERROR;
+    return API_SUPPORT_ERROR;
 }
 #endif
 
@@ -861,7 +861,7 @@ ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> 
     (void)cb;
     (void)serviceId;
     provider = nullptr;
-    return AUTH_PROVIDER_INTERNAL_ERROR;
+    return API_SUPPORT_ERROR;
 }
 #endif
 

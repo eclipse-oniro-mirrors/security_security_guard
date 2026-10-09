@@ -253,3 +253,31 @@ void AuthProviderSubscribeClient::DeathRecipient::OnRemoteDied(const wptr<IRemot
 }
 } // namespace OHOS::Security::SecurityGuard
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE
+
+#ifndef SECURITY_GUARD_AUTH_EVENT_ENABLE
+namespace OHOS::Security::SecurityGuard {
+int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callback,
+    const std::string &serviceId, std::shared_ptr<AuthProviderSubscribeClient> &provider)
+{
+    (void)callback;
+    (void)serviceId;
+    (void)provider;
+    return API_SUPPORT_ERROR;
+}
+
+int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &event,
+    AuthResultCallback callback)
+{
+    (void)event;
+    (void)callback;
+    return API_SUPPORT_ERROR;
+}
+
+void AuthProviderSubscribeClient::DeleteProvider()
+{
+}
+
+AuthProviderSubscribeClient::AuthProviderSubscribeClient(ConstructTag tag) {}
+AuthProviderSubscribeClient::~AuthProviderSubscribeClient() {}
+} // namespace OHOS::Security::SecurityGuard
+#endif // !SECURITY_GUARD_AUTH_EVENT_ENABLE

@@ -20,6 +20,11 @@
 #include "napi/native_node_api.h"
 #include "security_guard_define.h"
 
+namespace OHOS::Security::SecurityGuard {
+napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info);
+napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info);
+} // namespace OHOS::Security::SecurityGuard
+
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 #include "auth_event_info.h"
 #include "auth_provider_subscribe_client.h"
@@ -33,7 +38,6 @@ struct NapiAuthProvider {
     napi_env env = nullptr;
 };
 
-// SA 聚合完成后经回调通知 kit → kit 收到 AuthResult → resolve Promise<AuthResult>
 struct RequestAuthResultContext {
     napi_env env = nullptr;
     napi_deferred deferred = nullptr;
@@ -45,8 +49,6 @@ struct RequestAuthResultContext {
     AuthResult result;
 };
 
-napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info);
-napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info);
 napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info);
 } // namespace OHOS::Security::SecurityGuard
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE

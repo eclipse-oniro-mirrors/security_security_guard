@@ -52,7 +52,7 @@ AuthCoordinator& AuthCoordinator::GetInstance()
     return instance;
 }
 
-// Provider 接入校验: 1.系统应用校验(非系统应用→202) 2.权限校验(无权限→201)
+// Provider 接入校验: 1.权限校验(无权限→201) 2.系统应用校验(非系统应用→202)
 int32_t AuthCoordinator::IsProviderAllowed()
 {
     auto callerToken = IPCSkeleton::GetCallingTokenID();
@@ -61,21 +61,22 @@ int32_t AuthCoordinator::IsProviderAllowed()
         SGLOGI("native token allowed");
         return SUCCESS;
     }
-    // 非系统应用返回 NO_SYSTEMCALL(202)
-    uint64_t fullTokenId = IPCSkeleton::GetCallingFullTokenID();
-    if (!Security::AccessToken::TokenIdKit::IsSystemAppByFullTokenID(fullTokenId)) {
-        SGLOGE("not system app");
-        return NO_SYSTEMCALL;
-    }
     if (tokenType == Security::AccessToken::ATokenTypeEnum::TOKEN_HAP) {
+        // 先校验权限(201)
         int32_t result = Security::AccessToken::AccessTokenKit::VerifyAccessToken(callerToken,
             AUTH_SERVICE_ACCESS_PERMISSION);
-        if (result == Security::AccessToken::PermissionState::PERMISSION_GRANTED) {
-            SGLOGI("HAP token permission granted");
-            return SUCCESS;
+        if (result != Security::AccessToken::PermissionState::PERMISSION_GRANTED) {
+            SGLOGE("HAP token permission denied");
+            return NO_PERMISSION;
         }
-        SGLOGE("HAP token permission denied");
-        return NO_PERMISSION;
+        // 再校验系统应用(202)
+        uint64_t fullTokenId = IPCSkeleton::GetCallingFullTokenID();
+        if (!Security::AccessToken::TokenIdKit::IsSystemAppByFullTokenID(fullTokenId)) {
+            SGLOGE("not system app");
+            return NO_SYSTEMCALL;
+        }
+        SGLOGI("HAP token permission granted and is system app");
+        return SUCCESS;
     }
     SGLOGE("invalid token type denied");
     return NO_PERMISSION;

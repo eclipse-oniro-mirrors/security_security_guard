@@ -165,7 +165,7 @@ static napi_value NapiCreateUint32(const napi_env env, uint32_t value)
     return result;
 }
 #endif
-static napi_value GenerateBusinessError(napi_env env, int32_t code)
+napi_value GenerateBusinessError(napi_env env, int32_t code)
 {
     napi_value result;
     SGLOGD("GenerateBusinessError code:%{public}d", code);
@@ -185,7 +185,7 @@ static napi_value GenerateBusinessError(napi_env env, int32_t code)
     return result;
 }
 
-static napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &msg)
+napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &msg)
 {
     napi_value result;
     SGLOGD("GenerateBusinessError code:%{public}d", code);
@@ -1448,10 +1448,8 @@ static napi_value SecurityGuardNapiRegister(napi_env env, napi_value exports)
         DECLARE_NAPI_FUNCTION("off", Unsubscribe),
         DECLARE_NAPI_FUNCTION("getModelResult", NapiGetModelResult),
         DECLARE_NAPI_FUNCTION("updatePolicyFile", NapiUpdatePolicyFile),
-#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
         DECLARE_NAPI_FUNCTION("createAuthProvider", OHOS::Security::SecurityGuard::NapiCreateAuthProvider),
         DECLARE_NAPI_FUNCTION("destroyAuthProvider", OHOS::Security::SecurityGuard::NapiDestroyAuthProvider),
-#endif
     };
     NAPI_CALL(env, napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc));
     return exports;

@@ -147,6 +147,8 @@ enum JsErrCode : int32_t {
 // 错误码转换（供 napi_block_framework.cpp 共享使用）
 int32_t ConvertToJsErrCode(int32_t code);
 std::string ConvertToJsErrMsg(int32_t code);
+napi_value GenerateBusinessError(napi_env env, int32_t code);
+napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &msg);
 
 class SubscriberPtr;
 struct CommonAsyncContext {
