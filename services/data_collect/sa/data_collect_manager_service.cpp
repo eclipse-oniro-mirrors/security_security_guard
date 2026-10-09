@@ -805,13 +805,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     int32_t defaultTimeoutStrategy, int32_t defaultTimeoutMs, sptr<IRemoteObject> &session)
 {
     SGLOGI("CreatAuthEventClient, strategy=%{public}d, timeoutMs=%{public}d", defaultTimeoutStrategy, defaultTimeoutMs);
-    // 系统应用校验(非系统应用→202) + 权限校验(无权限→201)
-    AccessToken::AccessTokenID callerToken = IPCSkeleton::GetCallingTokenID();
-    int32_t code = IsCallerHasSystemPermission(callerToken);
-    if (code != SUCCESS) {
-        return code;
-    }
-    code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
+    int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
     }
