@@ -16,6 +16,7 @@
 #include "auth_provider_subscribe_client.h"
 
 #include <cinttypes>
+#include <set>
 
 #include "auth_result_callback_service.h"
 #include "data_collect_manager.h"
@@ -33,6 +34,20 @@
 namespace OHOS::Security::SecurityGuard {
 namespace {
 ffrt::mutex g_providerMutex {};
+
+// 出口错误码拦截: 不在 g_errorStringMap 中的统一归入 AUTH_PROVIDER_INTERNAL_ERROR
+int32_t NormalizeErrorCode(int32_t code)
+{
+    static const std::set<int32_t> validCodes = {
+        SUCCESS, NO_PERMISSION, NO_SYSTEMCALL, BAD_PARAM,
+        AUTH_PROVIDER_INTERNAL_ERROR, AUTH_PROVIDER_EXCEED_PROCESS_LIMIT,
+        AUTH_PROVIDER_EXCEED_GLOBAL_LIMIT, AUTH_REQUEST_EXCEED_LIMIT
+    };
+    if (validCodes.count(code) > 0) {
+        return code;
+    }
+    return AUTH_PROVIDER_INTERNAL_ERROR;
+}
 }
 
 AuthProviderSubscribeClient::AuthProviderSubscribeClient(ConstructTag tag) {}
@@ -72,7 +87,7 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     int32_t ret = proxy->CreateAuthProvider(serviceCallback, serviceId, providerRemote);
     if (ret != SUCCESS || providerRemote == nullptr) {
         SGLOGI("CreateAuthProvider result, ret=%{public}d", ret);
-        return ret != SUCCESS ? ret : AUTH_PROVIDER_INTERNAL_ERROR;
+        return NormalizeErrorCode(ret != SUCCESS ? ret : AUTH_PROVIDER_INTERNAL_ERROR);
     }
     provider = std::make_shared<AuthProviderSubscribeClient>(ConstructTag {});
     provider->callback_ = serviceCallback;
@@ -84,7 +99,7 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     ret = SetDeathRecipient(provider, object);
     if (ret != SUCCESS) {
         SGLOGE("SetDeathRecipient fail ret=%{public}d", ret);
-        return ret;
+        return NormalizeErrorCode(ret);
     }
     return SUCCESS;
 }
@@ -108,14 +123,14 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
         SGLOGE("session proxy is null");
         return AUTH_PROVIDER_INTERNAL_ERROR;
     }
-    // 创建回调 stub，包装 std::function → SA 聚合完成后经 IPC 回调 → 触发 std::function
     auto callbackService = new (std::nothrow) AuthResultCallbackService();
     if (callbackService == nullptr) {
         SGLOGE("callback service is null");
         return AUTH_PROVIDER_INTERNAL_ERROR;
     }
     callbackService->RegistCallBack(callback);
-    return session->RequestAuthResult(event, callbackService->AsObject());
+    int32_t ret = session->RequestAuthResult(event, callbackService->AsObject());
+    return NormalizeErrorCode(ret);
 }
 
 void AuthProviderSubscribeClient::DeleteProvider()
