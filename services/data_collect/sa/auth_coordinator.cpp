@@ -52,8 +52,7 @@ AuthCoordinator& AuthCoordinator::GetInstance()
     return instance;
 }
 
-// 验收: Provider 接入权限校验
-// native token 直接放行；HAP token 校验 ohos.permission.AUTH_SERVICE_ACCESS
+// Provider 接入校验: 1.系统应用校验(非系统应用→202) 2.权限校验(无权限→201)
 int32_t AuthCoordinator::IsProviderAllowed()
 {
     auto callerToken = IPCSkeleton::GetCallingTokenID();
@@ -61,6 +60,12 @@ int32_t AuthCoordinator::IsProviderAllowed()
     if (tokenType == Security::AccessToken::ATokenTypeEnum::TOKEN_NATIVE) {
         SGLOGI("native token allowed");
         return SUCCESS;
+    }
+    // 非系统应用返回 NO_SYSTEMCALL(202)
+    uint64_t fullTokenId = IPCSkeleton::GetCallingFullTokenID();
+    if (!Security::AccessToken::TokenIdKit::IsSystemAppByFullTokenID(fullTokenId)) {
+        SGLOGE("not system app");
+        return NO_SYSTEMCALL;
     }
     if (tokenType == Security::AccessToken::ATokenTypeEnum::TOKEN_HAP) {
         int32_t result = Security::AccessToken::AccessTokenKit::VerifyAccessToken(callerToken,
