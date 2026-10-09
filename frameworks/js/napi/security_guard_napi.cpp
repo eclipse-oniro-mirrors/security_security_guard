@@ -97,8 +97,7 @@ std::string ConvertToJsErrMsg(int32_t code)
     if (iter != g_errorStringMap.end()) {
         return iter->second.second;
     } else {
-        return "Internal system error. The possible causes as follows: 1.The inter-process IPC call fails."
-               " 2.The system service process is faulty.";
+        return "Unknown error, please reboot your device and try again";
     }
 }
 
@@ -108,7 +107,7 @@ int32_t ConvertToJsErrCode(int32_t code)
     if (iter != g_errorStringMap.end()) {
         return iter->second.first;
     } else {
-        return JS_ERR_AUTH_PROVIDER_INTERNAL;
+        return JS_ERR_SYS_ERR;
     }
 }
 

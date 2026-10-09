@@ -89,10 +89,17 @@ napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &
         napi_get_undefined(env, &result);
         return result;
     }
-    // native 错误码转换为 JS 错误码（如 NO_PERMISSION=2 → 201, BAD_PARAM=7 → 401）
+    // Provider 接口错误码转换: 不在映射表中的统一归入 27000001(仅限 createAuthProvider/destroyAuthProvider)
     int32_t jsErrCode = ConvertToJsErrCode(code);
+    if (jsErrCode == JS_ERR_SYS_ERR) {
+        jsErrCode = JS_ERR_AUTH_PROVIDER_INTERNAL;
+    }
     napi_value errCode = NapiCreateInt32(env, jsErrCode);
     std::string errMsgStr = msg.empty() ? ConvertToJsErrMsg(code) : msg;
+    if (jsErrCode == JS_ERR_AUTH_PROVIDER_INTERNAL && msg.empty()) {
+        errMsgStr = "Internal system error. The possible causes as follows: 1.The inter-process IPC call fails."
+                    " 2.The system service process is faulty.";
+    }
     napi_value errMsg = NapiCreateString(env, errMsgStr);
     napi_create_error(env, nullptr, errMsg, &result);
     napi_set_named_property(env, result, "code", errCode);
