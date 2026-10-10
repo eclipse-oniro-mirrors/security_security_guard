@@ -802,9 +802,9 @@ int32_t DataCollectManagerService::IsCallerHasApiPermission(const std::string &a
 // 验收: Client 扩展参数 — CreatAuthEventClient 参数从 timeoutAllowFlag 改为 defaultTimeoutStrategy + defaultTimeoutMs
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
-    int32_t defaultTimeoutStrategy, int32_t defaultTimeoutMs, sptr<IRemoteObject> &session)
+    int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
-    SGLOGI("CreatAuthEventClient, strategy=%{public}d, timeoutMs=%{public}d", defaultTimeoutStrategy, defaultTimeoutMs);
+    SGLOGI("CreatAuthEventClient, timeoutAllowFlag=%{public}d", timeoutAllowFlag);
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
@@ -817,18 +817,17 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     CreateClientParams params;
     params.callerPid = IPCSkeleton::GetCallingPid();
     params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
-    params.defaultTimeoutStrategy = static_cast<AuthStrategy>(defaultTimeoutStrategy);
-    params.defaultTimeoutMs = defaultTimeoutMs;
+    params.timeoutAllowFlag = timeoutAllowFlag;
+    params.defaultTimeoutMs = 400;
     params.callback = cb;
     return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(params, session);
 }
 #else
 ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
-    int32_t defaultTimeoutStrategy, int32_t defaultTimeoutMs, sptr<IRemoteObject> &session)
+    int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
     (void)cb;
-    (void)defaultTimeoutStrategy;
-    (void)defaultTimeoutMs;
+    (void)timeoutAllowFlag;
     session = nullptr;
     return API_SUPPORT_ERROR;
 }

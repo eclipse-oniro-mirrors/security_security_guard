@@ -129,8 +129,9 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams
                 return BAD_PARAM;
             }
         }
+        AuthStrategy strategy = params.timeoutAllowFlag ? AuthStrategy::ALLOW : AuthStrategy::DENY;
         session = new (std::nothrow) AuthEventSessionService(params.callerPid, params.callerUid,
-            params.defaultTimeoutStrategy, params.defaultTimeoutMs, params.callback);
+            strategy, params.defaultTimeoutMs, params.callback);
         if (session == nullptr) {
             SGLOGE("new session fail");
             return FAILED;

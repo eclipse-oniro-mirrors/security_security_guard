@@ -40,7 +40,7 @@ public:
 
     ErrCode Subscribe(int64_t eventId) override;
     ErrCode Unsubscribe(int64_t eventId) override;
-    ErrCode SetAuthResult(const AuthEvent &event, int32_t authStrategy) override;
+    ErrCode SetAuthResult(const AuthEvent &event, bool allowFlag) override;
     ErrCode Destroy() override;
 
     sptr<IRemoteObject> GetCallback() const

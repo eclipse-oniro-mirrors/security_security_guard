@@ -86,8 +86,7 @@ void AuthEventSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &s
 }
 
 int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
-    std::shared_ptr<AuthEventSubscribeClient> &client, AuthStrategy defaultTimeoutStrategy,
-    int32_t defaultTimeoutMs)
+    std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag)
 {
     SGLOGI("CreatClient");
     std::lock_guard<ffrt::mutex> lock(g_clientMutex);
@@ -113,16 +112,16 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(defaultTimeoutStrategy),
-        defaultTimeoutMs, sessionRemote);
+    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(timeoutAllowFlag),
+        sessionRemote);
     if (ret != SUCCESS || sessionRemote == nullptr) {
         SGLOGI("CreatAuthEventClient result, ret=%{public}d", ret);
         return ret != SUCCESS ? ret : FAILED;
     }
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
     client->callback_ = serviceCallback;
-    client->defaultTimeoutStrategy_ = defaultTimeoutStrategy;
-    client->defaultTimeoutMs_ = defaultTimeoutMs;
+    client->timeoutAllowFlag_ = timeoutAllowFlag;
+    client->defaultTimeoutMs_ = 400;
     {
         std::lock_guard<ffrt::mutex> memberLock(g_mutex_);
         client->sessionRemote_ = sessionRemote;
@@ -223,7 +222,7 @@ bool AuthEventSubscribeClient::RecoverSession(const std::set<int64_t> &events)
     // 服务端重启后会话丢失，重建会话并获取新的会话对象代理（沿用超时处置策略）
     sptr<IRemoteObject> newSessionRemote = nullptr;
     int32_t ret = proxy->CreatAuthEventClient(callback_,
-        static_cast<int32_t>(defaultTimeoutStrategy_), defaultTimeoutMs_, newSessionRemote);
+        static_cast<int32_t>(timeoutAllowFlag_), newSessionRemote);
     if (ret != SUCCESS || newSessionRemote == nullptr) {
         SGLOGE("ReCreatClient fail, ret=%{public}d", ret);
         return false;
@@ -315,7 +314,7 @@ int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
     return SUCCESS;
 }
 
-int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy)
+int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, bool allowFlag)
 {
     SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64,
         event.GetEventId(), event.GetSeqnum());
@@ -332,7 +331,7 @@ int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStra
         SGLOGE("session proxy is null");
         return NULL_OBJECT;
     }
-    return session->SetAuthResult(event, static_cast<int32_t>(authStrategy));
+    return session->SetAuthResult(event, allowFlag);
 }
 
 void AuthEventSubscribeClient::DeleteClient()

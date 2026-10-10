@@ -138,7 +138,7 @@ HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
     CreateClientParams params;
     params.callerPid = 5000;
     params.callerUid = 5000;
-    params.defaultTimeoutStrategy = AuthStrategy::ALLOW;
+    params.timeoutAllowFlag = 1;
     params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
     params.callback = cb;
     manager.CreatAuthEventClient(params, sessionRemote);

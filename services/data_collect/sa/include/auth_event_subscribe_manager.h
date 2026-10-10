@@ -46,7 +46,7 @@ constexpr const char* AUTH_AUDIT_EVENT_PERMISSION = "ohos.permission.kernel.AUTH
 struct CreateClientParams {
     pid_t callerPid;
     int32_t callerUid;
-    AuthStrategy defaultTimeoutStrategy;
+    int32_t timeoutAllowFlag;
     int32_t defaultTimeoutMs;
     sptr<IRemoteObject> callback;
 };
