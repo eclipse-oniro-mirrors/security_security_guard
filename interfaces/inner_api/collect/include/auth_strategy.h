@@ -16,12 +16,16 @@
 #ifndef SECURITY_GUARD_AUTH_STRATEGY_H
 #define SECURITY_GUARD_AUTH_STRATEGY_H
 
+#include <cstdint>
 namespace OHOS::Security::SecurityGuard {
 enum AuthStrategy {
     ALLOW = 0,
     DENY = 1,
     TIMEOUT = 2,
 };
+
+constexpr int64_t AUTH_RESULT_TIMEOUT_MS = 400;
+
 } // namespace OHOS::Security::SecurityGuard
 
 #endif // SECURITY_GUARD_AUTH_STRATEGY_H

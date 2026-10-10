@@ -32,11 +32,15 @@ ohos_unittest("SecurityGuardNapiTest") {
     "${sg_root_dir}/frameworks/js/napi/napi_security_event_querier.cpp",
     "${sg_root_dir}/frameworks/js/napi/security_guard_napi.cpp",
     "${sg_root_dir}/frameworks/js/napi/security_guard_sdk_adaptor.cpp",
+    "${sg_root_dir}/frameworks/js/napi/napi_block_framework.cpp",
     "${sg_root_dir}/frameworks/js/napi/test/unittest/src/securityguard_napi_test.cpp",
   ]
   defines = []
   if (security_guard_trim_model_analysis) {
     defines += [ "SECURITY_GUARD_TRIM_MODEL_ANALYSIS" ]
+  }
+  if (security_guard_auth_event_enable) {
+    defines += [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
   }
 
   deps = [

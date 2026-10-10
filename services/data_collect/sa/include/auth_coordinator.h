@@ -42,7 +42,6 @@ namespace OHOS::Security::SecurityGuard {
 constexpr size_t MAX_AUTH_PROVIDER_SIZE_ONE_PROCESS = 1;
 constexpr size_t MAX_AUTH_PROVIDER_SIZE = 16;
 constexpr size_t MAX_AUTH_REQUEST_CONCURRENT = 16;
-constexpr int64_t AUTH_RESULT_TIMEOUT_MS = 400;
 constexpr const char* AUTH_SERVICE_ACCESS_PERMISSION = "ohos.permission.AUTH_SERVICE_ACCESS";
 
 class AuthCoordinator {

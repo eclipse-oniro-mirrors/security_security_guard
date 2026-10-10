@@ -818,7 +818,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     params.callerPid = IPCSkeleton::GetCallingPid();
     params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
     params.timeoutAllowFlag = timeoutAllowFlag;
-    params.defaultTimeoutMs = 400;
+    params.defaultTimeoutMs = AUTH_RESULT_TIMEOUT_MS;
     params.callback = cb;
     return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(params, session);
 }

@@ -121,7 +121,7 @@ private:
     std::string clientId_ {};
     int64_t seqnumCounter_ {0};  // per-client seqnum 计数器
     AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
-    int32_t defaultTimeoutMs_ {400};
+    int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
     sptr<IRemoteObject> callback_ {};
     std::set<int64_t> eventIds_ {};
     bool valid_ {true};

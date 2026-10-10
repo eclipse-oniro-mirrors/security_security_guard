@@ -48,7 +48,7 @@ private:
     std::string bundleName_ {};
     std::vector<int64_t> subscribedEvents_ {};
     AuthStrategy defaultTimeoutStrategy_ {ALLOW};
-    int32_t defaultTimeoutMs_ {400};
+    int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
 };
 } // namespace OHOS::Security::SecurityGuard
 

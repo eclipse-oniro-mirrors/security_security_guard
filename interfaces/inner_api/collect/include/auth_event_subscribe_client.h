@@ -90,7 +90,7 @@ private:
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::set<int64_t> subscribedEventIds_{};
     bool timeoutAllowFlag_ {true};
-    int32_t defaultTimeoutMs_ {400};
+    int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
     bool deleted_ {false}; // 已显式销毁标记：阻止 HandleDeath 自动重建已删除的会话；销毁后各方法返回 BAD_PARAM
 };
 } // namespace OHOS::Security::SecurityGuard

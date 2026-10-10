@@ -121,7 +121,7 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
     client->callback_ = serviceCallback;
     client->timeoutAllowFlag_ = timeoutAllowFlag;
-    client->defaultTimeoutMs_ = 400;
+    client->defaultTimeoutMs_ = AUTH_RESULT_TIMEOUT_MS;
     {
         std::lock_guard<ffrt::mutex> memberLock(g_mutex_);
         client->sessionRemote_ = sessionRemote;
