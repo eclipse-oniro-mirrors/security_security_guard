@@ -14,7 +14,7 @@ security_guard 仓库已合入 AuthClient 消费者侧框架（SR20260806903405�
 - Provider 通过 `CreateAuthProvider` 接入框架，同步验证权限，异步返回会话标识
 - Provider 调 `RequestAuthResult` 请求鉴权结果，IPC 异步返回受理码，最终结果经回调通知 Promise
 - Client 回填阻断/放行结果，框架按**从严策略**（任一阻断即阻断，全部放行才放行）聚合
-- 超时 400ms 未回填的 Client 按其 `defaultTimeoutStrategy` 处置
+- 超时 400ms 未回填的 Client 按其 `timeoutStrategy` 处置
 - SA 聚合完成后经 `IAuthResultCallback` 回调通知 kit → kit 触发 `Promise<AuthResult>`
 - 新增 `ohos.permission.AUTH_SERVICE_ACCESS` 权限校验
 
@@ -78,7 +78,7 @@ classDiagram
 
     class AuthEventSessionService {
         -clientId_ string
-        -defaultTimeoutStrategy_ AuthStrategy
+        -timeoutStrategy_ AuthStrategy
         +Subscribe(eventId)
         +SetAuthResult(event, allowFlag, seqnum)
         +GetClientId()
@@ -333,7 +333,7 @@ stateDiagram-v2
     Waiting --> Completed_Allow : sentClientCount==0 且 defaultDenyCount==0, set_value(ALLOW)
     Waiting --> Timeout : 400ms 超时
 
-    Timeout --> Completed_Timeout : 按 defaultTimeoutStrategy
+    Timeout --> Completed_Timeout : 按 timeoutStrategy
     Completed_Timeout --> Completed_Deny : 存在超时 DENY Client
     Completed_Timeout --> Completed_Allow : 全部超时 ALLOW
 
@@ -423,7 +423,7 @@ sequenceDiagram
 
 ```idl
 void CreateAuthProvider([in] IRemoteObject cb, [in] String serviceId, [out] IRemoteObject provider);
-void CreatAuthEventClient([in] IRemoteObject cb, [in] int defaultTimeoutStrategy, [in] int defaultTimeoutMs, [out] IRemoteObject session);
+void CreatAuthEventClient([in] IRemoteObject cb, [in] int timeoutAllowFlag, [out] IRemoteObject session);
 ```
 
 ### 4.2 Provider 会话 IDL（AuthProviderSession.idl）
@@ -439,7 +439,7 @@ void Destroy();
 ```idl
 void Subscribe([in] long eventId);
 void Unsubscribe([in] long eventId);
-void SetAuthResult([in] AuthEvent event, [in] boolean allowFlag, [in] long seqnum);
+void SetAuthResult([in] AuthEvent event, [in] boolean allowFlag);
 void Destroy();
 ```
 
@@ -553,7 +553,7 @@ cJSON_Delete(root);
      seqnumToRequestId_[seqnumKey] = requestId
      seqnumToSession_[seqnumKey] = session
      sentClientCount++
-     IF defaultTimeoutStrategy==DENY: defaultDenyCount++
+     IF timeoutStrategy==DENY: defaultDenyCount++
 
 3. 推送 OnAuthEvent 给所有 Client（含降级）
 
@@ -577,7 +577,7 @@ cJSON_Delete(root);
 
 6. 超时(future 超时):
    FOR 每个未回填 clientId:
-     按 defaultTimeoutStrategy:
+     按 timeoutStrategy:
        DENY → clientResults=DENY, mergedAuthStrategy=DENY
        ALLOW → clientResults=TIMEOUT
    HA 打点
