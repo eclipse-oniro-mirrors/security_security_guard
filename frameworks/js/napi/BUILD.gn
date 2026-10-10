@@ -28,6 +28,7 @@ ohos_shared_library("securityguard_napi") {
     "napi_security_event_querier.cpp",
     "security_guard_napi.cpp",
     "security_guard_sdk_adaptor.cpp",
+    "napi_block_framework.cpp"
   ]
   defines = []
   if (security_guard_trim_model_analysis) {
@@ -35,7 +36,6 @@ ohos_shared_library("securityguard_napi") {
   }
   if (security_guard_auth_event_enable) {
     defines += [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
-    sources += [ "napi_block_framework.cpp" ]
   }
   sanitize = {
     integer_overflow = true
