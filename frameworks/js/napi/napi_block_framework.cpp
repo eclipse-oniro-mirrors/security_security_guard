@@ -22,6 +22,7 @@
 #include "ffrt.h"
 #include "security_guard_log.h"
 #include "security_guard_sdk_adaptor.h"
+#include "security_guard_define.h"
 
 using namespace OHOS::Security::SecurityGuard;
 
@@ -40,7 +41,6 @@ napi_value OHOS::Security::SecurityGuard::NapiDestroyAuthProvider(napi_env env, 
 }
 #else
 
-#include "security_guard_define.h"
 
 namespace OHOS::Security::SecurityGuard {
 bool ParseServiceId(napi_env env, napi_value jsVal, std::string &serviceId);
@@ -423,8 +423,8 @@ bool ParseCreateProviderParams(napi_env env, napi_callback_info info,
     return true;
 }
 
-// 创建 RequestAuthResult 异步工作并返回 Promise
-napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
+// 解析 RequestAuthResult 入参并创建上下文
+RequestAuthResultContext *CreateAuthResultContext(napi_env env, napi_callback_info info)
 {
     size_t argc = NAPI_REQUEST_AUTH_RESULT_ARGS_CNT;
     napi_value argv[NAPI_REQUEST_AUTH_RESULT_ARGS_CNT] = {nullptr};
@@ -460,7 +460,16 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     }
     context->resultCallback->RegistCallBack(
         [context](const AuthResult &authResult) { context->result = authResult; });
+    return context;
+}
 
+// 创建 RequestAuthResult 异步工作并返回 Promise
+napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
+{
+    auto *context = CreateAuthResultContext(env, info);
+    if (context == nullptr) {
+        return nullptr;
+    }
     napi_value promise = nullptr;
     if (napi_create_promise(env, &context->deferred, &promise) != napi_ok) {
         delete context;

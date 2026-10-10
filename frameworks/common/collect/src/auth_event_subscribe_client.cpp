@@ -317,8 +317,9 @@ int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
 
 int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, AuthStrategy authStrategy)
 {
-    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64, event.GetEventId(), event.GetSeqnum());
-    sptr<AuthEventSession> session {};
+    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64,
+        event.GetEventId(), event.GetSeqnum());
+    sptr<AuthEventSession> session{};
     {
         std::lock_guard<ffrt::mutex> lock(g_mutex_);
         if (deleted_) {
