@@ -463,7 +463,7 @@ ErrorCode DataCollection::LoadCollector(std::string path, const SecurityEventRul
     }
     int result = collector->Query(ruler, events);
     if (result != 0) {
-        LOGD("Failed to start collector");
+        LOGE("Failed to start collector");
         return FAILED;
     }
     LOGD("End LoadCollector");
@@ -479,16 +479,16 @@ int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler>
         return FAILED;
     }
     for (const auto &ruler : rulers) {
-        LOGD("QuerySecurityEvent eventId is 0x%{public}" PRIx64, ruler.GetEventId());
+        LOGI("QuerySecurityEvent eventId is 0x%{public}" PRIx64, ruler.GetEventId());
         std::string collectorPath;
         ErrorCode ret = GetCollectorPath(ruler.GetEventId(), collectorPath);
         if (ret != SUCCESS) {
-            LOGD("GetCollectorPath failed, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
+            LOGE("GetCollectorPath failed, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
             return FAILED;
         }
         ret = LoadCollector(collectorPath, ruler, events);
         if (ret != SUCCESS) {
-            LOGD("Load collector failed, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
+            LOGE("Load collector failed, eventId is 0x%{public}" PRIx64, ruler.GetEventId());
             return FAILED;
         }
     }

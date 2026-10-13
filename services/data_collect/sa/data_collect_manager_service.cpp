@@ -492,7 +492,7 @@ bool DataCollectManagerService::QueryEventByRuler(sptr<ISecurityEventQueryCallba
 ErrCode DataCollectManagerService::QuerySecurityEventById(const std::vector<SecurityCollector::SecurityEventRuler>
     &rulers, const sptr<IRemoteObject> &cb, const std::string &eventGroup)
 {
-    SGLOGD("enter DataCollectManagerService QuerySecurityEventById");
+    SGLOGI("enter DataCollectManagerService QuerySecurityEventById");
     int32_t ret = IsEventGroupHasPublicPermission(eventGroup, std::vector<int64_t>{});
     if (ret != SUCCESS) {
         return ret;
@@ -519,7 +519,7 @@ ErrCode DataCollectManagerService::QuerySecurityEventById(const std::vector<Secu
         }
         if (!errEventIds.empty()) {
             std::string message = "QuerySecurityEvent " + errEventIds + "failed";
-            SGLOGD("QuerySecurityEvent failed");
+            SGLOGE("QuerySecurityEvent failed");
             proxy->OnError(message);
             return;
         }
