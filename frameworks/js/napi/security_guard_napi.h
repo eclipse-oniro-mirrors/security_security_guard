@@ -138,7 +138,17 @@ enum JsErrCode : int32_t {
     JS_ERR_BAD_PARAM = 401,
     JS_ERR_API_SUPPORT_ERROR = 801,
     JS_ERR_SYS_ERR = 21200001,
+    JS_ERR_AUTH_PROVIDER_INTERNAL = 27000001,
+    JS_ERR_AUTH_PROVIDER_EXCEED_PROCESS = 27000002,
+    JS_ERR_AUTH_PROVIDER_EXCEED_GLOBAL = 27000003,
+    JS_ERR_AUTH_REQUEST_EXCEED_LIMIT = 27000004,
 };
+
+// 错误码转换（供 napi_block_framework.cpp 共享使用）
+int32_t ConvertToJsErrCode(int32_t code);
+std::string ConvertToJsErrMsg(int32_t code);
+napi_value GenerateBusinessError(napi_env env, int32_t code);
+napi_value GenerateBusinessError(napi_env env, int32_t code, const std::string &msg);
 
 class SubscriberPtr;
 struct CommonAsyncContext {

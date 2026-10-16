@@ -16,6 +16,8 @@
 #include "auth_event_session_service.h"
 
 #include <cinttypes>
+#include <chrono>
+#include <string>
 
 #include "ipc_skeleton.h"
 #ifdef HICOLLIE_ENABLE
@@ -38,10 +40,15 @@ constexpr uint32_t XCOLLIE_FLAG = 0;
 #endif
 }
 
-AuthEventSessionService::AuthEventSessionService(pid_t callerPid, int32_t callerUid, bool timeoutAllowFlag,
-    const sptr<IRemoteObject> &callback)
-    : pid_(callerPid), uid_(callerUid), timeoutAllowFlag_(timeoutAllowFlag), callback_(callback)
+AuthEventSessionService::AuthEventSessionService(pid_t callerPid, int32_t callerUid,
+    AuthStrategy defaultTimeoutStrategy, int32_t defaultTimeoutMs, const sptr<IRemoteObject> &callback)
+    : pid_(callerPid), uid_(callerUid), defaultTimeoutStrategy_(defaultTimeoutStrategy),
+      defaultTimeoutMs_(defaultTimeoutMs), callback_(callback)
 {
+    // 按 ConstructClientId 范式生成 clientId（时间戳 + 指针 hash）
+    std::string timeStr = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    std::string ptrStr = std::to_string(reinterpret_cast<int64_t>(callback.GetRefPtr()));
+    clientId_ = std::to_string(std::hash<std::string>{}(timeStr + ptrStr));
 }
 
 ErrCode AuthEventSessionService::Subscribe(int64_t eventId)
@@ -89,8 +96,8 @@ ErrCode AuthEventSessionService::Unsubscribe(int64_t eventId)
 
 ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allowFlag)
 {
-    SGLOGI("eventId=%{public}" PRId64 ", allowFlag=%{public}d", event.GetEventId(),
-        static_cast<int32_t>(allowFlag));
+    SGLOGI("eventId=%{public}" PRId64 ", allowFlag=%{public}d, seqnum=%{public}" PRId64, event.GetEventId(),
+        static_cast<int32_t>(allowFlag), event.GetSeqnum());
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
@@ -104,12 +111,13 @@ ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allo
         return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_AuthSessionSetAuthResult", XCOLLIE_FLAG);
-    return AuthEventSubscribeManager::GetInstance().SetAuthResult(this, event, allowFlag);
+    AuthStrategy authStrategy = allowFlag ? AuthStrategy::ALLOW : AuthStrategy::DENY;
+    return AuthEventSubscribeManager::GetInstance().SetAuthResult(this, event, static_cast<int32_t>(authStrategy));
 }
 
 ErrCode AuthEventSessionService::Destroy()
 {
-    SGLOGI("enter");
+    SGLOGI("Destroy");
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;

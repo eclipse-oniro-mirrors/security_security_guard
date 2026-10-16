@@ -79,8 +79,19 @@ ohos_shared_library("libsg_collect_sdk") {
       "src/auth_event_callback_service.cpp",
       "src/auth_event_callback_stub.cpp",
       "src/auth_event_subscribe_client.cpp",
+      "src/auth_event_info.cpp",
+      "src/auth_client_status.cpp",
+      "src/auth_client_info.cpp",
+      "src/client_auth_result.cpp",
+      "src/auth_result.cpp",
+      "src/auth_provider_callback_service.cpp",
+      "src/auth_provider_callback_stub.cpp",
+      "src/auth_provider_subscribe_client.cpp",
+      "src/auth_result_callback_stub.cpp",
+      "src/auth_result_callback_service.cpp",
     ]
     deps += [ "${sg_root_dir}/services/data_collect/idl:auth_event_session_sa_proxy" ]
+    deps += [ "${sg_root_dir}/services/data_collect/idl:auth_provider_session_sa_proxy" ]
   }
 
   sanitize = {

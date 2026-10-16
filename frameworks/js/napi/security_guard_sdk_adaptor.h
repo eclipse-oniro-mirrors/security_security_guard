@@ -25,6 +25,11 @@
 #include "i_collector_subscriber.h"
 #include "acquire_data_manager_callback_service.h"
 #include "sg_classify_client.h"
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+#include "auth_event_info.h"
+#include "auth_provider_subscribe_client.h"
+#include "auth_result.h"
+#endif
 namespace OHOS::Security::SecurityGuard {
 class SecurityGuardSdkAdaptor {
 public:
@@ -40,6 +45,12 @@ public:
     static int32_t Subscribe(const std::shared_ptr<SecurityCollector::ICollectorSubscriber> &subscriber);
     static int32_t Unsubscribe(const std::shared_ptr<SecurityCollector::ICollectorSubscriber> &subscriber);
     static int32_t ConfigUpdate(const SecurityGuard::SecurityConfigUpdateInfo &updateInfo);
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+    static int32_t CreateProvider(AuthProviderCallback callback, const std::string &serviceId,
+        std::shared_ptr<AuthProviderSubscribeClient> &provider);
+    static int32_t RequestAuthResult(std::shared_ptr<AuthProviderSubscribeClient> provider,
+        const AuthEventInfo &event, AuthResultCallback callback);
+#endif
 private:
     SecurityGuardSdkAdaptor() = delete;
     ~SecurityGuardSdkAdaptor() = delete;

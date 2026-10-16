@@ -34,7 +34,12 @@ int32_t AuthEventCallbackStub::OnRemoteRequest(uint32_t code, MessageParcel &dat
             SGLOGE("read auth event fail");
             return BAD_PARAM;
         }
-        return OnAuthEvent(*event);
+        int64_t seqnum = 0;
+        if (!data.ReadInt64(seqnum)) {
+            SGLOGE("read seqnum fail");
+            return BAD_PARAM;
+        }
+        return OnAuthEvent(*event, seqnum);
     }
     return IPCObjectStub::OnRemoteRequest(code, data, reply, option);
 }

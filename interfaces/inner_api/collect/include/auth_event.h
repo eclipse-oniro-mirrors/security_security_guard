@@ -16,6 +16,7 @@
 #ifndef SECURITY_GUARD_AUTH_EVENT_H
 #define SECURITY_GUARD_AUTH_EVENT_H
 
+#include <cstdint>
 #include <string>
 
 #include "parcel.h"
@@ -29,8 +30,10 @@ public:
     ~AuthEvent() override = default;
 
     int64_t GetEventId() const { return eventId_; };
+    int64_t GetSeqnum() const { return seqnum_; };
     std::string GetContent() const { return content_; };
     std::string GetMetadata() const { return metadata_; };
+    void SetSeqnum(int64_t seqnum) { seqnum_ = seqnum; };
     void SetContent(const std::string &content) { content_ = content; };
     void SetMetadata(const std::string &metadata) { metadata_ = metadata; };
     bool Marshalling(Parcel& parcel) const override;
@@ -39,6 +42,7 @@ public:
 
 private:
     int64_t eventId_ = 0;
+    int64_t seqnum_ = 0;
     std::string content_ {};
     std::string metadata_ {};
 };

@@ -16,6 +16,7 @@
 #include "auth_event_subscribe_client.h"
 
 #include <chrono>
+#include <cinttypes>
 
 #include "ffrt.h"
 #include "iservice_registry.h"
@@ -87,7 +88,7 @@ void AuthEventSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &s
 int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag)
 {
-    SGLOGI("enter");
+    SGLOGI("CreatClient");
     std::lock_guard<ffrt::mutex> lock(g_clientMutex);
     if (callback == nullptr) {
         SGLOGE("callback is nullptr");
@@ -111,7 +112,8 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, timeoutAllowFlag, sessionRemote);
+    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(timeoutAllowFlag),
+        sessionRemote);
     if (ret != SUCCESS || sessionRemote == nullptr) {
         SGLOGI("CreatAuthEventClient result, ret=%{public}d", ret);
         return ret != SUCCESS ? ret : FAILED;
@@ -119,6 +121,7 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
     client->callback_ = serviceCallback;
     client->timeoutAllowFlag_ = timeoutAllowFlag;
+    client->defaultTimeoutMs_ = AUTH_RESULT_TIMEOUT_MS;
     {
         std::lock_guard<ffrt::mutex> memberLock(g_mutex_);
         client->sessionRemote_ = sessionRemote;
@@ -218,7 +221,8 @@ bool AuthEventSubscribeClient::RecoverSession(const std::set<int64_t> &events)
     }
     // 服务端重启后会话丢失，重建会话并获取新的会话对象代理（沿用超时处置策略）
     sptr<IRemoteObject> newSessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(callback_, timeoutAllowFlag_, newSessionRemote);
+    int32_t ret = proxy->CreatAuthEventClient(callback_,
+        static_cast<int32_t>(timeoutAllowFlag_), newSessionRemote);
     if (ret != SUCCESS || newSessionRemote == nullptr) {
         SGLOGE("ReCreatClient fail, ret=%{public}d", ret);
         return false;
@@ -256,7 +260,7 @@ bool AuthEventSubscribeClient::SwitchSessionRemote(const sptr<IRemoteObject> &ne
 
 int32_t AuthEventSubscribeClient::Subscribe(int64_t eventId)
 {
-    SGLOGI("enter");
+    SGLOGI("SetAuthResult");
     sptr<AuthEventSession> session {};
     {
         std::lock_guard<ffrt::mutex> lock(g_mutex_);
@@ -284,7 +288,7 @@ int32_t AuthEventSubscribeClient::Subscribe(int64_t eventId)
 
 int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
 {
-    SGLOGI("enter");
+    SGLOGI("Unsubscribe, eventId=%{public}" PRId64, eventId);
     sptr<AuthEventSession> session {};
     {
         std::lock_guard<ffrt::mutex> lock(g_mutex_);
@@ -312,8 +316,9 @@ int32_t AuthEventSubscribeClient::Unsubscribe(int64_t eventId)
 
 int32_t AuthEventSubscribeClient::SetAuthResult(const AuthEvent &event, bool allowFlag)
 {
-    SGLOGI("enter");
-    sptr<AuthEventSession> session {};
+    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64,
+        event.GetEventId(), event.GetSeqnum());
+    sptr<AuthEventSession> session{};
     {
         std::lock_guard<ffrt::mutex> lock(g_mutex_);
         if (deleted_) {

@@ -31,6 +31,14 @@ idl_gen_interface("auth_event_session_interface") {
   part_name = "security_guard"
 }
 
+idl_gen_interface("auth_provider_session_interface") {
+  sources = [ "AuthProviderSession.idl" ]
+  log_domainid = "0xD002F07"
+  log_tag = "AUTH_PROVIDER_SESSION"
+  subsystem_name = "security"
+  part_name = "security_guard"
+}
+
 config("data_collect_manager_service_public_config") {
   include_dirs = [
     "${target_gen_dir}",
@@ -41,6 +49,13 @@ config("data_collect_manager_service_public_config") {
 }
 
 config("auth_event_session_public_config") {
+  include_dirs = [
+    "${target_gen_dir}",
+    "${sg_root_dir}/interfaces/inner_api/collect/include",
+  ]
+}
+
+config("auth_provider_session_public_config") {
   include_dirs = [
     "${target_gen_dir}",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
@@ -123,6 +138,74 @@ ohos_source_set("auth_event_session_sa_stub") {
   sources += filter_include(output_values, [ "*stub.cpp" ])
   public_configs = [ ":auth_event_session_public_config" ]
   deps = [ ":auth_event_session_interface" ]
+  external_deps = [
+    "c_utils:utils",
+    "hilog:libhilog",
+    "ipc:ipc_single",
+  ]
+
+  sanitize = {
+    integer_overflow = true
+    ubsan = true
+    boundary_sanitize = true
+    cfi = true
+    cfi_cross_dso = true
+    debug = false
+  }
+  branch_protector_ret = "pac_ret"
+  cflags = [
+    "-D_FORITFY_SOURCE=2",
+    "-Os",
+  ]
+  cflags_cc = [
+    "-D_FORITFY_SOURCE=2",
+    "-Os",
+  ]
+
+  subsystem_name = "security"
+  part_name = "security_guard"
+}
+
+ohos_source_set("auth_provider_session_sa_stub") {
+  output_values = get_target_outputs(":auth_provider_session_interface")
+  sources = []
+  sources += filter_include(output_values, [ "*stub.cpp" ])
+  public_configs = [ ":auth_provider_session_public_config" ]
+  deps = [ ":auth_provider_session_interface" ]
+  external_deps = [
+    "c_utils:utils",
+    "hilog:libhilog",
+    "ipc:ipc_single",
+  ]
+
+  sanitize = {
+    integer_overflow = true
+    ubsan = true
+    boundary_sanitize = true
+    cfi = true
+    cfi_cross_dso = true
+    debug = false
+  }
+  branch_protector_ret = "pac_ret"
+  cflags = [
+    "-D_FORITFY_SOURCE=2",
+    "-Os",
+  ]
+  cflags_cc = [
+    "-D_FORITFY_SOURCE=2",
+    "-Os",
+  ]
+
+  subsystem_name = "security"
+  part_name = "security_guard"
+}
+
+ohos_source_set("auth_provider_session_sa_proxy") {
+  output_values = get_target_outputs(":auth_provider_session_interface")
+  sources = []
+  sources += filter_include(output_values, [ "*proxy.cpp" ])
+  public_configs = [ ":auth_provider_session_public_config" ]
+  deps = [ ":auth_provider_session_interface" ]
   external_deps = [
     "c_utils:utils",
     "hilog:libhilog",

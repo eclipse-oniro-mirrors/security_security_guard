@@ -38,10 +38,19 @@ enum class DataCollectManagerInterfaceCode {
     // 会话内方法（Subscribe/Unsubscribe/SetAuthResult/Destroy）由独立 AuthEventSession.idl
     // 生成枚举 AuthEventSessionIpcCode 承载，不在此登记。
     CMD_CREAT_AUTH_EVENT_CLIENT = 13,
+    CMD_CREATE_AUTH_PROVIDER = 14,
 };
 
 enum class AuthEventCallbackInterfaceCode {
     CMD_ON_AUTH_EVENT = 1,
+};
+
+enum class AuthProviderCallbackInterfaceCode {
+    CMD_ON_CLIENT_STATUS_CHANGED = 1,
+};
+
+enum class AuthResultCallbackInterfaceCode {
+    CMD_ON_AUTH_RESULT = 1,
 };
 
 enum class DataCollectManagerCallbackInterfaceCode {

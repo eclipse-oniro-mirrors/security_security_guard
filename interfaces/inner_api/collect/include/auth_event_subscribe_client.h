@@ -26,6 +26,7 @@
 
 #include "auth_event.h"
 #include "auth_event_callback_service.h"
+#include "auth_strategy.h"
 #include "iremote_object.h"
 
 namespace OHOS::Security::SecurityGuard {
@@ -43,7 +44,7 @@ public:
     ~AuthEventSubscribeClient();
     // 创建会话：服务端创建会话对象并经 [out] 下发远端引用（sessionRemote_），
     // 一个 client 对象 = 一个服务端会话，会话身份由 binder handle 承载，无 clientId。
-    // timeoutAllowFlag：回填超时处置策略（默认放行），随会话保存，供超时需求（另一需求）消费
+    // timeoutAllowFlag 随会话保存，供超时处置消费；内部转换为 AuthStrategy
     static int32_t CreatClient(AuthEventCallback callback,
         std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag = true);
     int32_t Subscribe(int64_t eventId);
@@ -88,7 +89,8 @@ private:
     sptr<IRemoteObject> sessionRemote_{}; // 服务端下发的会话对象远端引用，CreatClient 时填充
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::set<int64_t> subscribedEventIds_{};
-    bool timeoutAllowFlag_ {true}; // 回填超时处置策略（服务端死亡重连重建会话时沿用）
+    bool timeoutAllowFlag_ {true};
+    int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
     bool deleted_ {false}; // 已显式销毁标记：阻止 HandleDeath 自动重建已删除的会话；销毁后各方法返回 BAD_PARAM
 };
 } // namespace OHOS::Security::SecurityGuard

@@ -28,7 +28,7 @@ class AuthEventCallbackProxy : public IRemoteProxy<IAuthEventCallback>, public N
 public:
     explicit AuthEventCallbackProxy(const sptr<IRemoteObject> &impl);
     ~AuthEventCallbackProxy() override = default;
-    int32_t OnAuthEvent(const AuthEvent &event) override;
+    int32_t OnAuthEvent(const AuthEvent &event, int64_t seqnum) override;
 
 private:
     static inline BrokerDelegator<AuthEventCallbackProxy> delegator_;

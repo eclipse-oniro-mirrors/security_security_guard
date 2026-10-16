@@ -34,6 +34,7 @@
 #include "acquire_data_subscribe_manager.h"
 #include "bigdata.h"
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+#include "auth_coordinator.h"
 #include "auth_event_subscribe_manager.h"
 #endif
 #include "collector_manager.h"
@@ -798,34 +799,68 @@ int32_t DataCollectManagerService::IsCallerHasApiPermission(const std::string &a
     return SUCCESS;
 }
 
+// 验收: Client 扩展参数 — CreatAuthEventClient 参数从 timeoutAllowFlag 改为 defaultTimeoutStrategy + defaultTimeoutMs
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
-ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb, bool timeoutAllowFlag,
-    sptr<IRemoteObject> &session)
+ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
+    int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
-    SGLOGI("enter");
+    SGLOGI("CreatAuthEventClient, timeoutAllowFlag=%{public}d", timeoutAllowFlag);
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
     }
     if (cb == nullptr) {
         SGLOGE("cb is null");
-        return NULL_OBJECT;
+        return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_CreatAuthEventClient", XCOLLIE_FLAG);
-    pid_t callerPid = IPCSkeleton::GetCallingPid();
-    int32_t callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
-    return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(callerPid, callerUid, timeoutAllowFlag,
-        cb, session);
+    CreateClientParams params;
+    params.callerPid = IPCSkeleton::GetCallingPid();
+    params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
+    params.timeoutAllowFlag = timeoutAllowFlag;
+    params.defaultTimeoutMs = AUTH_RESULT_TIMEOUT_MS;
+    params.callback = cb;
+    return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(params, session);
 }
 #else
-// AuthEvent 框架未启用：IDL 生成的纯虚方法仍需实现以保持可编译，一律拒绝（session 不下发）
-ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb, bool timeoutAllowFlag,
-    sptr<IRemoteObject> &session)
+ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
+    int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
     (void)cb;
     (void)timeoutAllowFlag;
     session = nullptr;
-    return FAILED;
+    return API_SUPPORT_ERROR;
+}
+#endif
+
+// 验收: Provider 接入 — 创建 Provider 会话入口，转调 AuthCoordinator
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> &cb,
+    const std::string &serviceId, sptr<IRemoteObject> &provider)
+{
+    SGLOGI("CreateAuthProvider, serviceId=%{public}s", serviceId.c_str());
+    // IsProviderAllowed 内含系统应用校验(202) + 权限校验(201)
+    int32_t code = AuthCoordinator::GetInstance().IsProviderAllowed();
+    if (code != SUCCESS) {
+        return code;
+    }
+    if (cb == nullptr) {
+        SGLOGE("cb is null");
+        return BAD_PARAM;
+    }
+    XCollie_Utils xcollie("SGIPC_CreateAuthProvider", XCOLLIE_FLAG);
+    pid_t callerPid = IPCSkeleton::GetCallingPid();
+    int32_t callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
+    return AuthCoordinator::GetInstance().CreateAuthProvider(callerPid, callerUid, cb, serviceId, provider);
+}
+#else
+ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> &cb,
+    const std::string &serviceId, sptr<IRemoteObject> &provider)
+{
+    (void)cb;
+    (void)serviceId;
+    provider = nullptr;
+    return API_SUPPORT_ERROR;
 }
 #endif
 

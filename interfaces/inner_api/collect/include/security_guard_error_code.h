@@ -44,6 +44,11 @@ using ErrorCode = enum {
     CLIENT_EXCEED_GLOBAL_LIMIT = 1008,  // client session count exceeds global limit
     FILE_NOT_FOUND = 1011,       // same as ext
     KERNEL_NOT_SUPPORT = 1012,   // kernel does not support this feature
+    // AuthProvider 错误码
+    AUTH_PROVIDER_INTERNAL_ERROR = 27000001,       // Provider 内部错误
+    AUTH_PROVIDER_EXCEED_PROCESS_LIMIT = 27000002, // Provider 进程会话超限
+    AUTH_PROVIDER_EXCEED_GLOBAL_LIMIT = 27000003,  // Provider 全局会话超限
+    AUTH_REQUEST_EXCEED_LIMIT = 27000004,          // RequestAuthResult 请求超过上限
 };
 } // namespace OHOS::Security::SecurityGuard
 

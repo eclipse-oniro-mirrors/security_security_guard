@@ -22,6 +22,7 @@
 
 #include "auth_event.h"
 #include "auth_event_session_stub.h"
+#include "auth_strategy.h"
 #include "iremote_object.h"
 #include "nocopyable.h"
 
@@ -33,8 +34,8 @@ namespace OHOS::Security::SecurityGuard {
 // 管理器锁进行（本类自身无锁，IsEventSubscribed 仅允许在管理器锁内调用）。
 class AuthEventSessionService : public AuthEventSessionStub, public NoCopyable {
 public:
-    AuthEventSessionService(pid_t callerPid, int32_t callerUid, bool timeoutAllowFlag,
-        const sptr<IRemoteObject> &callback);
+    AuthEventSessionService(pid_t callerPid, int32_t callerUid, AuthStrategy defaultTimeoutStrategy,
+        int32_t defaultTimeoutMs, const sptr<IRemoteObject> &callback);
     ~AuthEventSessionService() override = default;
 
     ErrCode Subscribe(int64_t eventId) override;
@@ -59,9 +60,26 @@ public:
 
     // 回填超时处置策略（创建会话时由客户端设置，默认放行）。
     // 本期仅保存不消费：超时判断与处置由另一需求承接，届时按会话读取该策略落值。
-    bool GetTimeoutAllowFlag() const
+    AuthStrategy GetTimeoutStrategy() const
     {
-        return timeoutAllowFlag_;
+        return defaultTimeoutStrategy_;
+    }
+
+    int32_t GetDefaultTimeoutMs() const
+    {
+        return defaultTimeoutMs_;
+    }
+
+    // 客户端唯一标识，用于结果聚合和状态通知
+    std::string GetClientId() const
+    {
+        return clientId_;
+    }
+
+    // per-client seqnum 递增（每个客户端接收事件数量的递增数字）
+    int64_t GenerateSeqnum()
+    {
+        return ++seqnumCounter_;
     }
 
     // 管理器锁内调用：分发时按 eventId 匹配命中会话
@@ -100,7 +118,10 @@ public:
 private:
     pid_t pid_ {};
     int32_t uid_ {};
-    bool timeoutAllowFlag_ {true};
+    std::string clientId_ {};
+    int64_t seqnumCounter_ {0};  // per-client seqnum 计数器
+    AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
+    int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
     sptr<IRemoteObject> callback_ {};
     std::set<int64_t> eventIds_ {};
     bool valid_ {true};
