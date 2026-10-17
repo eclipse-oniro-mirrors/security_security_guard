@@ -71,11 +71,11 @@ HWTEST_F(AuthEventSdkTest, CallbackServiceOnAuthEvent001, TestSize.Level0)
     int64_t receivedId = 0;
     service->RegistCallBack([&receivedId](const AuthEvent &event) { receivedId = event.GetEventId(); });
     AuthEvent event(1001, "content", "metadata");
-    EXPECT_EQ(service->OnAuthEvent(event), SUCCESS);
+    EXPECT_EQ(service->OnAuthEvent(event, 1), SUCCESS);
     EXPECT_EQ(1001L, receivedId);
     // 清空回调后不再触发
     service->ClearCallBack();
-    EXPECT_EQ(service->OnAuthEvent(event), FAILED);
+    EXPECT_EQ(service->OnAuthEvent(event, 2), FAILED);
     EXPECT_EQ(1001L, receivedId);
     delete service;
 }

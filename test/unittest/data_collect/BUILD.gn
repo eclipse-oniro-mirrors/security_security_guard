@@ -320,6 +320,7 @@ ohos_unittest("SecurityGuardDataCollectSaTest") {
   external_deps = [
     "c_utils:utils",
     "bounds_checking_function:libsec_shared",
+    "cJSON:cjson",
     "ffrt:libffrt",
     "googletest:gmock",
     "hilog:libhilog",

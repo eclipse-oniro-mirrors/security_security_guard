@@ -44,7 +44,9 @@ public:
         std::lock_guard<ffrt::mutex> lock(coordinator.mutex_);
         coordinator.providerSessions_.clear();
         coordinator.routingContexts_.clear();
-        coordinator.seqnumToEventId_.clear();
+        for (auto &shard : coordinator.seqnumShards_) {
+            shard.seqnumToCtx.clear();
+        }
     }
     void TearDown() override {}
 };
@@ -102,6 +104,5 @@ HWTEST_F(AuthProviderSessionServiceTest, DestroyAfterInvalid001, TestSize.Level0
 
     coordinator.DestroyAuthProvider(provider);
 }
-} // namespace OHOS::Security::SecurityGuard
 
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE
