@@ -381,6 +381,13 @@ void AuthCoordinator::HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr)
         ctx.completed = true;
         SGLOGI("all timeout clients ALLOW, mergedAuthStrategy=ALLOW, eventId=%{public}" PRId64, ctx.eventId);
     }
+    // 风格对齐 EvaluateStrictPolicy: 完成时通知 resultPromise 唤醒 WaitForCompletion 的 future.wait_for
+    // HandleTimeout 仅在 wait_for 超时(未 set_value)时被调用, 此处 set_value 一定不会重复
+    if (ctx.resultPromise != nullptr) {
+        AuthResult result;
+        result.SetMergedAuthStrategy(ctx.mergedAuthStrategy);
+        ctx.resultPromise->set_value(result);
+    }
 }
 
 // P0-1: promise/future 等待 — ctxPtr 持有 shared_ptr 保证 ctx 存活，wait_for 不持锁

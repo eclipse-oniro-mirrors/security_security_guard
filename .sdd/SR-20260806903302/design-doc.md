@@ -798,7 +798,7 @@ if (security_guard_auth_event_enable) {
 
 **RoutingContext 生命周期（P0-1）**：`routingContexts_` 存 `shared_ptr<RoutingContext>`，`SetAuthResult` 在分片锁内拷贝 `shared_ptr` 后释放分片锁，再用 per-request `ctxMutex` 修改字段。即使 `WaitForCompletion` 已 `erase` map 条目，`SetAuthResult` 持有的 `shared_ptr` 仍保证 ctx 存活到函数结束，消除 UAF。
 
-**HandleTimeout 数据竞争修复（P0-2）**：`HandleTimeout` 全程持 `ctxMutex`，与 `SetAuthResult` 互斥访问 `clientResults`/`completed`/`mergedAuthStrategy` 等字段。`HandleTimeout` 设置 `completed=true` 后，迟到的 `SetAuthResult` 检查 `completed` 直接返回，不再修改字段。
+**HandleTimeout 数据竞争修复（P0-2）**：`HandleTimeout` 全程持 `ctxMutex`，与 `SetAuthResult` 互斥访问 `clientResults`/`completed`/`mergedAuthStrategy` 等字段。`HandleTimeout` 设置 `completed=true` 后，迟到的 `SetAuthResult` 检查 `completed` 直接返回，不再修改字段。`HandleTimeout` 末尾与 `EvaluateStrictPolicy` 风格对齐，调用 `resultPromise->set_value(result)` 唤醒 `WaitForCompletion` 的 `future.wait_for`；因 `HandleTimeout` 仅在 `wait_for` 超时（未 set_value）时被调用，此处 set_value 不会重复。
 
 **Provider 生命周期（P0-3）**：`ProcessAuthResultAsync` 捕获 `sptr<AuthProviderSessionService>` 而非裸指针，`RequestAuthResult` 在 `mutex_` 锁内从 `providerSessions_` 查找 sptr 传入。ffrt 任务执行期间 provider 不会被析构，`IsValid()` 检查 + sptr 引用计数双重保证。
 
