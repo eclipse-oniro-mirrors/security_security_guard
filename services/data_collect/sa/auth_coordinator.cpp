@@ -464,7 +464,8 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
         auto ctxPtr = std::make_shared<RoutingContext>();
         ctxPtr->eventId = event.GetEventId();
         ctxPtr->eventContent = event.GetContent();
-        ctxPtr->eventMetadata = event.GetMetadata();
+        // eventMetadata 留空: metadata 是 SA 在 PushEventsToClients 中 per-client 生成的 seqNum=N cJSON,
+        // 不是 AuthEventInfo 自带的(AuthEventInfo 无 metadata 字段); per-request 级别无法存储 per-client 的多值
         ctxPtr->resultPromise = std::make_shared<std::promise<AuthResult>>();
         SGLOGD("routing context created, requestId=%{public}" PRId64 ", contentLen=%{public}zu",
             requestId, ctxPtr->eventContent.size());

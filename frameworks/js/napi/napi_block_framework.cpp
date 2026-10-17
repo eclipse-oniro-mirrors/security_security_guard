@@ -14,7 +14,7 @@
  */
 
 #include "napi_block_framework.h"
-
+#include <cinttypes>
 #include <memory>
 #include <vector>
 

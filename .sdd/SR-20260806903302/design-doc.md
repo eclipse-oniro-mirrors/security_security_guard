@@ -503,7 +503,7 @@ class AuthEvent : public Parcelable {
 struct RoutingContext {
     int64_t eventId;
     std::string eventContent;      // 原始事件内容, 供超时 HA 打点
-    std::string eventMetadata;      // 原始事件 metadata, 供超时 HA 打点
+    std::string eventMetadata;      // 留空: metadata 是 SA per-client 生成的 seqNum cJSON, 非 AuthEventInfo 自带
     size_t sentClientCount;                    // 待回填计数
     size_t defaultDenyCount;                   // 默认阻断计数
     map<string, AuthStrategy> clientResults;   // clientId → 回填策略
@@ -792,7 +792,7 @@ if (security_guard_auth_event_enable) {
 | 超时未回填 | SA 400ms 超时，Client 未回填时 | 应用信息(pid/uid) + 事件信息(eventId/content/metadata) + 超时时间(timeoutMs) | `AuthEventReporter::ReportTimeoutResult` |
 
 - 两类打点均经 `AuthEventReporter::ReportToHa` 统一接入 HA lite 客户端（`ha_client_lite_api.h` 依赖进入构建环境后在此函数完成接入）
-- RoutingContext 存储原始事件内容(`eventContent`/`eventMetadata`)和 per-client 应用信息(`clientAppInfos`)，供超时打点使用
+- RoutingContext 存储原始事件内容(`eventContent`)和 per-client 应用信息(`clientAppInfos`)，供超时打点使用；`eventMetadata` 留空（metadata 是 SA per-client 生成的 seqNum cJSON，非 AuthEventInfo 自带）
 
 ### 12.7 并发安全与资源释放
 
