@@ -261,13 +261,27 @@ bool AuthProviderSubscribeClient::RecoverSession(const std::string &serviceId)
         return false;
     }
     auto proxy = iface_cast<DataCollectManagerIdl>(object);
-    if (proxy == nullptr || callback_ == nullptr) {
-        SGLOGE("proxy or callback is null");
+    if (proxy == nullptr) {
+        SGLOGE("proxy is null");
+        return false;
+    }
+    // 锁内拷贝 callback_ 副本并检查 deleted_，避免与 Release() 并发读写 sptr 引用计数错乱
+    sptr<AuthProviderCallbackService> callback;
+    {
+        std::lock_guard<ffrt::mutex> lock(g_providerMutex);
+        if (deleted_) {
+            SGLOGI("provider deleted during reconnect, discard");
+            return false;
+        }
+        callback = callback_;
+    }
+    if (callback == nullptr) {
+        SGLOGE("callback is null");
         return false;
     }
     // 重新向 SA 注册：SA 侧 CreateAuthProvider 完成后会 NotifyClientStatusChanged 下发全量客户端列表
     sptr<IRemoteObject> newRemote = nullptr;
-    int32_t ret = proxy->CreateAuthProvider(callback_, serviceId, newRemote);
+    int32_t ret = proxy->CreateAuthProvider(callback, serviceId, newRemote);
     if (ret != SUCCESS || newRemote == nullptr) {
         SGLOGE("ReCreateProvider fail, ret=%{public}d", ret);
         return false;

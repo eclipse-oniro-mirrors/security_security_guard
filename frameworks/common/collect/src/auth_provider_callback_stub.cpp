@@ -15,6 +15,8 @@
 
 #include "auth_provider_callback_stub.h"
 
+#include <memory>
+
 #include "message_parcel.h"
 #include "security_guard_define.h"
 #include "security_guard_log.h"
@@ -40,13 +42,13 @@ int32_t AuthProviderCallbackStub::OnRemoteRequest(uint32_t code, MessageParcel &
         }
         std::vector<AuthClientInfo> clientsInfo;
         for (int32_t i = 0; i < size; ++i) {
-            auto *item = AuthClientInfo::Unmarshalling(data);
+            // RAII: unique_ptr 接管裸指针，emplace_back 抛 bad_alloc 时自动释放，避免内存泄漏
+            auto item = std::unique_ptr<AuthClientInfo>(AuthClientInfo::Unmarshalling(data));
             if (item == nullptr) {
                 SGLOGE("read auth client info fail");
                 return BAD_PARAM;
             }
             clientsInfo.emplace_back(*item);
-            delete item;
         }
         return OnClientStatusChanged(clientsInfo);
     }

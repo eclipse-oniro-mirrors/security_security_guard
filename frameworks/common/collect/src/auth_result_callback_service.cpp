@@ -49,12 +49,19 @@ void AuthResultCallbackService::ClearCallBack()
     callback_ = nullptr;
 }
 
+// 批次二（待评估）: OnAuthResult 持 notifyMutex_ 调用外部 callback 是反模式（持锁回调可能死锁）。
+// 但 notifyMutex_ 不能简单移除——它保护 callback_ 捕获的 promise 资源的生命周期：
+// ClearCallBack 必须等 OnAuthResult 执行完才能销毁 promise，否则 OnAuthResult 持有的 callback 副本
+// 会引用已销毁的 promise → UAF。完整修复需重构为 shared_ptr<callback wrapper> 引用计数方案，
+// 让 callback 执行移到锁外同时保证资源安全。当前保持现状，添加注释说明语义约束。
 // SA 聚合完成后回调 → 触发 std::function → C++ 调用方或 NAPI Promise resolve
 int32_t AuthResultCallbackService::OnAuthResult(const AuthResult &result)
 {
+    // notifyMutex_ 串行化回调执行 + 保护 callback_ 捕获的 promise 资源生命周期（防止 ClearCallBack 并发销毁 promise）
     std::lock_guard<ffrt::mutex> execLock(mutexes_->notifyMutex_);
     std::function<void(const AuthResult &result)> callback;
     {
+        // callbackMutex_ 仅保护 callback_ 变量的读写，临界区极短
         std::lock_guard<ffrt::mutex> slotLock(mutexes_->callbackMutex_);
         callback = callback_;
     }
@@ -63,7 +70,7 @@ int32_t AuthResultCallbackService::OnAuthResult(const AuthResult &result)
         return FAILED;
     }
     SGLOGD("OnAuthResult mergedStrategy=%{public}d", static_cast<int32_t>(result.GetMergedAuthStrategy()));
-    callback(result);
+    callback(result);  // 持 notifyMutex_ 执行：保证 ClearCallBack 等待回调完成后再销毁 promise
     return SUCCESS;
 }
 } // namespace OHOS::Security::SecurityGuard

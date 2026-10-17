@@ -502,8 +502,9 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         SGLOGE("provider is null or invalid");
         return BAD_PARAM;
     }
-    // per-provider 并发上限校验（M6: 每 Provider 上限 128）
-    if (provider->GetActiveRequestCount() >= MAX_AUTH_REQUEST_CONCURRENT_PER_PROVIDER) {
+    // per-provider 并发上限校验 + 计数原子化（M6: 每 Provider 上限 128）
+    // CAS 消除 TOCTOU：避免多线程同时通过 check 后递增超限
+    if (!provider->TryIncrementActiveRequest(MAX_AUTH_REQUEST_CONCURRENT_PER_PROVIDER)) {
         SGLOGE("per-provider request exceed limit, count=%{public}zu", provider->GetActiveRequestCount());
         return AUTH_REQUEST_EXCEED_LIMIT;
     }
@@ -514,11 +515,11 @@ int32_t AuthCoordinator::RequestAuthResult(AuthProviderSessionService *provider,
         auto iter = FindProviderLocked(provider);
         if (iter == providerSessions_.end()) {
             SGLOGE("provider not found in sessions");
+            provider->DecrementActiveRequest();  // 回滚已递增的计数
             return BAD_PARAM;
         }
         providerSptr = *iter;
     }
-    provider->IncrementActiveRequest();
     int64_t eventId = event.GetEventId();
     int64_t requestId = ++requestCounter_;
     SGLOGI("RequestAuthResult, eventId=%{public}" PRId64 ", requestId=%{public}" PRId64
@@ -694,7 +695,7 @@ void AuthCoordinator::NotifyClientStatusChanged()
     SGLOGD("notify clients status changed done, providerCount=%{public}zu", callbacks.size());
 }
 
-AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(sptr<AuthProviderSessionService> provider)
+AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider)
     : provider_(std::move(provider))
 {
 }
@@ -702,10 +703,12 @@ AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(sptr<AuthPr
 void AuthProviderSessionDeathRecipient::OnRemoteDied(const wptr<IRemoteObject> &remote)
 {
     SGLOGI("auth provider died, clean session");
-    if (provider_ == nullptr) {
+    // wptr.promote() 临时提升为强引用，若 Provider 已析构则返回 nullptr，安全跳过
+    auto provider = provider_.promote();
+    if (provider == nullptr) {
         return;
     }
-    AuthCoordinator::GetInstance().RemoveProvider(provider_);
+    AuthCoordinator::GetInstance().RemoveProvider(provider);
 }
 } // namespace OHOS::Security::SecurityGuard
 

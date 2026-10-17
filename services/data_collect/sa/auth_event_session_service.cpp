@@ -130,7 +130,7 @@ ErrCode AuthEventSessionService::Destroy()
     return AuthEventSubscribeManager::GetInstance().DestroyAuthEventClient(this);
 }
 
-AuthEventSessionDeathRecipient::AuthEventSessionDeathRecipient(sptr<AuthEventSessionService> session)
+AuthEventSessionDeathRecipient::AuthEventSessionDeathRecipient(wptr<AuthEventSessionService> session)
     : session_(std::move(session))
 {
 }
@@ -138,10 +138,12 @@ AuthEventSessionDeathRecipient::AuthEventSessionDeathRecipient(sptr<AuthEventSes
 void AuthEventSessionDeathRecipient::OnRemoteDied(const wptr<IRemoteObject> &remote)
 {
     SGLOGI("auth event subscriber died, clean session");
-    if (session_ == nullptr) {
+    // wptr.promote() 临时提升为强引用，若 session 已析构则返回 nullptr，安全跳过
+    auto session = session_.promote();
+    if (session == nullptr) {
         return;
     }
-    AuthEventSubscribeManager::GetInstance().RemoveSession(session_);
+    AuthEventSubscribeManager::GetInstance().RemoveSession(session);
 }
 } // namespace OHOS::Security::SecurityGuard
 

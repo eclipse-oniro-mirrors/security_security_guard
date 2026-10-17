@@ -55,6 +55,19 @@ public:
             activeRequestCount_.fetch_sub(1);
         }
     }
+    // 原子地"检查并递增"并发计数，消除 TOCTOU（避免多线程同时通过校验后递增超限）
+    // 返回 true 表示成功递增（未超 maxLimit），false 表示已达上限
+    bool TryIncrementActiveRequest(size_t maxLimit)
+    {
+        size_t current = activeRequestCount_.load(std::memory_order_relaxed);
+        while (current < maxLimit) {
+            if (activeRequestCount_.compare_exchange_weak(current, current + 1,
+                std::memory_order_relaxed, std::memory_order_relaxed)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 private:
     pid_t pid_ {};
@@ -68,11 +81,13 @@ private:
 
 class AuthProviderSessionDeathRecipient : public IRemoteObject::DeathRecipient {
 public:
-    explicit AuthProviderSessionDeathRecipient(sptr<AuthProviderSessionService> provider);
+    // wptr 避免与 AuthProviderSessionService::deathRecipient_ 形成循环引用
+    // (Provider 强引用 Recipient，Recipient 若也强引用 Provider 则循环)
+    explicit AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider);
     ~AuthProviderSessionDeathRecipient() override = default;
     void OnRemoteDied(const wptr<IRemoteObject> &remote) override;
 private:
-    sptr<AuthProviderSessionService> provider_ {};
+    wptr<AuthProviderSessionService> provider_ {};
 };
 } // namespace OHOS::Security::SecurityGuard
 
