@@ -15,7 +15,9 @@
 
 #include "auth_provider_subscribe_client.h"
 
+#include <chrono>
 #include <cinttypes>
+#include <future>
 #include <set>
 
 #include "auth_result_callback_service.h"
@@ -34,6 +36,9 @@
 namespace OHOS::Security::SecurityGuard {
 namespace {
 ffrt::mutex g_providerMutex {};
+
+// SG 进程崩溃后 Provider SDK 退避重连间隔（秒），与 AuthEventSubscribeClient 对齐
+constexpr int PROVIDER_RECONNECT_RETRY_DELAY_SECONDS[] = {1, 5, 15, 30, 60, 60, 60, 60, 60};
 
 // 出口错误码拦截: 不在 g_errorStringMap 中的统一归入 AUTH_PROVIDER_INTERNAL_ERROR
 int32_t NormalizeErrorCode(int32_t code)
@@ -105,7 +110,7 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
 }
 
 // 返回码: 请求是否被接受；最终阻断策略经回调返回
-// SDK 内部创建 AuthResultCallbackService 包装 std::function，作为 IRemoteObject 传给 SA
+// kit 侧 promise/future 同步等待 SA 聚合结果，超时 400ms 兜底返回 TIMEOUT（M4+M7）
 int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &event,
     AuthResultCallback callback)
 {
@@ -128,9 +133,34 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
         SGLOGE("callback service is null");
         return AUTH_PROVIDER_INTERNAL_ERROR;
     }
-    callbackService->RegistCallBack(callback);
+    // kit 内部用 promise/future 同步转异步：SA 回调写入 promise，kit 阻塞等待
+    auto promise = std::make_shared<std::promise<AuthResult>>();
+    auto future = promise->get_future();
+    callbackService->RegistCallBack([promise](const AuthResult &result) {
+        promise->set_value(result);
+    });
     int32_t ret = session->RequestAuthResult(event, callbackService->AsObject());
-    return NormalizeErrorCode(ret);
+    if (ret != SUCCESS) {
+        SGLOGE("SA RequestAuthResult rejected, ret=%{public}d, eventId=%{public}" PRId64,
+            ret, event.GetEventId());
+        return NormalizeErrorCode(ret);
+    }
+    SGLOGI("SA RequestAuthResult accepted, eventId=%{public}" PRId64 ", waiting for callback...",
+        event.GetEventId());
+    // kit 侧 400ms 同步阻塞等待，超时按默认策略返回 TIMEOUT
+    auto status = future.wait_for(std::chrono::milliseconds(AUTH_RESULT_TIMEOUT_MS));
+    if (status == std::future_status::timeout) {
+        SGLOGW("kit wait auth result timeout, return TIMEOUT");
+        AuthResult timeoutResult;
+        timeoutResult.SetMergedAuthStrategy(AuthStrategy::TIMEOUT);
+        callback(timeoutResult);
+        return SUCCESS;
+    }
+    AuthResult authResult = future.get();
+    SGLOGI("kit got auth result, mergedStrategy=%{public}d, eventId=%{public}" PRId64,
+        static_cast<int32_t>(authResult.GetMergedAuthStrategy()), event.GetEventId());
+    callback(authResult);
+    return SUCCESS;
 }
 
 void AuthProviderSubscribeClient::DeleteProvider()
@@ -200,24 +230,59 @@ int32_t AuthProviderSubscribeClient::SetDeathRecipient(std::shared_ptr<AuthProvi
 
 void AuthProviderSubscribeClient::HandleDeath()
 {
-    SGLOGI("DataCollectManagerService died, try to recover AuthProviderSubscribeClient state");
-    sptr<IRemoteObject> newRemote = ReconnectService();
-    if (newRemote == nullptr) {
-        SGLOGE("reconnect fail");
-        return;
+    SGLOGI("DataCollectManagerService died, try to recover AuthProviderSubscribeClient");
+    std::string serviceId;
+    {
+        std::lock_guard<ffrt::mutex> lock(g_providerMutex);
+        serviceId = serviceId_;
     }
-    sptr<AuthProviderSession> newSession = iface_cast<AuthProviderSession>(newRemote);
-    if (newSession == nullptr) {
-        SGLOGE("new session proxy is null");
-        return;
+    for (int delay : PROVIDER_RECONNECT_RETRY_DELAY_SECONDS) {
+        ffrt::this_task::sleep_for(std::chrono::seconds(delay));
+        if (IsDeleted()) {
+            SGLOGI("provider deleted, stop reconnect");
+            return;
+        }
+        if (RecoverSession(serviceId)) {
+            return;
+        }
     }
-    if (!SwitchSessionRemote(newRemote, newSession)) {
-        newSession->Destroy();
-    }
+    SGLOGE("recover AuthProviderSubscribeClient fail after retries");
 }
 
-bool AuthProviderSubscribeClient::RecoverSession()
+bool AuthProviderSubscribeClient::RecoverSession(const std::string &serviceId)
 {
+    auto registry = SystemAbilityManagerClient::GetInstance().GetSystemAbilityManager();
+    if (registry == nullptr) {
+        SGLOGE("GetSystemAbilityManager error");
+        return false;
+    }
+    sptr<IRemoteObject> object = registry->GetSystemAbility(DATA_COLLECT_MANAGER_SA_ID);
+    if (object == nullptr) {
+        return false;
+    }
+    auto proxy = iface_cast<DataCollectManagerIdl>(object);
+    if (proxy == nullptr || callback_ == nullptr) {
+        SGLOGE("proxy or callback is null");
+        return false;
+    }
+    // 重新向 SA 注册：SA 侧 CreateAuthProvider 完成后会 NotifyClientStatusChanged 下发全量客户端列表
+    sptr<IRemoteObject> newRemote = nullptr;
+    int32_t ret = proxy->CreateAuthProvider(callback_, serviceId, newRemote);
+    if (ret != SUCCESS || newRemote == nullptr) {
+        SGLOGE("ReCreateProvider fail, ret=%{public}d", ret);
+        return false;
+    }
+    {
+        std::lock_guard<ffrt::mutex> lock(g_providerMutex);
+        if (deleted_) {
+            SGLOGI("provider deleted during reconnect, discard");
+            return false;
+        }
+        sessionRemote_ = newRemote;
+    }
+    // 重新挂死亡监听到新 SA 对象
+    SetDeathRecipient(shared_from_this(), object);
+    SGLOGI("recover AuthProvider success, SA 下发全量客户端列表由 NotifyClientStatusChanged 触发");
     return true;
 }
 
@@ -249,7 +314,12 @@ void AuthProviderSubscribeClient::DeathRecipient::OnRemoteDied(const wptr<IRemot
     if (provider == nullptr) {
         return;
     }
-    provider->HandleDeath();
+    sptr<IRemoteObject> object = remote.promote();
+    if (object != nullptr) {
+        object->RemoveDeathRecipient(this);
+    }
+    // 避免阻塞 binder 线程，异步执行退避重连
+    ffrt::submit([provider]() { provider->HandleDeath(); });
 }
 } // namespace OHOS::Security::SecurityGuard
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE

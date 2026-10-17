@@ -17,6 +17,7 @@
 #define SECURITY_GUARD_AUTH_PROVIDER_SESSION_SERVICE_H
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -43,6 +44,17 @@ public:
     void MarkInvalid() { valid_ = false; }
     void SetDeathRecipient(const sptr<IRemoteObject::DeathRecipient> &recipient) { deathRecipient_ = recipient; }
     sptr<IRemoteObject::DeathRecipient> GetDeathRecipient() const { return deathRecipient_; }
+    // P1-1: 断开 Provider 与 DeathRecipient 的循环引用，防止内存泄漏
+    void ClearDeathRecipient() { deathRecipient_ = nullptr; }
+
+    // per-provider 并发请求计数（M6: 每 Provider 上限 128）
+    size_t GetActiveRequestCount() const { return activeRequestCount_.load(); }
+    void IncrementActiveRequest() { activeRequestCount_.fetch_add(1); }
+    void DecrementActiveRequest() {
+        if (activeRequestCount_.load() > 0) {
+            activeRequestCount_.fetch_sub(1);
+        }
+    }
 
 private:
     pid_t pid_ {};
@@ -51,6 +63,7 @@ private:
     sptr<IRemoteObject> callback_ {};
     bool valid_ {true};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_ {};
+    std::atomic<size_t> activeRequestCount_ {0};  // per-provider 并发请求计数
 };
 
 class AuthProviderSessionDeathRecipient : public IRemoteObject::DeathRecipient {

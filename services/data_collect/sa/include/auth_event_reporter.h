@@ -18,6 +18,7 @@
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 
 #include <cstdint>
+#include <string>
 
 #include "auth_event.h"
 
@@ -29,13 +30,19 @@ namespace OHOS::Security::SecurityGuard {
 class AuthEventReporter {
 public:
     // 阻断结果回填打点：SetAuthResult 且 allowFlag=false 时上报。
-    // 内容：应用信息（caller pid/uid）+ 事件信息（eventId/content/metadata）。
+    // 内容：应用信息（caller pid/uid）+ 事件信息（eventId/content/metadata）+ 发送时间。
     static void ReportAuthBlockResult(pid_t callerPid, int32_t callerUid, const AuthEvent &event);
+    // 超时打点：Client 超时未回填时上报。
+    // 内容：应用信息（caller pid/uid）+ 事件信息（eventId/content/metadata）+ 超时时间。
+    static void ReportTimeoutResult(pid_t callerPid, int32_t callerUid,
+        int64_t eventId, const std::string &content, const std::string &metadata, int64_t timeoutMs);
 
 private:
     // HA lite 客户端真实上报的统一接入点：ha_client_lite_api.h 依赖进入本仓构建环境后，
     // 仅修改本函数完成接入（组装 eventName + 参数键值对并上报），上层打点语义不受影响。
-    static void ReportToHa(const char *eventName, pid_t callerPid, int32_t callerUid, const AuthEvent &event);
+    static void ReportToHa(const char *eventName, pid_t callerPid, int32_t callerUid,
+        int64_t eventId, const std::string &content, const std::string &metadata,
+        int64_t timeoutMs, int64_t sendTimeMs);
 };
 } // namespace OHOS::Security::SecurityGuard
 

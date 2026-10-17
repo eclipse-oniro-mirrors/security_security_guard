@@ -200,17 +200,29 @@ bool ParseOneClientStatus(napi_env env, napi_value item, AuthClientStatus &statu
     if (!ParseString(env, item, "clientId", clientId, SERVICE_ID_MAX_LEN)) {
         return false;
     }
+    // isDegraded 为必填字段，对齐 .d.ts 定义
     bool hasDegrader = false;
     napi_has_named_property(env, item, "isDegraded", &hasDegrader);
-    if (hasDegrader) {
-        napi_value degVal = nullptr;
-        napi_get_named_property(env, item, "isDegraded", &degVal);
-        if (degVal != nullptr) {
-            bool isDegrader = false;
-            napi_get_value_bool(env, degVal, &isDegrader);
-            status.SetDegraded(isDegrader);
-        }
+    if (!hasDegrader) {
+        SGLOGE("isDegraded is required");
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
     }
+    napi_value degVal = nullptr;
+    napi_get_named_property(env, item, "isDegraded", &degVal);
+    if (degVal == nullptr) {
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
+    }
+    napi_valuetype degType;
+    napi_typeof(env, degVal, &degType);
+    if (degType != napi_boolean) {
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
+    }
+    bool isDegrader = false;
+    napi_get_value_bool(env, degVal, &isDegrader);
+    status.SetDegraded(isDegrader);
     status.SetClientId(clientId);
     return true;
 }
@@ -358,12 +370,16 @@ void RequestAuthResultExecute(napi_env env, void *data)
 {
     auto *context = static_cast<RequestAuthResultContext *>(data);
     if (context == nullptr || context->provider == nullptr) {
+        SGLOGE("RequestAuthResultExecute context or provider is null");
         return;
     }
+    SGLOGI("RequestAuthResultExecute start, eventId=%{public}" PRId64, context->eventInfo.GetEventId());
     // 回调 stub 已在主线程创建，此处直接调 SA
     context->ret = SecurityGuardSdkAdaptor::RequestAuthResult(context->provider, context->eventInfo,
         [context](const AuthResult &authResult) {
             context->result = authResult;
+            SGLOGI("RequestAuthResult callback received, mergedStrategy=%{public}d",
+                static_cast<int32_t>(authResult.GetMergedAuthStrategy()));
         });
     if (context->ret != SUCCESS) {
         SGLOGE("RequestAuthResult rejected, ret=%{public}d", context->ret);
@@ -378,9 +394,12 @@ void RequestAuthResultComplete(napi_env env, napi_status status, void *data)
     }
     if (context->ret == SUCCESS) {
         // 请求被接受，SA 异步聚合完成后经回调 resolve Promise
+        SGLOGI("RequestAuthResultComplete resolve, mergedStrategy=%{public}d",
+            static_cast<int32_t>(context->result.GetMergedAuthStrategy()));
         napi_value jsResult = WrapAuthResult(env, context->result);
         napi_resolve_deferred(env, context->deferred, jsResult);
     } else {
+        SGLOGE("RequestAuthResultComplete reject, ret=%{public}d", context->ret);
         napi_value error = GenerateBusinessError(env, NormalizeProviderError(context->ret));
         napi_reject_deferred(env, context->deferred, error);
     }
@@ -452,14 +471,7 @@ RequestAuthResultContext *CreateAuthResultContext(napi_env env, napi_callback_in
     context->env = env;
     context->eventInfo = eventInfo;
     context->provider = provider->provider;
-    context->resultCallback = new (std::nothrow) AuthResultCallbackService();
-    if (context->resultCallback == nullptr) {
-        delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
-        return nullptr;
-    }
-    context->resultCallback->RegistCallBack(
-        [context](const AuthResult &authResult) { context->result = authResult; });
+    // kit 内部自建 callbackService 并 promise/future 同步等待，NAPI 层无需创建回调对象
     return context;
 }
 

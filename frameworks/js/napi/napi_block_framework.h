@@ -29,7 +29,6 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info);
 #include "auth_event_info.h"
 #include "auth_provider_subscribe_client.h"
 #include "auth_result.h"
-#include "auth_result_callback_service.h"
 
 namespace OHOS::Security::SecurityGuard {
 struct NapiAuthProvider {
@@ -45,7 +44,6 @@ struct RequestAuthResultContext {
     AuthEventInfo eventInfo;
     int32_t ret = 0;
     std::shared_ptr<AuthProviderSubscribeClient> provider;
-    sptr<AuthResultCallbackService> resultCallback;
     AuthResult result;
 };
 
