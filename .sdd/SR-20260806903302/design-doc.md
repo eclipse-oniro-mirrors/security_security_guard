@@ -24,7 +24,7 @@ security_guard 仓库已合入 AuthClient 消费者侧框架（SR20260806903405�
 |---|---|
 | 部署位置 | SA 3524（data_collect）同进程 |
 | Provider 配额 | 1/进程，16/设备 |
-| 并发请求 | 128/Provider（per-provider 计数，超限返回 27000004） |
+| 并发请求 | 128/Provider（per-provider CAS 原子计数，超限返回 27000004） |
 | Client 配额 | 2/进程，16/设备（复用现有） |
 | 超时时间 | SA 侧硬编码 400ms；kit 侧 promise/future.wait_for(400ms) 同步等待 |
 | 等待机制 | SA: std::promise/std::future；kit: promise/future 同步转异步 |
@@ -535,7 +535,14 @@ atomic<int64_t> requestCounter_ {0};  // requestId 全局递增
 // Provider 会话管理
 class AuthProviderSessionService : public AuthProviderSessionStub, public NoCopyable {
     atomic<size_t> activeRequestCount_ {0};  // per-provider 并发计数 (上限 128)
-    void ClearDeathRecipient();  // 断开与 DeathRecipient 的循环引用 (P1-1)
+    // TryIncrementActiveRequest(maxLimit): CAS 原子化 check+increment，消除 TOCTOU 竞态
+    bool TryIncrementActiveRequest(size_t maxLimit);  // compare_exchange_weak 自旋
+    void ClearDeathRecipient();  // 兜底断开循环引用（主要靠 wptr 自动消除）
+};
+
+// DeathRecipient 持 wptr<Provider>，自动消除循环引用（P1-1 wptr 改造）
+class AuthProviderSessionDeathRecipient : public IRemoteObject::DeathRecipient {
+    wptr<AuthProviderSessionService> provider_ {};  // 弱引用，OnRemoteDied 中 promote() 提升
 };
 ```
 
@@ -732,6 +739,11 @@ if (security_guard_auth_event_enable) {
 | 29 | HandleTimeout 全程持 ctxMutex，与 SetAuthResult 互斥（P0-2） |
 | 30 | ProcessAuthResultAsync 捕获 sptr<AuthProviderSessionService>，无裸指针 UAF（P0-3） |
 | 31 | DestroyAuthProvider/RemoveProvider 调 ClearDeathRecipient 断循环引用，无内存泄漏（P1-1） |
+| 32 | DeathRecipient 持 wptr<Provider>，OnRemoteDied 中 promote() 提升强引用，Provider 析构后安全跳过；自动消除循环引用不依赖调用时机（P1-1 wptr 改造） |
+| 33 | ProcessAuthResultAsync ffrt 任务用 ActiveRequestGuard RAII 守卫，任何退出路径（return/异常/取消）自动 DecrementActiveRequest，无并发配额泄漏；provider==nullptr 时守卫内部判空不解引用 |
+| 34 | RequestAuthResult 用 TryIncrementActiveRequest CAS 原子化 check+increment，消除 TOCTOU 竞态；高并发下 activeRequestCount_ 不超过 128 |
+| 35 | RecoverSession 在 g_providerMutex 锁内拷贝 callback_ 副本并检查 deleted_，避免与 Release() 并发读写 sptr 引用计数错乱 |
+| 36 | auth_provider_callback_stub.cpp Unmarshalling 裸指针改 unique_ptr RAII，emplace_back 抛 bad_alloc 时自动释放，无内存泄漏 |
 
 ## 12. 可靠性设计
 
@@ -749,11 +761,15 @@ if (security_guard_auth_event_enable) {
 - M11: `RequestAuthResult` IPC 立即返回受理码，dispatch + register + wait + notify + cleanup 全部在 `ProcessAuthResultAsync` 的 ffrt 异步任务中执行，不阻塞 SA IPC 线程
 - kit 侧 `RequestAuthResult` 用 `promise/future` 同步转异步，NAPI 层在 `napi_async_work` worker 线程阻塞等待，不阻塞 JS 主线程
 - Provider SDK `OnRemoteDied` 通过 `ffrt::submit` 异步执行退避重连，不阻塞 binder 线程
+- `AuthResultCallbackService`/`AuthProviderCallbackService` 的 `notifyMutex_` 持锁调用外部 callback 是已知反模式（持锁回调可能死锁），但 `notifyMutex_` 保护 `callback_` 捕获资源（promise / napi_ref）的生命周期，**简单移除会引入 UAF**。当前保持现状并添加语义注释，完整修复需重构为 `shared_ptr<callback wrapper>` 引用计数方案（批次二待评估）
 
 ### 12.3 内存膨胀
 
 - 每 Provider 并发请求上限 128（`MAX_AUTH_REQUEST_CONCURRENT_PER_PROVIDER`），超限返回 `AUTH_REQUEST_EXCEED_LIMIT(27000004)`
-- per-provider 原子计数 `activeRequestCount_`，聚合完成/超时后递减
+- per-provider 原子计数 `activeRequestCount_`，`TryIncrementActiveRequest` CAS 原子化 check+increment 消除 TOCTOU 竞态，聚合完成/超时后递减
+- `ActiveRequestGuard` RAII 守卫保证 ffrt 任务任何退出路径（return/异常/取消）都自动递减计数，不泄漏并发配额
+- `AuthProviderSessionDeathRecipient`/`AuthEventSessionDeathRecipient` 持 `wptr` 弱引用，自动消除循环引用，不依赖 `ClearDeathRecipient()` 调用时机
+- `auth_provider_callback_stub.cpp` Unmarshalling 裸指针改 `unique_ptr` RAII，`emplace_back` 抛 `bad_alloc` 时自动释放，无内存泄漏
 
 ### 12.4 超时
 
@@ -786,7 +802,15 @@ if (security_guard_auth_event_enable) {
 
 **Provider 生命周期（P0-3）**：`ProcessAuthResultAsync` 捕获 `sptr<AuthProviderSessionService>` 而非裸指针，`RequestAuthResult` 在 `mutex_` 锁内从 `providerSessions_` 查找 sptr 传入。ffrt 任务执行期间 provider 不会被析构，`IsValid()` 检查 + sptr 引用计数双重保证。
 
-**循环引用断开（P1-1）**：`AuthProviderSessionService` 持 `sptr<DeathRecipient>`，`DeathRecipient` 持 `sptr<AuthProviderSessionService>`，形成循环引用。`DestroyAuthProvider` 和 `RemoveProvider` 在清理路径显式调用 `ClearDeathRecipient()` 断开循环，防止内存泄漏。
+**循环引用自动消除（P1-1，wptr 改造）**：`AuthProviderSessionService` 持 `sptr<DeathRecipient>`，`DeathRecipient` 持 `wptr<AuthProviderSessionService>`（弱引用）。Provider 析构后 `wptr::promote()` 返回 nullptr，`OnRemoteDied` 安全跳过。**自动消除循环引用，不依赖 `ClearDeathRecipient()` 调用时机**。`ClearDeathRecipient()` 保留为兜底（DestroyAuthProvider/RemoveProvider 仍调用，加速回收）。同仓 `DataCollectManagerService::SubscriberDeathRecipient`、`SecurityCollectorManagerService::SubscriberDeathRecipient` 均采用此范式。连带 `AuthEventSessionDeathRecipient::session_` 同步改 `wptr`。
+
+**ActiveRequestGuard RAII 守卫**：`ProcessAuthResultAsync` 的 ffrt 任务首行创建 `ActiveRequestGuard guard(provider)`，作用域退出时（正常 return / 异常 / ffrt 任务取消）守卫析构自动调 `DecrementActiveRequest()`。替代 3 处手动调用，保证任何退出路径都不泄漏 per-provider 128 并发配额。守卫析构内部判空 `provider != nullptr`，消除 `provider == nullptr` 时空指针解引用。
+
+**TOCTOU 竞态消除（CAS 原子化）**：`RequestAuthResult` 原 check (`GetActiveRequestCount() >= 128`) + use (`IncrementActiveRequest()`) 两步非原子，高并发下多线程同时通过校验后递增，最终 count 超过 128。改为 `TryIncrementActiveRequest(maxLimit)` 单步 CAS（`compare_exchange_weak` 自旋），check + increment 原子完成。失败路径（provider 不在 sessions 中）显式 `DecrementActiveRequest()` 回滚。
+
+**RecoverSession 并发安全**：`RecoverSession` 在 `g_providerMutex` 锁内拷贝 `callback_` 副本并检查 `deleted_`，避免与 `Release()` 并发读写 `sptr` 引用计数错乱（sptr 拷贝/赋值跨线程非原子）。
+
+**notifyMutex_ 语义约束（批次二待评估）**：`AuthResultCallbackService`/`AuthProviderCallbackService` 的 `notifyMutex_` 保护 `callback_` 捕获资源（promise / NAPI napi_ref）的生命周期，`ClearCallBack` 必须等 `OnAuthResult`/`OnClientStatusChanged` 执行完才能销毁资源。**简单移除 notifyMutex_ 会引入 UAF**：ClearCallBack 置 null 后，回调持有的 callback 副本会引用已销毁的 promise/napi_ref。完整修复需重构为 `shared_ptr<callback wrapper>` 引用计数方案，让 callback 执行移到锁外同时保证资源安全。当前保持 notifyMutex_ 持锁回调现状，添加注释说明语义约束。
 
 **分片锁降低竞争（P1-3）**：`seqnumToCtx_` 按 `hash(seqnumKey) % 16` 分片，每分片独立锁。`SetAuthResult` 只锁对应分片（~2μs），替代原全局 `mutex_` 两级查找（~30μs）。20+ Provider × 128 并发场景下锁利用率从 ~19% 降至 ~1.2%。`mutex_` 仍保护 `routingContexts_` 和 `providerSessions_`，但访问频率低。
 
