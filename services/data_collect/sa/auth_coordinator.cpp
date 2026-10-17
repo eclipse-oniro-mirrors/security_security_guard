@@ -418,29 +418,18 @@ void AuthCoordinator::WaitForCompletion(std::shared_ptr<RoutingContext> ctxPtr, 
     SGLOGD("routing context cleaned, requestId=%{public}" PRId64, requestId);
 }
 
-// P0-1: 注册 RoutingContext 到 routingContexts_[requestId]，返回 shared_ptr 供调用方持有
-// 调用方（ffrt 任务）持有 shared_ptr 保证 ctx 存活，即使 routingContexts_ 被 erase
-std::shared_ptr<RoutingContext> AuthCoordinator::RegisterRoutingContext(int64_t requestId, RoutingContext &ctx)
-{
-    auto ctxPtr = std::make_shared<RoutingContext>();
-    ctxPtr->eventId = ctx.eventId;
-    ctxPtr->eventContent = std::move(ctx.eventContent);
-    ctxPtr->eventMetadata = std::move(ctx.eventMetadata);
-    ctxPtr->sentClientCount = ctx.sentClientCount;
-    ctxPtr->defaultDenyCount = ctx.defaultDenyCount;
-    ctxPtr->clientTimeoutStrategies = std::move(ctx.clientTimeoutStrategies);
-    ctxPtr->clientPromises = std::move(ctx.clientPromises);
-    ctxPtr->clientAppInfos = std::move(ctx.clientAppInfos);
-    ctxPtr->resultPromise = std::move(ctx.resultPromise);
+// RAII 守卫: 作用域退出时自动递减 per-provider 并发计数，保证任何退出路径（return/异常/ffrt 取消）都不泄漏配额
+struct ActiveRequestGuard {
+    sptr<AuthProviderSessionService> provider;
+    explicit ActiveRequestGuard(sptr<AuthProviderSessionService> p) : provider(std::move(p)) {}
+    ~ActiveRequestGuard()
     {
-        std::lock_guard<ffrt::mutex> lock(mutex_);
-        routingContexts_[requestId] = ctxPtr;
+        if (provider != nullptr) {
+            provider->DecrementActiveRequest();
+        }
     }
-    SGLOGI("register routing context, requestId=%{public}" PRId64 ", eventId=%{public}" PRId64
-        ", sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
-        requestId, ctxPtr->eventId, ctxPtr->sentClientCount, ctxPtr->defaultDenyCount);
-    return ctxPtr;
-}
+    DISALLOW_COPY_AND_MOVE(ActiveRequestGuard);
+};
 
 // M11: ffrt 异步任务执行 dispatch + register + wait + notify + cleanup
 // IPC 立即返回受理码，dispatch 在 ffrt 任务中执行，避免阻塞 SA IPC 线程
@@ -453,14 +442,15 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
         requestId, event.GetEventId());
     ffrt::submit([this, provider, requestId, event, resultCallback]() {
         SGLOGI("ffrt task start, requestId=%{public}" PRId64, requestId);
+        // RAII 守卫: 作用域退出时自动 DecrementActiveRequest，保证任何退出路径都不泄漏并发配额
+        ActiveRequestGuard guard(provider);
         // provider 是 sptr，生命周期由 ffrt 任务保证；IsValid 检查 provider 是否被主动销毁
         if (provider == nullptr || !provider->IsValid()) {
             SGLOGE("provider invalid in ffrt task, requestId=%{public}" PRId64, requestId);
             AuthResult fallback;
             fallback.SetMergedAuthStrategy(AuthStrategy::ALLOW);
             NotifyAuthResult(resultCallback, fallback);
-            provider->DecrementActiveRequest();
-            return;
+            return;  // guard 析构自动 DecrementActiveRequest（provider 为 null 时 guard 内部判空跳过）
         }
         // 直接用 ctxPtr 作为 dispatch 的工作 ctx，避免 local ctx 与 ctxPtr 之间的字段搬运
         // RegisterNormalClient 同时写入 ctxPtr 字段（via params.ctx = *ctxPtr）和分片索引（via params.ctxPtr）
@@ -482,8 +472,7 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
             AuthResult result;
             BuildAuthResult(*ctxPtr, result);
             NotifyAuthResult(resultCallback, result);
-            provider->DecrementActiveRequest();
-            return;
+            return;  // guard 析构自动 DecrementActiveRequest
         }
         // 注册到 routingContexts_（seqnumShards_ 已在 RegisterNormalClient 中写入）
         // Client 收到 OnAuthEvent 后调用 SetAuthResult，此时 ctxPtr 字段已全部填充完成
@@ -497,9 +486,9 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
         AuthResult result;
         WaitForCompletion(ctxPtr, result, requestId, dispatchResult.seqnums, dispatchResult.clientIds);
         NotifyAuthResult(resultCallback, result);
-        provider->DecrementActiveRequest();
         SGLOGI("async done, requestId=%{public}" PRId64 ", mergedStrategy=%{public}d",
             requestId, static_cast<int32_t>(result.GetMergedAuthStrategy()));
+        // guard 析构自动 DecrementActiveRequest
     });
 }
 

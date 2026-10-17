@@ -123,8 +123,6 @@ private:
     void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
     // P0-2: HandleTimeout 全程持 ctxMutex，避免与 SetAuthResult 数据竞争
     void HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr);
-    // P0-1: RegisterRoutingContext 返回 shared_ptr，调用方持有引用保证 ctx 生命周期
-    std::shared_ptr<RoutingContext> RegisterRoutingContext(int64_t requestId, RoutingContext &ctx);
     // P0-3: ffrt 任务捕获 sptr<AuthProviderSessionService>，避免 provider 析构后 UAF
     void ProcessAuthResultAsync(sptr<AuthProviderSessionService> provider, int64_t requestId,
         const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback);
