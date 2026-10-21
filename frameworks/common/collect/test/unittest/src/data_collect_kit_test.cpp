@@ -821,6 +821,14 @@ HWTEST_F(DataCollectKitTest, TestQueryProcInfo, TestSize.Level1)
         SecurityGuard::NULL_OBJECT);
 }
 
+HWTEST_F(DataCollectKitTest, TestQueryProcInfo01, TestSize.Level1)
+{
+    auto callback = std::make_shared<MockNapiSecurityEventQuerier>();
+    SecurityCollector::SecurityEventRuler rule(11111);
+    EXPECT_EQ(SecurityGuard::DataCollectManager::GetInstance().QuerySecurityEventById({rule}, callback, "auditGroup"),
+        SecurityGuard::NULL_OBJECT);
+}
+
 HWTEST_F(DataCollectKitTest, TestQueryCodeSignInfoByPath01, TestSize.Level1)
 {
     std::string result {};
