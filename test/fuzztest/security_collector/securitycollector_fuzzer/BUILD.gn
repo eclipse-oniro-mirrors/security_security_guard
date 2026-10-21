@@ -68,10 +68,13 @@ ohos_fuzztest("SecurityCollectorFuzzTest") {
     "security_collector_fuzzer.cpp",
   ]
 
+  # Do NOT depend on services/collector_manager:security_collector_manager here.
+  # That shared library is compiled with the normal SECURITY_GUARD_COLLECTOR_CFG_SOURCE
+  # ("security_audit.cfg"), which would override the fuzz-specific config above.
+  # All required collector_manager sources are compiled directly into this target.
   deps = [
     "${sg_root_dir}/frameworks/common/collect:libsg_collect_sdk",
     "${sg_root_dir}/frameworks/common/collector:libsg_collector_sdk",
-    "${sg_root_dir}/services/collector_manager:security_collector_manager",
   ]
 
   external_deps = [
