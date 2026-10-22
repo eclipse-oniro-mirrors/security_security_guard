@@ -166,6 +166,34 @@ void EventSubscribeClientFuzzTest(const uint8_t* data, size_t size)
     EventSubscribeClient::CreatClient(fdp.ConsumeRandomLengthString(MAX_STRING_SIZE), func, client1);
     client.Subscribe(fdp.ConsumeIntegral<int64_t>());
     client.Unsubscribe(fdp.ConsumeIntegral<int64_t>());
+
+    // Deleter: null client and valid client with callback/recipient
+    EventSubscribeClient::Deleter(nullptr);
+    auto *rawClient = new EventSubscribeClient();
+    rawClient->callback_ = new (std::nothrow) AcquireDataManagerCallbackService();
+    rawClient->deathRecipient_ =
+        new (std::nothrow) EventSubscribeClient::DeathRecipient{std::weak_ptr<EventSubscribeClient>()};
+    EventSubscribeClient::Deleter(rawClient);
+
+    // SetDeathRecipient: first call creates recipient, second reuses it
+    auto validClient = std::make_shared<EventSubscribeClient>();
+    sptr<IRemoteObject> remote(new (std::nothrow) MockRemoteObject());
+    EventSubscribeClient::SetDeathRecipient(validClient, remote);
+    EventSubscribeClient::SetDeathRecipient(validClient, remote);
+
+    // ReconnectService: real samgr with recipient already set
+    validClient->ReconnectService();
+
+    // OnRemoteDied: expired weak client returns directly
+    EventSubscribeClient::DeathRecipient expiredRecipient{std::weak_ptr<EventSubscribeClient>()};
+    expiredRecipient.OnRemoteDied(wptr<IRemoteObject>(remote));
+
+    // OnRemoteDied: valid client, mocked ffrt submit runs HandleDeath synchronously
+    EventSubscribeClient::DeathRecipient recipient{validClient};
+    recipient.OnRemoteDied(wptr<IRemoteObject>(remote));
+
+    // HandleDeath directly: mocked sleep makes the retry loop finish fast
+    validClient->HandleDeath();
 }
 }  // namespace OHOS
 

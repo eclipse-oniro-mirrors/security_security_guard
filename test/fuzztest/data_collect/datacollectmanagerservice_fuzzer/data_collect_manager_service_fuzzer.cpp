@@ -35,6 +35,7 @@
 #include "database.h"
 #include "risk_event_rdb_helper.h"
 #include "store_define.h"
+#include "security_event_filter.h"
 #undef private
 #undef prtected
 
@@ -126,6 +127,68 @@ bool DataCollectManagerServiceFuzzTest1(FuzzedDataProvider &fdp)
         fdp.ConsumeRandomLengthString(MAX_STRING_SIZE), callback);
     return true;
 }
+
+bool DataCollectManagerServiceFuzzTest2(FuzzedDataProvider &fdp)
+{
+    int64_t eventId = fdp.ConsumeIntegral<int64_t>();
+    int64_t type = fdp.ConsumeIntegral<int64_t>();
+    Security::SecurityCollector::SecurityEventRuler ruler{eventId};
+    sptr<IRemoteObject> obj(new (std::nothrow) MockRemoteObject());
+    auto proxy = iface_cast<ISecurityEventQueryCallback>(obj);
+    DataCollectManagerService::QuerySecurityGuardBatchAndCallback({ruler}, proxy);
+    DataCollectManagerService::QuerySecurityCollectorBatchAndCallback({ruler}, proxy);
+
+    // SubscriberDeathRecipient::OnRemoteDied branches:
+    // remote is null
+    sptr<DataCollectManagerService> service(new (std::nothrow) DataCollectManagerService(
+        DATA_COLLECT_MANAGER_SA_ID, false));
+    DataCollectManagerService::SubscriberDeathRecipient recipient{wptr<DataCollectManagerService>(service)};
+    const wptr<IRemoteObject> nullRemote {};
+    recipient.OnRemoteDied(nullRemote);
+
+    // remote promote fails (dangling weak ref)
+    wptr<IRemoteObject> expiredRemote {};
+    {
+        sptr<IRemoteObject> tmp(new (std::nothrow) MockRemoteObject());
+        expiredRemote = tmp;
+    }
+    recipient.OnRemoteDied(expiredRemote);
+
+    // service weak ref expired
+    DataCollectManagerService::SubscriberDeathRecipient expiredRecipient{wptr<DataCollectManagerService>{}};
+    expiredRecipient.OnRemoteDied(wptr<IRemoteObject>(obj));
+
+    // valid path: remove subscribe record on remote died
+    recipient.OnRemoteDied(wptr<IRemoteObject>(obj));
+
+    // DumpEventInfo: query recent event (mocked database) then dprintf
+    int fd = fdp.ConsumeIntegral<int32_t>();
+    service->DumpEventInfo(fd, eventId);
+
+    // SecurityEventFilter ReadFromParcel/Unmarshalling with fuzzed parcel fields
+    Security::SecurityGuard::EventMuteFilter fuzzInfo {};
+    fuzzInfo.eventId = eventId;
+    fuzzInfo.type = type;
+    fuzzInfo.isInclude = fdp.ConsumeBool();
+    Security::SecurityGuard::SecurityEventFilter fuzzFilter(fuzzInfo);
+    Parcel filterParcel;
+    filterParcel.WriteInt64(eventId);
+    filterParcel.WriteInt64(type);
+    filterParcel.WriteBool(fdp.ConsumeBool());
+    filterParcel.WriteUint32(fdp.ConsumeIntegral<uint32_t>());
+    filterParcel.WriteString(fdp.ConsumeRandomLengthString(MAX_STRING_SIZE));
+    fuzzFilter.ReadFromParcel(filterParcel);
+
+    Parcel unmarshalParcel;
+    unmarshalParcel.WriteInt64(eventId);
+    unmarshalParcel.WriteInt64(type);
+    unmarshalParcel.WriteBool(fdp.ConsumeBool());
+    unmarshalParcel.WriteUint32(fdp.ConsumeIntegral<uint32_t>());
+    unmarshalParcel.WriteString(fdp.ConsumeRandomLengthString(MAX_STRING_SIZE));
+    auto *unmarshalled = Security::SecurityGuard::SecurityEventFilter::Unmarshalling(unmarshalParcel);
+    delete unmarshalled;
+    return true;
+}
 }  // namespace OHOS
 
 /* Fuzzer entry point */
@@ -135,6 +198,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     FuzzedDataProvider fdp(data, size);
     OHOS::DataCollectManagerServiceFuzzTest(fdp);
     OHOS::DataCollectManagerServiceFuzzTest1(fdp);
+    OHOS::DataCollectManagerServiceFuzzTest2(fdp);
     // Wait for all async tasks submitted by this iteration (e.g. PushDataCollectTask)
     // to finish before the process exits, otherwise they may touch destroyed
     // objects during teardown and report use-after-free.
