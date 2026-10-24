@@ -17,7 +17,6 @@
 
 #include <chrono>
 #include <cinttypes>
-#include <future>
 #include <set>
 
 #include "auth_result_callback_service.h"
@@ -66,7 +65,7 @@ int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callbac
     const std::string &serviceId, std::shared_ptr<AuthProviderSubscribeClient> &provider)
 {
     SGLOGI("CreateProvider, serviceId=%{public}s", serviceId.c_str());
-    
+
     if (callback == nullptr) {
         SGLOGE("callback is nullptr");
         return BAD_PARAM;
@@ -128,17 +127,16 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
         SGLOGE("session proxy is null");
         return AUTH_PROVIDER_INTERNAL_ERROR;
     }
-    auto callbackService = new (std::nothrow) AuthResultCallbackService();
+    // sptr 持有 callbackService: SA侧也持有sptr，双方引用计数共同决定生命周期
+    // SA聚合完成后 OnAuthResult 在 IPC 线程触发 callback，无需 promise/future 同步等待
+    sptr<AuthResultCallbackService> callbackService = new (std::nothrow) AuthResultCallbackService();
     if (callbackService == nullptr) {
         SGLOGE("callback service is null");
         return AUTH_PROVIDER_INTERNAL_ERROR;
     }
-    // kit 内部用 promise/future 同步转异步：SA 回调写入 promise，kit 阻塞等待
-    auto promise = std::make_shared<std::promise<AuthResult>>();
-    auto future = promise->get_future();
-    callbackService->RegistCallBack([promise](const AuthResult &result) {
-        promise->set_value(result);
-    });
+
+    callbackService->RegistCallBack(std::move(callback));
+
     int32_t ret = session->RequestAuthResult(event, callbackService->AsObject());
     if (ret != SUCCESS) {
         SGLOGE("SA RequestAuthResult rejected, ret=%{public}d, eventId=%{public}" PRId64,
@@ -147,19 +145,6 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
     }
     SGLOGI("SA RequestAuthResult accepted, eventId=%{public}" PRId64 ", waiting for callback...",
         event.GetEventId());
-    // kit 侧 400ms 同步阻塞等待，超时按默认策略返回 TIMEOUT
-    auto status = future.wait_for(std::chrono::milliseconds(AUTH_RESULT_TIMEOUT_MS));
-    if (status == std::future_status::timeout) {
-        SGLOGW("kit wait auth result timeout, return TIMEOUT");
-        AuthResult timeoutResult;
-        timeoutResult.SetMergedAuthStrategy(AuthStrategy::TIMEOUT);
-        callback(timeoutResult);
-        return SUCCESS;
-    }
-    AuthResult authResult = future.get();
-    SGLOGI("kit got auth result, mergedStrategy=%{public}d, eventId=%{public}" PRId64,
-        static_cast<int32_t>(authResult.GetMergedAuthStrategy()), event.GetEventId());
-    callback(authResult);
     return SUCCESS;
 }
 

@@ -15,12 +15,17 @@
 #ifndef SECURITY_COLLECTOR_I_EVENT_WRAPPER_H
 #define SECURITY_COLLECTOR_I_EVENT_WRAPPER_H
 #include "event_define.h"
+#include <cstdint>
 #include <string>
 namespace OHOS::Security::SecurityCollector {
 class IEventWrapper {
 public:
+    virtual ~IEventWrapper() = default;
     virtual int32_t WrapperEvent(Event &event) = 0;
     virtual void RecordSubscribeEvent(int64_t eventId, int32_t errorCode, int32_t callerUid) = 0;
+    // 阻断框架打点：beginTime 为聚合开始时间戳
+    virtual void RecordAuthBlockResult(int64_t eventId, int32_t callerUid, int64_t beginTime, int64_t seqnum,
+        const std::string &resultExtra) = 0;
 };
 }
 #endif

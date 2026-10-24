@@ -26,6 +26,8 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info);
 } // namespace OHOS::Security::SecurityGuard
 
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+#include <atomic>
+#include <memory>
 #include "auth_event_info.h"
 #include "auth_provider_subscribe_client.h"
 #include "auth_result.h"
@@ -37,14 +39,22 @@ struct NapiAuthProvider {
     napi_env env = nullptr;
 };
 
+struct RequestAuthResultContext;
+
+struct CallbackGuard {
+    RequestAuthResultContext *ctx = nullptr;
+    std::atomic<bool> called {false};
+    ~CallbackGuard();
+};
+
 struct RequestAuthResultContext {
-    napi_env env = nullptr;
     napi_deferred deferred = nullptr;
-    napi_async_work asyncWork = nullptr;
+    napi_threadsafe_function tsfn = nullptr;
     AuthEventInfo eventInfo;
     int32_t ret = 0;
     std::shared_ptr<AuthProviderSubscribeClient> provider;
-    AuthResult result;
+    std::shared_ptr<AuthResult> result = std::make_shared<AuthResult>();
+    std::shared_ptr<CallbackGuard> guard = std::make_shared<CallbackGuard>(); // RAII兜底
 };
 
 napi_value NapiRequestAuthResult(napi_env env, napi_callback_info info);

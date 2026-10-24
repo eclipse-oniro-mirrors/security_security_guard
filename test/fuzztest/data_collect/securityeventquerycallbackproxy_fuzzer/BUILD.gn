@@ -96,6 +96,7 @@ ohos_fuzztest("SecurityEventQueryCallbackProxyFuzzTest") {
       "${sg_root_dir}/services/data_collect/sa/auth_event_session_service.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_event_subscribe_manager.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_coordinator.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_result_callback_proxy.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_provider_session_service.cpp",
       "${sg_root_dir}/services/data_collect/sa/auth_provider_callback_proxy.cpp",
     ]

@@ -20,7 +20,6 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <future>
 #include <map>
 #include <memory>
 #include <set>
@@ -28,6 +27,7 @@
 #include <vector>
 
 #include "ffrt.h"
+#include "ffrt_inner.h"
 #include "iremote_object.h"
 #include "nocopyable.h"
 
@@ -68,22 +68,26 @@ private:
     // seqnum: 每客户端每事件独有，用于路由查找
     struct RoutingContext {
         int64_t eventId {0};
+        int64_t beginTime {0};
         std::string eventContent;      // M12: 原始事件内容，供超时 HA 打点
         std::string eventMetadata;     // M12: 原始事件 metadata，供超时 HA 打点
         size_t sentClientCount {0};
         size_t defaultDenyCount {0};
         std::map<std::string, AuthStrategy> clientResults;          // clientId → 回填策略
         std::map<std::string, AuthStrategy> clientTimeoutStrategies; // clientId → 超时策略
-        std::map<std::string, std::shared_ptr<std::promise<AuthStrategy>>> clientPromises; // clientId → promise
+        std::map<std::string, std::shared_ptr<ffrt::promise<AuthStrategy>>> clientPromises; // clientId → promise
         // M12: per-client 应用信息，供超时 HA 打点（应用信息+事件信息+超时时间）
         struct ClientAppInfo {
             pid_t pid {0};
             int32_t uid {0};
+            int64_t seqnum {0};
         };
-        std::map<std::string, ClientAppInfo> clientAppInfos;  // clientId → pid/uid
-        std::shared_ptr<std::promise<AuthResult>> resultPromise;
+        std::map<std::string, ClientAppInfo> clientAppInfos;  // clientId → pid/uid/seqnum
+        std::shared_ptr<ffrt::promise<AuthResult>> resultPromise;
         ffrt::mutex ctxMutex;
         bool completed {false};
+        bool resultPromiseSatisfied {false};
+        std::set<std::string> satisfiedClientIds;
         AuthStrategy mergedAuthStrategy {AuthStrategy::ALLOW};
     };
 
@@ -104,19 +108,18 @@ private:
     // DispatchEventToClients 入参超过 5，用结构体收拢
     struct DispatchParams {
         int64_t requestId;
-        int64_t eventId;
-        const std::vector<AuthClientStatus> &clientStatusList;
+        const AuthEventInfo &eventInfo;
         RoutingContext &ctx;
         DispatchResult &result;
         std::shared_ptr<RoutingContext> ctxPtr;  // P0-1: 传递给 RegisterNormalClient 写入分片索引
     };
     void DispatchEventToClients(const DispatchParams &params);
-    void NotifyDegradedClient(int64_t eventId, AuthEventSessionService *session);
-    void RegisterNormalClient(int64_t requestId, int64_t eventId, AuthEventSessionService *session,
+    void NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthEventSessionService *session);
+    void RegisterNormalClient(int64_t requestId, const AuthEventInfo &eventInfo, AuthEventSessionService *session,
         RoutingContext &ctx, DispatchResult &result,
         std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         std::shared_ptr<RoutingContext> ctxPtr);
-    void PushEventsToClients(int64_t eventId,
+    void PushEventsToClients(const AuthEventInfo &eventInfo,
         const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         const DispatchResult &result);
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);

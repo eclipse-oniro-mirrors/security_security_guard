@@ -22,7 +22,6 @@
 #include "ipc_skeleton.h"
 
 #include "auth_event_callback_proxy.h"
-#include "auth_event_reporter.h"
 #include "auth_coordinator.h"
 #include "i_auth_event_callback.h"
 #include "security_guard_define.h"
@@ -217,11 +216,9 @@ int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *sessio
         authResults_[event.GetEventId()] = strategy;
     }
     // 锁外转发到 Coordinator，驱动从严聚合与 promise 解阻塞
-    AuthCoordinator::GetInstance().SetAuthResult(session, event, authStrategy);
-    if (strategy == AuthStrategy::DENY) {
-        AuthEventReporter::ReportAuthBlockResult(session->GetPid(), session->GetUid(), event);
-    }
-    SGLOGI("set auth result, eventId=%{public}" PRId64 ", authStrategy=%{public}d", event.GetEventId(), authStrategy);
+    int32_t coordResult = AuthCoordinator::GetInstance().SetAuthResult(session, event, authStrategy);
+    SGLOGI("set auth result, eventId=%{public}" PRId64 ", authStrategy=%{public}d, coordResult=%{public}d",
+        event.GetEventId(), authStrategy, coordResult);
     return SUCCESS;
 }
 

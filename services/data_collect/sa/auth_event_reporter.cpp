@@ -14,50 +14,53 @@
  */
 
 #include "auth_event_reporter.h"
-
-#include <chrono>
 #include <cinttypes>
+#include <dlfcn.h>
 #include <string>
 
+#include "i_event_wrapper.h"
 #include "security_guard_log.h"
 
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 namespace OHOS::Security::SecurityGuard {
 namespace {
-    // HA 事件名（接入 ha_client_lite_api.h 时沿用）
-    constexpr const char* AUTH_BLOCK_RESULT_EVENT = "AUTH_BLOCK_RESULT";
-    constexpr const char* AUTH_TIMEOUT_EVENT = "AUTH_BLOCK_TIMEOUT";
+typedef SecurityCollector::IEventWrapper* (*GetEventWrapperFunc)();
+GetEventWrapperFunc GetEventWrapperEntry() {
+    static GetEventWrapperFunc func = []() -> GetEventWrapperFunc {
+        void *handle = dlopen(SECURITY_GUARD_EVENT_WRAPPER_PATH, RTLD_LAZY);
+        if (handle == nullptr) {
+            SGLOGE("dlopen event wrapper failed");
+            return nullptr;
+        }
+        auto entry = reinterpret_cast<GetEventWrapperFunc>(dlsym(handle, "GetEventWrapper"));
+        if (entry == nullptr) {
+            SGLOGI("dlsym GetEventWrapper failed");
+            return nullptr;
+        }
+        SGLOGE("dlopen event wrapper success");
+        return entry;
+    }();
+    return func;
 }
+} // namespace
 
-void AuthEventReporter::ReportAuthBlockResult(pid_t callerPid, int32_t callerUid, const AuthEvent &event)
+void AuthEventReporter::ReportAuthBlockResult(int64_t eventId, int32_t callerUid, int64_t beginTime, int64_t seqnum,
+        const std::string &resultExtra)
 {
-    // M14: 采集发送时间（应用下发阻断结果的时刻）
-    auto sendTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    ReportToHa(AUTH_BLOCK_RESULT_EVENT, callerPid, callerUid, event.GetEventId(),
-        event.GetContent(), event.GetMetadata(), 0, sendTimeMs);
-}
+    auto entry = GetEventWrapperEntry();
+    if (entry == nullptr) {
+        SGLOGE("event wrapper not available, skip HA reprot");
+        return;
+    }
 
-void AuthEventReporter::ReportTimeoutResult(pid_t callerPid, int32_t callerUid,
-    int64_t eventId, const std::string &content, const std::string &metadata, int64_t timeoutMs)
-{
-    auto sendTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    ReportToHa(AUTH_TIMEOUT_EVENT, callerPid, callerUid, eventId, content, metadata, timeoutMs, sendTimeMs);
-}
-
-void AuthEventReporter::ReportToHa(const char *eventName, pid_t callerPid, int32_t callerUid,
-    int64_t eventId, const std::string &content, const std::string &metadata,
-    int64_t timeoutMs, int64_t sendTimeMs)
-{
-    // HA lite 客户端真实上报的统一入口（依赖 ha_client_lite_api.h 进入本仓构建环境后
-    // 在此组装并上报：eventName + CALLER_PID/CALLER_UID/EVENT_ID/CONTENT/METADATA/SEND_TIME/TIMEOUT_MS）。
-    // 注意：HA 上报若为耗时接口，仅允许锁外调用（与 Notify 推送同纪律）。
-    SGLOGI("ha report, event=%{public}s, pid=%{public}d, uid=%{public}d, eventId=%{public}" PRId64
-        ", timeoutMs=%{public}" PRId64 ", sendTimeMs=%{public}" PRId64,
-        eventName, static_cast<int32_t>(callerPid), callerUid, eventId, timeoutMs, sendTimeMs);
-    SGLOGD("ha report detail, content=%{public}s, metadata=%{public}s", content.c_str(), metadata.c_str());
+    auto wrapper = entry();
+    if (wrapper == nullptr) {
+        SGLOGE("event wrapper instance is null, skip HA reprot");
+        return;
+    }
+    SGLOGD("report auth block result, event=%{public}" PRId64 ", seqnum=%{public}" PRId64 ", uid=%{public}d, "
+           "beginTime=%{public}" PRId64, eventId, seqnum, callerUid, beginTime);
+    wrapper->RecordAuthBlockResult(eventId, callerUid, beginTime, seqnum, resultExtra);
 }
 } // namespace OHOS::Security::SecurityGuard
-
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE
