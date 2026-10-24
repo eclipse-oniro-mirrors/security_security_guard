@@ -115,17 +115,24 @@ private:
     };
     void DispatchEventToClients(const DispatchParams &params);
     void NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthEventSessionService *session);
-    void RegisterNormalClient(int64_t requestId, const AuthEventInfo &eventInfo, AuthEventSessionService *session,
-        RoutingContext &ctx, DispatchResult &result,
-        std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
-        std::shared_ptr<RoutingContext> ctxPtr);
+    // RegisterNormalClient: 入参收拢到 DispatchParams，避免超过 5 个入参
+    void RegisterNormalClient(const DispatchParams &params, AuthEventSessionService *session,
+        std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets);
     void PushEventsToClients(const AuthEventInfo &eventInfo,
         const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         const DispatchResult &result);
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
     void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
+    // 拆分 HandleTimeout: 超时单个 client 处置 + 聚合结果通知，避免单函数超过 50 行
+    void HandleTimeoutClient(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
+    void NotifyTimeoutResult(RoutingContext &ctx, const std::string &clientId);
+    void SatisfyResultPromise(RoutingContext &ctx);
     // P0-2: HandleTimeout 全程持 ctxMutex，避免与 SetAuthResult 数据竞争
     void HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr);
+    // 拆分 SetAuthResult: 查找 ctx + 回填策略 + HA 打点，避免单函数超过 50 行
+    std::shared_ptr<RoutingContext> FindRoutingContext(const std::string &clientId, int64_t seqnum);
+    void RecordClientResult(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
+    void ReportDenyResult(const RoutingContext &ctx, const std::string &clientId);
     // P0-3: ffrt 任务捕获 sptr<AuthProviderSessionService>，避免 provider 析构后 UAF
     void ProcessAuthResultAsync(sptr<AuthProviderSessionService> provider, int64_t requestId,
         const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback);

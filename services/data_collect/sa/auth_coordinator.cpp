@@ -244,35 +244,34 @@ void AuthCoordinator::NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthE
 }
 
 // 正常客户端: 生成 seqnum + 用 clientId 初始化计数 + 记录 seqnumKey→ctx 分片索引
-void AuthCoordinator::RegisterNormalClient(int64_t requestId, const AuthEventInfo &eventInfo,
-    AuthEventSessionService *session, RoutingContext &ctx, DispatchResult &result,
-    std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
-    std::shared_ptr<RoutingContext> ctxPtr)
+// 入参收拢到 DispatchParams，避免超过 5 个入参
+void AuthCoordinator::RegisterNormalClient(const DispatchParams &params, AuthEventSessionService *session,
+    std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets)
 {
     std::string clientId = session->GetClientId();
     AuthStrategy timeoutStrategy = session->GetTimeoutStrategy();
-    ctx.sentClientCount++;
+    params.ctx.sentClientCount++;
     if (timeoutStrategy == AuthStrategy::DENY) {
-        ctx.defaultDenyCount++;
+        params.ctx.defaultDenyCount++;
     }
     int64_t seqnum = session->GenerateSeqnum();
     // M12: 记录 per-client 应用信息，供超时 HA 打点
-    ctx.clientAppInfos[clientId] = {session->GetPid(), session->GetUid(), seqnum};
-    result.seqnums.push_back(seqnum);
-    result.clientIds.push_back(clientId);
+    params.ctx.clientAppInfos[clientId] = {session->GetPid(), session->GetUid(), seqnum};
+    params.result.seqnums.push_back(seqnum);
+    params.result.clientIds.push_back(clientId);
     SGLOGD("dispatch, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64 ", clientId=%{public}s",
-        eventInfo.GetEventId(), seqnum, clientId.c_str());
+        params.eventInfo.GetEventId(), seqnum, clientId.c_str());
     {
-        std::lock_guard<ffrt::mutex> lk(ctx.ctxMutex);
-        ctx.clientTimeoutStrategies[clientId] = timeoutStrategy;
-        ctx.clientPromises[clientId] = std::make_shared<ffrt::promise<AuthStrategy>>();
+        std::lock_guard<ffrt::mutex> lk(params.ctx.ctxMutex);
+        params.ctx.clientTimeoutStrategies[clientId] = timeoutStrategy;
+        params.ctx.clientPromises[clientId] = std::make_shared<ffrt::promise<AuthStrategy>>();
     }
     // P1-3: seqnumKey → ctxPtr 写入对应分片，SetAuthResult 只需锁对应分片（~2μs）
     std::string seqnumKey = MakeSeqnumKey(clientId, seqnum);
     size_t shardIdx = GetSeqnumShardIndex(seqnumKey);
     {
         std::lock_guard<ffrt::mutex> lk(seqnumShards_[shardIdx].mutex);
-        seqnumShards_[shardIdx].seqnumToCtx[seqnumKey] = ctxPtr;
+        seqnumShards_[shardIdx].seqnumToCtx[seqnumKey] = params.ctxPtr;
     }
     targets.emplace_back(session->GetCallback(), timeoutStrategy);
 }
@@ -331,8 +330,7 @@ void AuthCoordinator::DispatchEventToClients(const DispatchParams &params)
             NotifyDegradedClient(params.eventInfo, session);
             continue;
         }
-        RegisterNormalClient(params.requestId, params.eventInfo, session, params.ctx, params.result,
-            targets, params.ctxPtr);
+        RegisterNormalClient(params, session, targets);
     }
     SGLOGI("dispatch done, sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
         params.ctx.sentClientCount, params.ctx.defaultDenyCount);
@@ -354,52 +352,73 @@ void AuthCoordinator::HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr)
         if (ctx.clientResults.find(clientId) != ctx.clientResults.end()) {
             continue;
         }
-        if (strategy == AuthStrategy::DENY) {
-            // 超时且默认 DENY → 记 DENY，触发阻断
-            ctx.clientResults[clientId] = AuthStrategy::DENY;
-            ctx.mergedAuthStrategy = AuthStrategy::DENY;
-            ctx.completed = true;
-            SGLOGW("timeout DENY triggers block, clientId=%{public}s", clientId.c_str());
-        } else {
-            // 超时且默认 ALLOW → 记 TIMEOUT（对齐 JS 枚举语义）
-            ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
-            SGLOGD("timeout ALLOW client, record TIMEOUT, clientId=%{public}s", clientId.c_str());
-        }
-        auto promiseIter = ctx.clientPromises.find(clientId);
-        if (promiseIter != ctx.clientPromises.end() && promiseIter->second != nullptr &&
-            ctx.satisfiedClientIds.find(clientId) == ctx.satisfiedClientIds.end()) {
-            ctx.satisfiedClientIds.insert(clientId);
-            promiseIter->second->set_value(strategy);
-        }
-        SGLOGD("timeout, clientId=%{public}s, strategy=%{public}d",
-            clientId.c_str(), static_cast<int32_t>(strategy));
-        // M13: 超时 HA 打点 — 所有超时订阅者都需上报
-        auto appIt = ctx.clientAppInfos.find(clientId);
-        if (appIt != ctx.clientAppInfos.end()) {
-            cJSON *root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "content", ctx.eventContent.c_str());
-            cJSON_AddStringToObject(root, "authResult", "TIMEOUT");
-            char *jsonStr = cJSON_PrintUnformatted(root);
-            if (jsonStr != nullptr) {
-                AuthEventReporter::ReportAuthBlockResult(ctx.eventId, appIt->second.uid,
-                    ctx.beginTime, appIt->second.seqnum, std::string(jsonStr));
-                cJSON_free(jsonStr);
-            }
-            cJSON_Delete(root);
-        }
+        HandleTimeoutClient(ctx, clientId, strategy);
+        NotifyTimeoutResult(ctx, clientId);
     }
     if (!ctx.completed) {
         ctx.mergedAuthStrategy = AuthStrategy::ALLOW;
         ctx.completed = true;
         SGLOGI("all timeout clients ALLOW, mergedAuthStrategy=ALLOW, eventId=%{public}" PRId64, ctx.eventId);
     }
+    SatisfyResultPromise(ctx);
+}
 
-    if (ctx.resultPromise != nullptr && !ctx.resultPromiseSatisfied) {
-        ctx.resultPromiseSatisfied = true;
-        AuthResult result;
-        result.SetMergedAuthStrategy(ctx.mergedAuthStrategy);
-        ctx.resultPromise->set_value(result);
+// 单个 client 超时处置: 按 defaultTimeoutStrategy 记录结果 + 唤醒 clientPromise
+// 调用方（HandleTimeout）已持 ctxMutex，本函数不重复加锁
+void AuthCoordinator::HandleTimeoutClient(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy)
+{
+    if (strategy == AuthStrategy::DENY) {
+        // 超时且默认 DENY → 记 DENY，触发阻断
+        ctx.clientResults[clientId] = AuthStrategy::DENY;
+        ctx.mergedAuthStrategy = AuthStrategy::DENY;
+        ctx.completed = true;
+        SGLOGW("timeout DENY triggers block, clientId=%{public}s", clientId.c_str());
+    } else {
+        // 超时且默认 ALLOW → 记 TIMEOUT（对齐 JS 枚举语义）
+        ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
+        SGLOGD("timeout ALLOW client, record TIMEOUT, clientId=%{public}s", clientId.c_str());
     }
+    auto promiseIter = ctx.clientPromises.find(clientId);
+    if (promiseIter != ctx.clientPromises.end() && promiseIter->second != nullptr &&
+        ctx.satisfiedClientIds.find(clientId) == ctx.satisfiedClientIds.end()) {
+        ctx.satisfiedClientIds.insert(clientId);
+        promiseIter->second->set_value(strategy);
+    }
+    SGLOGD("timeout, clientId=%{public}s, strategy=%{public}d",
+        clientId.c_str(), static_cast<int32_t>(strategy));
+}
+
+// 超时 HA 打点: 所有超时订阅者都需上报 TIMEOUT 结果
+// 调用方（HandleTimeout）已持 ctxMutex，本函数不重复加锁
+void AuthCoordinator::NotifyTimeoutResult(RoutingContext &ctx, const std::string &clientId)
+{
+    auto appIt = ctx.clientAppInfos.find(clientId);
+    if (appIt == ctx.clientAppInfos.end()) {
+        return;
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "content", ctx.eventContent.c_str());
+    cJSON_AddStringToObject(root, "authResult", "TIMEOUT");
+    char *jsonStr = cJSON_PrintUnformatted(root);
+    if (jsonStr != nullptr) {
+        AuthEventReporter::ReportAuthBlockResult(ctx.eventId, appIt->second.uid,
+            ctx.beginTime, appIt->second.seqnum, std::string(jsonStr));
+        cJSON_free(jsonStr);
+    }
+    cJSON_Delete(root);
+}
+
+// 聚合结果通知: resultPromise 唤醒 WaitForCompletion 的 future.wait_for
+// 调用方已持 ctxMutex，本函数不重复加锁
+void AuthCoordinator::SatisfyResultPromise(RoutingContext &ctx)
+{
+    if (ctx.resultPromise == nullptr || ctx.resultPromiseSatisfied) {
+        return;
+    }
+    ctx.resultPromiseSatisfied = true;
+    AuthResult result;
+    result.SetMergedAuthStrategy(ctx.mergedAuthStrategy);
+    ctx.resultPromise->set_value(result);
 }
 
 // P0-1: promise/future 等待 — ctxPtr 持有 shared_ptr 保证 ctx 存活，wait_for 不持锁
@@ -595,6 +614,69 @@ void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy aut
 
 // P0-1 + P1-3: Client 回填 — 分片锁内查找 + 拷贝 shared_ptr（~2μs），释放分片锁后用 ctxMutex 修改字段
 // shared_ptr 保证 ctx 存活，即使 WaitForCompletion 已 erase routingContexts_，ctx 仍存活到 SetAuthResult 结束
+// 拆分为 FindRoutingContext + RecordClientResult + ReportDenyResult，避免单函数超过 50 行
+std::shared_ptr<AuthCoordinator::RoutingContext> AuthCoordinator::FindRoutingContext(
+    const std::string &clientId, int64_t seqnum)
+{
+    std::string seqnumKey = MakeSeqnumKey(clientId, seqnum);
+    // P1-3: 只锁对应分片（~2μs），不锁全局 mutex_，不同 request 的 SetAuthResult 可并发
+    size_t shardIdx = GetSeqnumShardIndex(seqnumKey);
+    std::shared_ptr<RoutingContext> ctxPtr;  // 函数体内，已进入类作用域，无需限定
+    {
+        std::lock_guard<ffrt::mutex> shardLock(seqnumShards_[shardIdx].mutex);
+        auto it = seqnumShards_[shardIdx].seqnumToCtx.find(seqnumKey);
+        if (it == seqnumShards_[shardIdx].seqnumToCtx.end()) {
+            // 从严策略下，首个DENY会立即触发 清理所有的 seqnumKey(包括未响应的client)
+            // 迟到的client回填会查不到key -- 这是正常竞态，返回nullptr让上层跳过ha打点
+            SGLOGW("seqnumKey already cleaned, clientId=%{public}s, seqnum=%{public}" PRId64, clientId.c_str(), seqnum);
+            return nullptr;
+        }
+        ctxPtr = it->second;  // 拷贝 shared_ptr，引用计数+1，ctx 生命周期延长到 SetAuthResult 结束
+    }  // 释放分片锁，其他 SetAuthResult 可并发查找
+    SGLOGD("seqnumKey hit, clientId=%{public}s, seqnum=%{public}" PRId64 ", shardIdx=%{public}zu",
+        clientId.c_str(), seqnum, shardIdx);
+    return ctxPtr;
+}
+
+// 回填单个 client 策略: 记录 + promise set_value + DecrementCounters + EvaluateStrictPolicy
+// 调用方（SetAuthResult）已持 ctxMutex，本函数不重复加锁
+void AuthCoordinator::RecordClientResult(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy)
+{
+    if (ctx.completed) {
+        SGLOGD("ctx already completed, skip, clientId=%{public}s", clientId.c_str());
+        return;
+    }
+    ctx.clientResults[clientId] = strategy;
+    auto promiseIter = ctx.clientPromises.find(clientId);
+    if (promiseIter != ctx.clientPromises.end() && promiseIter->second != nullptr &&
+        ctx.satisfiedClientIds.find(clientId) == ctx.satisfiedClientIds.end()) {
+        ctx.satisfiedClientIds.insert(clientId);
+        promiseIter->second->set_value(strategy);
+    }
+    DecrementCounters(ctx, clientId);
+    EvaluateStrictPolicy(ctx, strategy, ctx.eventId);
+}
+
+// 阻断回填 HA 打点: 仅 DENY 时上报，迟到响应已提前返回不会到达此处
+// 调用方（SetAuthResult）已持 ctxMutex，本函数不重复加锁
+void AuthCoordinator::ReportDenyResult(const RoutingContext &ctx, const std::string &clientId)
+{
+    auto appIt = ctx.clientAppInfos.find(clientId);
+    if (appIt == ctx.clientAppInfos.end()) {
+        return;
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "content", ctx.eventContent.c_str());
+    cJSON_AddStringToObject(root, "authResult", "DENY");
+    char *jsonStr = cJSON_PrintUnformatted(root);
+    if (jsonStr != nullptr) {
+        AuthEventReporter::ReportAuthBlockResult(ctx.eventId, appIt->second.uid,
+            ctx.beginTime, appIt->second.seqnum, std::string(jsonStr));
+        cJSON_free(jsonStr);
+    }
+    cJSON_Delete(root);
+}
+
 int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
     int32_t authStrategy)
 {
@@ -603,59 +685,18 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     }
     AuthStrategy strategy = static_cast<AuthStrategy>(authStrategy);
     int64_t seqnum = event.GetSeqnum();
-    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", authStrategy=%{public}d",
-        seqnum, authStrategy);
     std::string clientId = session->GetClientId();
-    std::string seqnumKey = MakeSeqnumKey(clientId, seqnum);
-    // P1-3: 只锁对应分片（~2μs），不锁全局 mutex_，不同 request 的 SetAuthResult 可并发
-    size_t shardIdx = GetSeqnumShardIndex(seqnumKey);
-    std::shared_ptr<RoutingContext> ctxPtr;
-    {
-        std::lock_guard<ffrt::mutex> shardLock(seqnumShards_[shardIdx].mutex);
-        auto it = seqnumShards_[shardIdx].seqnumToCtx.find(seqnumKey);
-        if (it == seqnumShards_[shardIdx].seqnumToCtx.end()) {
-        // 从严策略下，首个DENY会立即触发 清理所有的 seqnumKey(包括未响应的client)
-        // 迟到的client回填会查不到key -- 这是正常竞态，返回NOT_FOUND让上层跳过ha打点
-            SGLOGW("seqnumKey already cleaned, clientId=%{public}s, seqnum=%{public}" PRId64, clientId.c_str(), seqnum);
-            return NOT_FOUND;
-        }
-        ctxPtr = it->second;  // 拷贝 shared_ptr，引用计数+1，ctx 生命周期延长到 SetAuthResult 结束
-    }  // 释放分片锁，其他 SetAuthResult 可并发查找
-    SGLOGD("seqnumKey hit, clientId=%{public}s, seqnum=%{public}" PRId64 ", shardIdx=%{public}zu",
-        clientId.c_str(), seqnum, shardIdx);
-    // P0-1: 用 ctx 自己的 ctxMutex 保护字段修改（per-request，不同 request 之间无竞争）
-    std::lock_guard<ffrt::mutex> cvLock(ctxPtr->ctxMutex);
-    if (ctxPtr->completed) {
-        SGLOGD("ctx already completed, skip, clientId=%{public}s, seqnum=%{public}" PRId64,
-            clientId.c_str(), seqnum);
+    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", authStrategy=%{public}d", seqnum, authStrategy);
+    auto ctxPtr = FindRoutingContext(clientId, seqnum);
+    if (ctxPtr == nullptr) {
         return NOT_FOUND;
     }
-    ctxPtr->clientResults[clientId] = strategy;
-    auto promiseIter = ctxPtr->clientPromises.find(clientId);
-    if (promiseIter != ctxPtr->clientPromises.end() && promiseIter->second != nullptr &&
-        ctxPtr->satisfiedClientIds.find(clientId) == ctxPtr->satisfiedClientIds.end()) {
-        ctxPtr->satisfiedClientIds.insert(clientId);
-        promiseIter->second->set_value(strategy);
+    // P0-1: 用 ctx 自己的 ctxMutex 保护字段修改（per-request，不同 request 之间无竞争）
+    std::lock_guard<ffrt::mutex> cvLock(ctxPtr->ctxMutex);
+    RecordClientResult(*ctxPtr, clientId, strategy);
+    if (strategy == AuthStrategy::DENY) {
+        ReportDenyResult(*ctxPtr, clientId);
     }
-    DecrementCounters(*ctxPtr, clientId);
-    EvaluateStrictPolicy(*ctxPtr, strategy, ctxPtr->eventId);
-    // 阻断回填HA打点，仅 DENY时上报，迟到响应已提前返回不会到达此处
-    if (authStrategy == AuthStrategy::DENY) {
-        auto appIt = ctxPtr->clientAppInfos.find(clientId);
-        if (appIt != ctxPtr->clientAppInfos.end()) {
-            cJSON *root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "content", ctxPtr->eventContent.c_str());
-            cJSON_AddStringToObject(root, "authResult", "DENY");
-            char *jsonStr = cJSON_PrintUnformatted(root);
-            if (jsonStr != nullptr) {
-                AuthEventReporter::ReportAuthBlockResult(ctxPtr->eventId, appIt->second.uid,
-                    ctxPtr->beginTime, appIt->second.seqnum, std::string(jsonStr));
-                cJSON_free(jsonStr);
-            }
-            cJSON_Delete(root);
-        }
-    }
-
     SGLOGD("SetAuthResult done, clientId=%{public}s, strategy=%{public}d, sentClientCount=%{public}zu",
         clientId.c_str(), authStrategy, ctxPtr->sentClientCount);
     return SUCCESS;
