@@ -25,7 +25,8 @@
 namespace OHOS::Security::SecurityGuard {
 namespace {
 typedef SecurityCollector::IEventWrapper* (*GetEventWrapperFunc)();
-GetEventWrapperFunc GetEventWrapperEntry() {
+GetEventWrapperFunc GetEventWrapperEntry()
+{
     static GetEventWrapperFunc func = []() -> GetEventWrapperFunc {
         void *handle = dlopen(SECURITY_GUARD_EVENT_WRAPPER_PATH, RTLD_LAZY);
         if (handle == nullptr) {
@@ -45,7 +46,7 @@ GetEventWrapperFunc GetEventWrapperEntry() {
 } // namespace
 
 void AuthEventReporter::ReportAuthBlockResult(int64_t eventId, int32_t callerUid, int64_t beginTime, int64_t seqnum,
-        const std::string &resultExtra)
+    const std::string &resultExtra)
 {
     auto entry = GetEventWrapperEntry();
     if (entry == nullptr) {

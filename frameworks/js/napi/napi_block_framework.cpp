@@ -332,41 +332,70 @@ napi_value BuildClientInfoArray(napi_env env, const std::vector<AuthClientInfo> 
     return jsArray;
 }
 
-// JS 主线程执行: 构建 ClientInfo 数组并回调 JS 函数
-void OnClientStatusChangedCallback(napi_env env, napi_ref callbackRef,
-    const std::vector<AuthClientInfo> &clientsInfo)
+// tsfn CallJs:在JS主线程执行，构建ClientInfo 数组并回调JS函数
+void OnClientStatusChangedTsfnCall(napi_env env, napi_value jsCb, void *context, void *data)
 {
-    if (env == nullptr || callbackRef == nullptr) {
+    if (env == nullptr || jsCb == nullptr || data == nullptr) {
+        if (data != nullptr) {
+            delete static_cast<std::vector<AuthClientInfo> *>(data);
+        }
         return;
     }
-    auto *info = new std::vector<AuthClientInfo>(clientsInfo);
-    auto task = [env, callbackRef, info]() {
-        napi_handle_scope scope = nullptr;
-        napi_open_handle_scope(env, &scope);
-        napi_value callbackFunc = nullptr;
-        napi_get_reference_value(env, callbackRef, &callbackFunc);
-        if (callbackFunc == nullptr) {
-            SGLOGE("callback function is null");
-            napi_close_handle_scope(env, scope);
-            delete info;
-            return;
-        }
-        napi_value jsArray = BuildClientInfoArray(env, *info);
-        napi_value undefined = nullptr;
-        napi_get_undefined(env, &undefined);
-        napi_value returnVal = nullptr;
-        napi_call_function(env, undefined, callbackFunc, 1, &jsArray, &returnVal);
-        napi_close_handle_scope(env, scope);
+
+    napi_handle_scope scope = nullptr;
+    auto *info = static_cast<std::vector<AuthClientInfo> *>(data);
+
+    napi_value jsArray = BuildClientInfoArray(env, *info);
+    napi_value undefined = nullptr;
+    napi_get_undefined(env, &undefined);
+    napi_value returnVal = nullptr;
+    napi_call_function(env, undefined, jsCb, 1, &jsArray, &returnVal);
+    napi_close_handle_scope(env, scope);
+    delete info;
+}
+
+// 创建 OnClientStatusChanged 专用 tsfn
+bool CreateStatusTsfn(napi_env env, napi_ref callbackRef, napi_threadsafe_function &tsfn)
+{
+    napi_value callbackFunc = nullptr;
+    napi_get_reference_value(env, callbackRef, &callbackFunc);
+    napi_value resourceName = nullptr;
+    napi_create_string_utf8(env, "OnClientStatusChanged", NAPI_AUTO_LENGTH, &resourceName);
+    napi_status status = napi_create_threadsafe_function(env, callbackFunc, nullptr, resourceName,
+        0, 1, nullptr, nullptr, nullptr, OnClientStatusChangedTsfnCall, &tsfn);
+    if (status != napi_ok || tsfn == nullptr) {
+        SGLOGE("create status tsfn fail, status=%{public}d", static_cast<int32_t>(status));
+        return false;
+    }
+    return true;
+}
+
+// SA 回调 通过 tsfn 投递 ClientInfo 列表 到JS 主线程
+// tsfn 生命周期 由 NapiAuthProvider 管理： destroy 时 napi_tsfn_abort 丢弃队列中未执行的call
+void OnClientStatusChangedCallback(napi_threadsafe_function tsfn, const std::vector<AuthClientInfo> &clientsInfo)
+{
+    if (tsfn == nullptr) {
+        return;
+    }
+    auto *info = new (std::nothrow)std::vector<AuthClientInfo>(clientsInfo);
+    if (info == nullptr) {
+        SGLOGE("alloc clients info fail, drop OnClientStatusChanged");
+        return;
+    }
+
+    napi_status status = napi_call_threadsafe_function(tsfn, info, napi_tsfn_nonblocking);
+    if (status != napi_ok) {
+        SGLOGW("napi_call_threadsafe_function fail, status = %{public}d", static_cast<int32_t>(status));
         delete info;
-    };
-    napi_send_event(env, task, napi_eprio_high, "OnClientStatusChanged");
+    }
 }
 }
 
 namespace OHOS::Security::SecurityGuard {
 
 // Callback析构 ：SA崩溃时 callbackSerive 析构 --> callback_ 析构 --> guard 析构
-CallbackGuard::~CallbackGuard(){
+CallbackGuard::~CallbackGuard()
+{
     if (ctx == nullptr) {
         return;
     }
@@ -382,7 +411,8 @@ CallbackGuard::~CallbackGuard(){
 // SA回调通过tsfn投递到Js主线程
 // data != nullptr: SA 正常回调，resolve Promise
 // data == nullptr: SA 崩溃或受理失败，reject Promise
-void OnAuthResultTsfnJsCall(napi_env env, napi_value jsCb, void *context, void *data) {
+void OnAuthResultTsfnJsCall(napi_env env, napi_value jsCb, void *context, void *data)
+{
     auto *ctx = static_cast<RequestAuthResultContext *>(context);
     if (ctx == nullptr) {
         return;
@@ -549,13 +579,24 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     }
     nativeProvider->env = env;
     nativeProvider->callbackRef = callbackRef;
-    AuthProviderCallback callback = [env, ref = callbackRef](
+    if (!CreateStatusTsfn(env, callbackRef, nativeProvider->statusTsfn)) {
+        napi_delete_reference(env, callbackRef);
+        delete nativeProvider;
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
+        return nullptr;
+    }
+
+    AuthProviderCallback callback = [tsfn = nativeProvider->statusTsfn](
         const std::vector<AuthClientInfo> &clientsInfo) {
-        OnClientStatusChangedCallback(env, ref, clientsInfo);
+        OnClientStatusChangedCallback(tsfn, clientsInfo);
     };
     std::shared_ptr<AuthProviderSubscribeClient> provider = nullptr;
     int32_t ret = SecurityGuardSdkAdaptor::CreateProvider(callback, serviceId, provider);
     if (ret != SUCCESS || provider == nullptr) {
+        if (nativeProvider->statusTsfn != nullptr) {
+            napi_release_threadsafe_function(nativeProvider->statusTsfn, napi_tsfn_abort);
+            nativeProvider->statusTsfn = nullptr;
+        }
         if (nativeProvider->callbackRef != nullptr) {
             napi_delete_reference(env, nativeProvider->callbackRef);
         }
@@ -604,6 +645,10 @@ void NapiAuthProviderFinalize(napi_env env, void *data, void *hint)
         provider->provider->DeleteProvider();
         provider->provider = nullptr;
     }
+    if (provider->statusTsfn != nullptr) {
+        napi_release_threadsafe_function(provider->statusTsfn, napi_tsfn_abort);
+        provider->statusTsfn = nullptr;
+    }
     if (provider->callbackRef != nullptr) {
         napi_delete_reference(env, provider->callbackRef);
         provider->callbackRef = nullptr;
@@ -628,6 +673,10 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
     if (nativeProvider->provider != nullptr) {
         nativeProvider->provider->DeleteProvider();
         nativeProvider->provider = nullptr;
+    }
+    if (nativeProvider->statusTsfn != nullptr) {
+        napi_release_threadsafe_function(nativeProvider->statusTsfn, napi_tsfn_abort);
+        nativeProvider->statusTsfn = nullptr;
     }
     if (nativeProvider->callbackRef != nullptr) {
         napi_delete_reference(env, nativeProvider->callbackRef);

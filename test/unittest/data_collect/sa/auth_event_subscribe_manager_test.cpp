@@ -301,13 +301,16 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
     // 同一进程第 3 个客户端
     EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
         CLIENT_EXCEED_PROCESS_LIMIT);
     // 其他进程不受影响
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9102, 9102 + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9102, 9102 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
@@ -315,8 +318,10 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
     for (pid_t pid = 9200; pid < 9208; pid++) {
-        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
-        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
+        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+            SUCCESS);
+        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+            SUCCESS);
     }
     // 会话集合已满 16，新进程创建 -> GLOBAL_LIMIT
     EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
@@ -325,7 +330,8 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
     auto *session = CreateManagedSession(9207, 9207 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(manager.DestroyAuthEventClient(session), SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SubscribeAndNotify001, TestSize.Level0)

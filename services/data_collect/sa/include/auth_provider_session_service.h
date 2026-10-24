@@ -50,7 +50,8 @@ public:
     // per-provider 并发请求计数（M6: 每 Provider 上限 128）
     size_t GetActiveRequestCount() const { return activeRequestCount_.load(); }
     void IncrementActiveRequest() { activeRequestCount_.fetch_add(1); }
-    void DecrementActiveRequest() {
+    void DecrementActiveRequest()
+    {
         if (activeRequestCount_.load() > 0) {
             activeRequestCount_.fetch_sub(1);
         }

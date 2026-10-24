@@ -37,6 +37,7 @@ struct NapiAuthProvider {
     std::shared_ptr<AuthProviderSubscribeClient> provider;
     napi_ref callbackRef = nullptr;
     napi_env env = nullptr;
+    napi_threadsafe_function statusTsfn = nullptr;
 };
 
 struct RequestAuthResultContext;
