@@ -343,6 +343,7 @@ void OnClientStatusChangedTsfnCall(napi_env env, napi_value jsCb, void *context,
     }
 
     napi_handle_scope scope = nullptr;
+    napi_open_handle_scope(env, &scope);
     auto *info = static_cast<std::vector<AuthClientInfo> *>(data);
 
     napi_value jsArray = BuildClientInfoArray(env, *info);
