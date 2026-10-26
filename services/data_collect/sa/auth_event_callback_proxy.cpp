@@ -37,6 +37,10 @@ int32_t AuthEventCallbackProxy::OnAuthEvent(const AuthEvent &event, int64_t seqn
         return ERR_INVALID_DATA;
     }
 
+    if (!data.WriteInt64(seqnum)) {
+        return ERR_INVALID_DATA;
+    }
+
     MessageOption option = { MessageOption::TF_ASYNC };
     sptr<IRemoteObject> remote = Remote();
     if (remote == nullptr) {

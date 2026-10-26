@@ -14,7 +14,7 @@
  */
 
 #include "napi_block_framework.h"
-
+#include <cinttypes>
 #include <memory>
 #include <vector>
 
@@ -200,17 +200,29 @@ bool ParseOneClientStatus(napi_env env, napi_value item, AuthClientStatus &statu
     if (!ParseString(env, item, "clientId", clientId, SERVICE_ID_MAX_LEN)) {
         return false;
     }
+    // isDegraded 为必填字段，对齐 .d.ts 定义
     bool hasDegrader = false;
     napi_has_named_property(env, item, "isDegraded", &hasDegrader);
-    if (hasDegrader) {
-        napi_value degVal = nullptr;
-        napi_get_named_property(env, item, "isDegraded", &degVal);
-        if (degVal != nullptr) {
-            bool isDegrader = false;
-            napi_get_value_bool(env, degVal, &isDegrader);
-            status.SetDegraded(isDegrader);
-        }
+    if (!hasDegrader) {
+        SGLOGE("isDegraded is required");
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
     }
+    napi_value degVal = nullptr;
+    napi_get_named_property(env, item, "isDegraded", &degVal);
+    if (degVal == nullptr) {
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
+    }
+    napi_valuetype degType;
+    napi_typeof(env, degVal, &degType);
+    if (degType != napi_boolean) {
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return false;
+    }
+    bool isDegrader = false;
+    napi_get_value_bool(env, degVal, &isDegrader);
+    status.SetDegraded(isDegrader);
     status.SetClientId(clientId);
     return true;
 }
@@ -320,72 +332,126 @@ napi_value BuildClientInfoArray(napi_env env, const std::vector<AuthClientInfo> 
     return jsArray;
 }
 
-// JS 主线程执行: 构建 ClientInfo 数组并回调 JS 函数
-void OnClientStatusChangedCallback(napi_env env, napi_ref callbackRef,
-    const std::vector<AuthClientInfo> &clientsInfo)
+// tsfn CallJs:在JS主线程执行，构建ClientInfo 数组并回调JS函数
+void OnClientStatusChangedTsfnCall(napi_env env, napi_value jsCb, void *context, void *data)
 {
-    if (env == nullptr || callbackRef == nullptr) {
+    if (env == nullptr || jsCb == nullptr || data == nullptr) {
+        if (data != nullptr) {
+            delete static_cast<std::vector<AuthClientInfo> *>(data);
+        }
         return;
     }
-    auto *info = new std::vector<AuthClientInfo>(clientsInfo);
-    auto task = [env, callbackRef, info]() {
-        napi_handle_scope scope = nullptr;
-        napi_open_handle_scope(env, &scope);
-        napi_value callbackFunc = nullptr;
-        napi_get_reference_value(env, callbackRef, &callbackFunc);
-        if (callbackFunc == nullptr) {
-            SGLOGE("callback function is null");
-            napi_close_handle_scope(env, scope);
-            delete info;
-            return;
-        }
-        napi_value jsArray = BuildClientInfoArray(env, *info);
-        napi_value undefined = nullptr;
-        napi_get_undefined(env, &undefined);
-        napi_value returnVal = nullptr;
-        napi_call_function(env, undefined, callbackFunc, 1, &jsArray, &returnVal);
-        napi_close_handle_scope(env, scope);
+
+    napi_handle_scope scope = nullptr;
+    napi_open_handle_scope(env, &scope);
+    auto *info = static_cast<std::vector<AuthClientInfo> *>(data);
+
+    napi_value jsArray = BuildClientInfoArray(env, *info);
+    napi_value undefined = nullptr;
+    napi_get_undefined(env, &undefined);
+    napi_value returnVal = nullptr;
+    napi_call_function(env, undefined, jsCb, 1, &jsArray, &returnVal);
+    napi_close_handle_scope(env, scope);
+    delete info;
+}
+
+// 创建 OnClientStatusChanged 专用 tsfn
+bool CreateStatusTsfn(napi_env env, napi_ref callbackRef, napi_threadsafe_function &tsfn)
+{
+    napi_value callbackFunc = nullptr;
+    napi_get_reference_value(env, callbackRef, &callbackFunc);
+    napi_value resourceName = nullptr;
+    napi_create_string_utf8(env, "OnClientStatusChanged", NAPI_AUTO_LENGTH, &resourceName);
+    napi_status status = napi_create_threadsafe_function(env, callbackFunc, nullptr, resourceName,
+        0, 1, nullptr, nullptr, nullptr, OnClientStatusChangedTsfnCall, &tsfn);
+    if (status != napi_ok || tsfn == nullptr) {
+        SGLOGE("create status tsfn fail, status=%{public}d", static_cast<int32_t>(status));
+        return false;
+    }
+    return true;
+}
+
+// SA 回调 通过 tsfn 投递 ClientInfo 列表 到JS 主线程
+// tsfn 生命周期 由 NapiAuthProvider 管理： destroy 时 napi_tsfn_abort 丢弃队列中未执行的call
+void OnClientStatusChangedCallback(napi_threadsafe_function tsfn, const std::vector<AuthClientInfo> &clientsInfo)
+{
+    if (tsfn == nullptr) {
+        return;
+    }
+    auto *info = new (std::nothrow)std::vector<AuthClientInfo>(clientsInfo);
+    if (info == nullptr) {
+        SGLOGE("alloc clients info fail, drop OnClientStatusChanged");
+        return;
+    }
+
+    napi_status status = napi_call_threadsafe_function(tsfn, info, napi_tsfn_nonblocking);
+    if (status != napi_ok) {
+        SGLOGW("napi_call_threadsafe_function fail, status = %{public}d", static_cast<int32_t>(status));
         delete info;
-    };
-    napi_send_event(env, task, napi_eprio_high, "OnClientStatusChanged");
+    }
 }
 }
 
 namespace OHOS::Security::SecurityGuard {
 
-// SA 聚合完成后回调 → kit 收到 AuthResult → resolve Promise<AuthResult>
-void RequestAuthResultExecute(napi_env env, void *data)
+// Callback析构 ：SA崩溃时 callbackSerive 析构 --> callback_ 析构 --> guard 析构
+CallbackGuard::~CallbackGuard()
 {
-    auto *context = static_cast<RequestAuthResultContext *>(data);
-    if (context == nullptr || context->provider == nullptr) {
+    if (ctx == nullptr) {
         return;
     }
-    // 回调 stub 已在主线程创建，此处直接调 SA
-    context->ret = SecurityGuardSdkAdaptor::RequestAuthResult(context->provider, context->eventInfo,
-        [context](const AuthResult &authResult) {
-            context->result = authResult;
-        });
-    if (context->ret != SUCCESS) {
-        SGLOGE("RequestAuthResult rejected, ret=%{public}d", context->ret);
+    bool expected = false;
+    if (!called.compare_exchange_strong(expected, true)) {
+        return; // 已被CallJs消费，正常路径
     }
+    SGLOGW("SA died before callback, reject Promise via tsfn guard");
+    ctx->ret = AUTH_PROVIDER_INTERNAL_ERROR;
+    napi_call_threadsafe_function(ctx->tsfn, nullptr, napi_tsfn_nonblocking);
 }
 
-void RequestAuthResultComplete(napi_env env, napi_status status, void *data)
+// SA回调通过tsfn投递到Js主线程
+// data != nullptr: SA 正常回调，resolve Promise
+// data == nullptr: SA 崩溃或受理失败，reject Promise
+void OnAuthResultTsfnJsCall(napi_env env, napi_value jsCb, void *context, void *data)
 {
-    auto *context = static_cast<RequestAuthResultContext *>(data);
+    auto *ctx = static_cast<RequestAuthResultContext *>(context);
+    if (ctx == nullptr) {
+        return;
+    }
+
+    // 标记guard已经消费，阻止CallbackGuard 析构时重复 reject
+    ctx->guard->called.store(true, std::memory_order_release);
+    auto *result = static_cast<AuthResult *>(data);
+    if (result != nullptr) {
+        SGLOGI("resolve promise, mergedStrategy=%{public}d",
+            static_cast<int32_t>(result->GetMergedAuthStrategy()));
+        napi_value jsResult = WrapAuthResult(env, *result);
+        napi_resolve_deferred(env, ctx->deferred, jsResult);
+        delete result;
+    } else {
+        SGLOGI("reject promise, ret=%{public}d", ctx->ret);
+        napi_value error = GenerateBusinessError(env, NormalizeProviderError(ctx->ret));
+        napi_reject_deferred(env, ctx->deferred, error);
+    }
+    napi_release_threadsafe_function(ctx->tsfn, napi_tsfn_abort);
+    delete ctx;
+}
+
+// SA 聚合完成后回调 → 通过 tsfn 投递 AuthResult 到 JS 主线程
+void OnAuthResultCallback(RequestAuthResultContext *context, const AuthResult &authResult)
+{
     if (context == nullptr) {
         return;
     }
-    if (context->ret == SUCCESS) {
-        // 请求被接受，SA 异步聚合完成后经回调 resolve Promise
-        napi_value jsResult = WrapAuthResult(env, context->result);
-        napi_resolve_deferred(env, context->deferred, jsResult);
-    } else {
-        napi_value error = GenerateBusinessError(env, NormalizeProviderError(context->ret));
-        napi_reject_deferred(env, context->deferred, error);
+    SGLOGI("SA callback received, mergedStrategy=%{public}d",
+        static_cast<int32_t>(authResult.GetMergedAuthStrategy()));
+    auto *result = new (std::nothrow) AuthResult(authResult);
+    if (result == nullptr) {
+        SGLOGE("alloc AuthResult fail, drop result (guard will reject via tsfn)");
+        // guard 析构时通过 tsfn reject
+        return;
     }
-    napi_delete_async_work(env, context->asyncWork);
-    delete context;
+    napi_call_threadsafe_function(context->tsfn, result, napi_tsfn_nonblocking);
 }
 
 // 校验 createAuthProvider 入参并提取 serviceId + callback
@@ -419,7 +485,8 @@ bool ParseCreateProviderParams(napi_env env, napi_callback_info info,
         napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
         return false;
     }
-    napi_create_reference(env, argv[0], 1, &callbackRef);
+    // 引用方法函数本身，而非整个callback对象
+    napi_create_reference(env, callbackMethod, 1, &callbackRef);
     return true;
 }
 
@@ -449,17 +516,9 @@ RequestAuthResultContext *CreateAuthResultContext(napi_env env, napi_callback_in
         napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
-    context->env = env;
     context->eventInfo = eventInfo;
     context->provider = provider->provider;
-    context->resultCallback = new (std::nothrow) AuthResultCallbackService();
-    if (context->resultCallback == nullptr) {
-        delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
-        return nullptr;
-    }
-    context->resultCallback->RegistCallBack(
-        [context](const AuthResult &authResult) { context->result = authResult; });
+    // kit 内部自建 callbackService 并 promise/future 同步等待，NAPI 层无需创建回调对象
     return context;
 }
 
@@ -476,18 +535,26 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
         napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
-    napi_value resourceName = NapiCreateString(env, "NapiRequestAuthResult");
-    if (napi_create_async_work(env, nullptr, resourceName, RequestAuthResultExecute,
-        RequestAuthResultComplete, static_cast<void *>(context), &context->asyncWork) != napi_ok) {
+    // 创建 tsfn:SA回调在IPC线程投递 AuthResult 到 JS 主线程
+    napi_value resourceName = NapiCreateString(env, "NapiRequestAuthResultTsfn");
+    if (napi_create_threadsafe_function(env, nullptr, nullptr, resourceName,
+            0, 1, nullptr, nullptr, context, OnAuthResultTsfnJsCall, &context->tsfn) != napi_ok) {
         delete context;
         napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;
     }
-    if (napi_queue_async_work(env, context->asyncWork) != napi_ok) {
-        napi_delete_async_work(env, context->asyncWork);
-        delete context;
-        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
-        return nullptr;
+
+    auto guard = context->guard;
+    guard->ctx = context;
+    context->ret = SecurityGuardSdkAdaptor::RequestAuthResult(context->provider, context->eventInfo,
+        [context](const AuthResult &authResult) {
+            OnAuthResultCallback(context, authResult);
+        });
+    if (context->ret != SUCCESS) {
+        SGLOGI("RequestAuthResult reject, ret=%{public}d", context->ret);
+        // SA拒绝请求：标记 guard 已经消费，通过 tsfn 投递 reject 到JS主线程
+        guard->called.store(true, std::memory_order_release);
+        napi_call_threadsafe_function(context->tsfn, nullptr, napi_tsfn_nonblocking);
     }
     return promise;
 }
@@ -513,13 +580,24 @@ napi_value NapiCreateAuthProvider(napi_env env, napi_callback_info info)
     }
     nativeProvider->env = env;
     nativeProvider->callbackRef = callbackRef;
-    AuthProviderCallback callback = [env, ref = callbackRef](
+    if (!CreateStatusTsfn(env, callbackRef, nativeProvider->statusTsfn)) {
+        napi_delete_reference(env, callbackRef);
+        delete nativeProvider;
+        napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
+        return nullptr;
+    }
+
+    AuthProviderCallback callback = [tsfn = nativeProvider->statusTsfn](
         const std::vector<AuthClientInfo> &clientsInfo) {
-        OnClientStatusChangedCallback(env, ref, clientsInfo);
+        OnClientStatusChangedCallback(tsfn, clientsInfo);
     };
     std::shared_ptr<AuthProviderSubscribeClient> provider = nullptr;
     int32_t ret = SecurityGuardSdkAdaptor::CreateProvider(callback, serviceId, provider);
     if (ret != SUCCESS || provider == nullptr) {
+        if (nativeProvider->statusTsfn != nullptr) {
+            napi_release_threadsafe_function(nativeProvider->statusTsfn, napi_tsfn_abort);
+            nativeProvider->statusTsfn = nullptr;
+        }
         if (nativeProvider->callbackRef != nullptr) {
             napi_delete_reference(env, nativeProvider->callbackRef);
         }
@@ -568,6 +646,10 @@ void NapiAuthProviderFinalize(napi_env env, void *data, void *hint)
         provider->provider->DeleteProvider();
         provider->provider = nullptr;
     }
+    if (provider->statusTsfn != nullptr) {
+        napi_release_threadsafe_function(provider->statusTsfn, napi_tsfn_abort);
+        provider->statusTsfn = nullptr;
+    }
     if (provider->callbackRef != nullptr) {
         napi_delete_reference(env, provider->callbackRef);
         provider->callbackRef = nullptr;
@@ -592,6 +674,10 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
     if (nativeProvider->provider != nullptr) {
         nativeProvider->provider->DeleteProvider();
         nativeProvider->provider = nullptr;
+    }
+    if (nativeProvider->statusTsfn != nullptr) {
+        napi_release_threadsafe_function(nativeProvider->statusTsfn, napi_tsfn_abort);
+        nativeProvider->statusTsfn = nullptr;
     }
     if (nativeProvider->callbackRef != nullptr) {
         napi_delete_reference(env, nativeProvider->callbackRef);

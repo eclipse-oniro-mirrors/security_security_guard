@@ -19,7 +19,7 @@
 
 #include <atomic>
 #include <cstdint>
-#include <future>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "ffrt.h"
+#include "ffrt_inner.h"
 #include "iremote_object.h"
 #include "nocopyable.h"
 
@@ -41,8 +42,10 @@
 namespace OHOS::Security::SecurityGuard {
 constexpr size_t MAX_AUTH_PROVIDER_SIZE_ONE_PROCESS = 1;
 constexpr size_t MAX_AUTH_PROVIDER_SIZE = 16;
-constexpr size_t MAX_AUTH_REQUEST_CONCURRENT = 16;
+constexpr size_t MAX_AUTH_REQUEST_CONCURRENT_PER_PROVIDER = 128;
 constexpr const char* AUTH_SERVICE_ACCESS_PERMISSION = "ohos.permission.AUTH_SERVICE_ACCESS";
+// P1-3: seqnum 索引分片数，降低高并发下锁竞争
+constexpr size_t SEQNUM_SHARD_COUNT = 16;
 
 class AuthCoordinator {
 public:
@@ -65,14 +68,26 @@ private:
     // seqnum: 每客户端每事件独有，用于路由查找
     struct RoutingContext {
         int64_t eventId {0};
+        int64_t beginTime {0};
+        std::string eventContent;      // M12: 原始事件内容，供超时 HA 打点
+        std::string eventMetadata;     // M12: 原始事件 metadata，供超时 HA 打点
         size_t sentClientCount {0};
         size_t defaultDenyCount {0};
         std::map<std::string, AuthStrategy> clientResults;          // clientId → 回填策略
         std::map<std::string, AuthStrategy> clientTimeoutStrategies; // clientId → 超时策略
-        std::map<std::string, std::shared_ptr<std::promise<AuthStrategy>>> clientPromises; // clientId → promise
-        std::shared_ptr<std::promise<AuthResult>> resultPromise;
+        std::map<std::string, std::shared_ptr<ffrt::promise<AuthStrategy>>> clientPromises; // clientId → promise
+        // M12: per-client 应用信息，供超时 HA 打点（应用信息+事件信息+超时时间）
+        struct ClientAppInfo {
+            pid_t pid {0};
+            int32_t uid {0};
+            int64_t seqnum {0};
+        };
+        std::map<std::string, ClientAppInfo> clientAppInfos;  // clientId → pid/uid/seqnum
+        std::shared_ptr<ffrt::promise<AuthResult>> resultPromise;
         ffrt::mutex ctxMutex;
         bool completed {false};
+        bool resultPromiseSatisfied {false};
+        std::set<std::string> satisfiedClientIds;
         AuthStrategy mergedAuthStrategy {AuthStrategy::ALLOW};
     };
 
@@ -93,32 +108,43 @@ private:
     // DispatchEventToClients 入参超过 5，用结构体收拢
     struct DispatchParams {
         int64_t requestId;
-        int64_t eventId;
-        const std::vector<AuthClientStatus> &clientStatusList;
+        const AuthEventInfo &eventInfo;
         RoutingContext &ctx;
         DispatchResult &result;
+        std::shared_ptr<RoutingContext> ctxPtr;  // P0-1: 传递给 RegisterNormalClient 写入分片索引
     };
     void DispatchEventToClients(const DispatchParams &params);
-    void NotifyDegradedClient(int64_t eventId, AuthEventSessionService *session);
-    void RegisterNormalClient(int64_t requestId, int64_t eventId, AuthEventSessionService *session,
-        RoutingContext &ctx, DispatchResult &result,
+    void NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthEventSessionService *session);
+    // RegisterNormalClient: 入参收拢到 DispatchParams，避免超过 5 个入参
+    void RegisterNormalClient(const DispatchParams &params, AuthEventSessionService *session,
         std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets);
-    void PushEventsToClients(int64_t eventId,
+    void PushEventsToClients(const AuthEventInfo &eventInfo,
         const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         const DispatchResult &result);
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
     void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
-    void HandleTimeout(RoutingContext &ctx);
-    void RegisterRoutingContext(int64_t requestId, RoutingContext &ctx);
-    void SubmitAsyncWait(int64_t requestId, std::vector<int64_t> &&seqnums,
-        std::vector<std::string> &&clientIds, const sptr<IRemoteObject> &resultCallback);
-    void WaitForCompletion(RoutingContext &ctx, AuthResult &result,
+    // 拆分 HandleTimeout: 超时单个 client 处置 + 聚合结果通知，避免单函数超过 50 行
+    void HandleTimeoutClient(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
+    void NotifyTimeoutResult(RoutingContext &ctx, const std::string &clientId);
+    void SatisfyResultPromise(RoutingContext &ctx);
+    // P0-2: HandleTimeout 全程持 ctxMutex，避免与 SetAuthResult 数据竞争
+    void HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr);
+    // 拆分 SetAuthResult: 查找 ctx + 回填策略 + HA 打点，避免单函数超过 50 行
+    std::shared_ptr<RoutingContext> FindRoutingContext(const std::string &clientId, int64_t seqnum);
+    void RecordClientResult(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
+    void ReportDenyResult(const RoutingContext &ctx, const std::string &clientId);
+    // P0-3: ffrt 任务捕获 sptr<AuthProviderSessionService>，避免 provider 析构后 UAF
+    void ProcessAuthResultAsync(sptr<AuthProviderSessionService> provider, int64_t requestId,
+        const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback);
+    // P0-1: WaitForCompletion 持有 shared_ptr 保证 ctx 存活，wait_for 不持锁
+    void WaitForCompletion(std::shared_ptr<RoutingContext> ctxPtr, AuthResult &result,
         int64_t requestId, const std::vector<int64_t> &seqnums,
         const std::vector<std::string> &clientIds);
     void BuildAuthResult(RoutingContext &ctx, AuthResult &result);
     void NotifyAuthResult(const sptr<IRemoteObject> &callback, const AuthResult &result);
-    void ReportTimeoutHA(int64_t eventId, int64_t seqnum, int64_t timeoutMs);
     std::vector<AuthClientInfo> CollectClientInfos();
+    // P1-3: 按 hash(seqnumKey) 分片，返回对应分片索引
+    static size_t GetSeqnumShardIndex(const std::string &seqnumKey);
 
     // seqnum per-client 递增，不同客户端可能相同，用 clientId+seqnum 组合 key 查找
     // 组合 key 格式: clientId + "_" + seqnum
@@ -126,9 +152,15 @@ private:
 
     ffrt::mutex mutex_{};
     std::set<sptr<AuthProviderSessionService>> providerSessions_{};
-    std::map<int64_t, std::unique_ptr<RoutingContext>> routingContexts_{};  // requestId → ctx
-    std::map<std::string, int64_t> seqnumToRequestId_{};  // clientId_seqnum → requestId
-    std::map<std::string, AuthEventSessionService *> seqnumToSession_{}; // clientId_seqnum → session
+    // P0-1: unique_ptr → shared_ptr，SetAuthResult 持拷贝延长生命周期，避免 erase 后 UAF
+    std::map<int64_t, std::shared_ptr<RoutingContext>> routingContexts_{};  // requestId → ctx
+    // P1-3: seqnumKey → ctx 分片索引，替代原 seqnumToRequestId_ + routingContexts_ 两级查找
+    // 每 SetAuthResult 只需锁对应分片（~2μs），替代原全局 mutex_（~30μs）
+    struct SeqnumShard {
+        ffrt::mutex mutex;
+        std::map<std::string, std::shared_ptr<RoutingContext>> seqnumToCtx;
+    };
+    SeqnumShard seqnumShards_[SEQNUM_SHARD_COUNT];
     std::atomic<int64_t> requestCounter_ {0};
 };
 } // namespace OHOS::Security::SecurityGuard

@@ -67,6 +67,18 @@ sptr<MockRemoteObject> CreateRemoteObject()
     return obj;
 }
 
+// 构造 CreatAuthEventClient 入参（控制入参 ≤5 适配）
+CreateClientParams MakeParams(pid_t pid, int32_t uid, bool allowFlag, const sptr<IRemoteObject> &cb)
+{
+    CreateClientParams params;
+    params.callerPid = pid;
+    params.callerUid = uid;
+    params.timeoutAllowFlag = allowFlag ? 1 : 0;
+    params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
+    params.callback = cb;
+    return params;
+}
+
 // 经管理器创建会话并返回会话对象裸指针（管理器会话集合持有强引用，测试期内有效）
 AuthEventSessionService *CreateManagedSession(pid_t pid, int32_t uid, AuthStrategy timeoutStrategy,
     const sptr<IRemoteObject> &cb)
@@ -196,7 +208,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission002, TestSize.Lev
     EXPECT_EQ(session->SetAuthResult(event, true), SUCCESS);
     AuthStrategy authStrategy = AuthStrategy::ALLOW;
     EXPECT_EQ(AuthEventSubscribeManager::GetInstance().GetAuthResult(4002, authStrategy), SUCCESS);
-    EXPECT_TRUE(allowFlag);
+    EXPECT_EQ(authStrategy, AuthStrategy::ALLOW);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SessionApiPermission001, TestSize.Level0)
@@ -262,14 +274,14 @@ HWTEST_F(AuthEventSubscribeManagerTest, CreatAuthEventClient001, TestSize.Level0
     sptr<IRemoteObject> cb = CreateRemoteObject();
     sptr<IRemoteObject> sessionRemote = nullptr;
     // 正常创建：下发非空会话对象
-    EXPECT_EQ(manager.CreatAuthEventClient(9001, 9001 + 100, true, cb, sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote), SUCCESS);
     EXPECT_NE(sessionRemote, nullptr);
     // 同一 cb 重复创建 -> BAD_PARAM
     sptr<IRemoteObject> sessionRemote2 = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(9001, 9001 + 100, true, cb, sessionRemote2), BAD_PARAM);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote2), BAD_PARAM);
     // 空回调 -> NULL_OBJECT
     sptr<IRemoteObject> sessionRemote3 = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(9001, 9001 + 100, true, nullptr, sessionRemote3), NULL_OBJECT);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, nullptr), sessionRemote3), NULL_OBJECT);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, TimeoutPolicyStorage001, TestSize.Level0)
@@ -279,23 +291,26 @@ HWTEST_F(AuthEventSubscribeManagerTest, TimeoutPolicyStorage001, TestSize.Level0
     // 创建时设置阻断(false) -> 会话读取为 false；默认放行(true) -> 读取为 true
     auto *blockSession = CreateManagedSession(9801, 9801 + 100, AuthStrategy::DENY, CreateRemoteObject());
     ASSERT_NE(nullptr, blockSession);
-    EXPECT_FALSE(blockSession->GetTimeoutAllowFlag());
+    EXPECT_EQ(blockSession->GetTimeoutStrategy(), AuthStrategy::DENY);
     auto *allowSession = CreateManagedSession(9802, 9802 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, allowSession);
-    EXPECT_TRUE(allowSession->GetTimeoutAllowFlag());
+    EXPECT_EQ(allowSession->GetTimeoutStrategy(), AuthStrategy::ALLOW);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(9101, 9101 + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(9101, 9101 + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
     // 同一进程第 3 个客户端
-    EXPECT_EQ(manager.CreatAuthEventClient(9101, 9101 + 100, true, CreateRemoteObject(), sessionRemote),
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
         CLIENT_EXCEED_PROCESS_LIMIT);
     // 其他进程不受影响
-    EXPECT_EQ(manager.CreatAuthEventClient(9102, 9102 + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9102, 9102 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
@@ -303,17 +318,20 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
     for (pid_t pid = 9200; pid < 9208; pid++) {
-        EXPECT_EQ(manager.CreatAuthEventClient(pid, pid + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
-        EXPECT_EQ(manager.CreatAuthEventClient(pid, pid + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
+        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+            SUCCESS);
+        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+            SUCCESS);
     }
     // 会话集合已满 16，新进程创建 -> GLOBAL_LIMIT
-    EXPECT_EQ(manager.CreatAuthEventClient(9300, 9300 + 100, true, CreateRemoteObject(), sessionRemote),
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
         CLIENT_EXCEED_GLOBAL_LIMIT);
     // 销毁后可重新创建
     auto *session = CreateManagedSession(9207, 9207 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(manager.DestroyAuthEventClient(session), SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(9300, 9300 + 100, true, CreateRemoteObject(), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
+        SUCCESS);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SubscribeAndNotify001, TestSize.Level0)
@@ -321,7 +339,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SubscribeAndNotify001, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<MockRemoteObject> obj = CreateRemoteObject();
     EXPECT_CALL(*obj, SendRequest(IAuthEventCallback::CMD_ON_AUTH_EVENT, _, _, _)).Times(1);
-    auto *session = CreateManagedSession(9401, 9401 + 100, true, obj);
+    auto *session = CreateManagedSession(9401, 9401 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
     ASSERT_EQ(manager.SubscribeAuthEvent(session, 1001), SUCCESS);
     // 重复订阅幂等
@@ -339,7 +357,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, UnsubscribeAndNotify002, TestSize.Level0
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<MockRemoteObject> obj = CreateRemoteObject();
     EXPECT_CALL(*obj, SendRequest(_, _, _, _)).Times(0);
-    auto *session = CreateManagedSession(9402, 9402 + 100, true, obj);
+    auto *session = CreateManagedSession(9402, 9402 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
     ASSERT_EQ(manager.SubscribeAuthEvent(session, 1002), SUCCESS);
     EXPECT_EQ(manager.UnsubscribeAuthEvent(session, 1002), SUCCESS);
@@ -351,7 +369,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, UnsubscribeAndNotify002, TestSize.Level0
 HWTEST_F(AuthEventSubscribeManagerTest, UnsubscribeNotSubscribed003, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
-    auto *session = CreateManagedSession(9403, 9403 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9403, 9403 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     // 退订未订阅的 eventId -> 幂等 SUCCESS
     EXPECT_EQ(manager.UnsubscribeAuthEvent(session, 1003), SUCCESS);
@@ -360,7 +378,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, UnsubscribeNotSubscribed003, TestSize.Le
 HWTEST_F(AuthEventSubscribeManagerTest, InvalidSession004, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
-    auto *session = CreateManagedSession(9404, 9404 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9404, 9404 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     ASSERT_EQ(manager.DestroyAuthEventClient(session), SUCCESS);
     // 已销毁会话（不在会话集合）-> BAD_PARAM
@@ -377,7 +395,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, PidBound005, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_HAP));
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
-    auto *session = CreateManagedSession(9999, 9999 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9999, 9999 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(session->Subscribe(1006), BAD_PARAM);
     EXPECT_EQ(session->Unsubscribe(1006), BAD_PARAM);
@@ -412,29 +430,29 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResult001, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     AuthEvent event(3001, "content", "metadata");
     // 已销毁会话回填 -> BAD_PARAM
-    auto *stale = CreateManagedSession(9501, 9501 + 100, true, CreateRemoteObject());
+    auto *stale = CreateManagedSession(9501, 9501 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, stale);
     ASSERT_EQ(manager.DestroyAuthEventClient(stale), SUCCESS);
     EXPECT_EQ(manager.SetAuthResult(stale, event, AuthStrategy::ALLOW), BAD_PARAM);
 
-    auto *session = CreateManagedSession(9502, 9502 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9502, 9502 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW), SUCCESS);
     AuthStrategy authStrategy = AuthStrategy::ALLOW;
-    EXPECT_EQ(manager.GetAuthResult(3001, allowFlag), SUCCESS);
-    EXPECT_TRUE(allowFlag);
+    EXPECT_EQ(manager.GetAuthResult(3001, authStrategy), SUCCESS);
+    EXPECT_EQ(authStrategy, AuthStrategy::ALLOW);
     // 覆盖更新
     EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY), SUCCESS);
-    EXPECT_EQ(manager.GetAuthResult(3001, allowFlag), SUCCESS);
-    EXPECT_FALSE(allowFlag);
+    EXPECT_EQ(manager.GetAuthResult(3001, authStrategy), SUCCESS);
+    EXPECT_EQ(authStrategy, AuthStrategy::DENY);
     // 未设置过的 eventId
-    EXPECT_EQ(manager.GetAuthResult(9999, allowFlag), NOT_FOUND);
+    EXPECT_EQ(manager.GetAuthResult(9999, authStrategy), NOT_FOUND);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultTooLong002, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
-    auto *session = CreateManagedSession(9503, 9503 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9503, 9503 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     std::string tooLong(MAX_AUTH_EVENT_STR_LEN + 1, 'a');
     AuthEvent longContent(3002, tooLong, "");
@@ -446,7 +464,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultTooLong002, TestSize.Level0
 HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
-    auto *session = CreateManagedSession(9510, 9510 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9510, 9510 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     for (int64_t eventId = 1; eventId <= static_cast<int64_t>(MAX_AUTH_EVENT_SUBSCRIBE_SIZE); eventId++) {
         ASSERT_EQ(manager.SubscribeAuthEvent(session, eventId), SUCCESS);
@@ -458,7 +476,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit001, TestSize.Level0)
 HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit002, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
-    auto *session = CreateManagedSession(9511, 9511 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9511, 9511 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     for (int64_t eventId = 1; eventId <= static_cast<int64_t>(MAX_AUTH_EVENT_RESULT_SIZE); eventId++) {
         AuthEvent event(eventId);
@@ -474,7 +492,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SubscriberDied007, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<MockRemoteObject> obj = CreateRemoteObject();
     EXPECT_CALL(*obj, SendRequest(_, _, _, _)).Times(0);
-    auto *session = CreateManagedSession(9601, 9601 + 100, true, obj);
+    auto *session = CreateManagedSession(9601, 9601 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
     ASSERT_EQ(manager.SubscribeAuthEvent(session, 1007), SUCCESS);
     // 经真实 per-session DeathRecipient 回调链路触发清理
@@ -492,13 +510,13 @@ HWTEST_F(AuthEventSubscribeManagerTest, AuthBlockResultReport001, TestSize.Level
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     // 阻断结果回填：打点路径在无 HA 环境下仅告警，不影响返回值
-    auto *session = CreateManagedSession(9703, 9703 + 100, true, CreateRemoteObject());
+    auto *session = CreateManagedSession(9703, 9703 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     AuthEvent event(1104, "content", "metadata");
     EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::DENY), SUCCESS);
-    bool allowFlag = true;
-    EXPECT_EQ(manager.GetAuthResult(1104, allowFlag), SUCCESS);
-    EXPECT_FALSE(allowFlag);
+    AuthStrategy authStrategy = AuthStrategy::ALLOW;
+    EXPECT_EQ(manager.GetAuthResult(1104, authStrategy), SUCCESS);
+    EXPECT_EQ(authStrategy, AuthStrategy::DENY);
 }
 
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE

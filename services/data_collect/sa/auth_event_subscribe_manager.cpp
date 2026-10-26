@@ -22,7 +22,7 @@
 #include "ipc_skeleton.h"
 
 #include "auth_event_callback_proxy.h"
-#include "auth_event_reporter.h"
+#include "auth_coordinator.h"
 #include "i_auth_event_callback.h"
 #include "security_guard_define.h"
 #include "security_guard_log.h"
@@ -154,36 +154,45 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams
 
 int32_t AuthEventSubscribeManager::SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId)
 {
-    std::lock_guard<ffrt::mutex> lock(mutex_);
-    auto iter = FindSessionLocked(session);
-    if (iter == sessions_.end()) {
-        SGLOGE("session not found");
-        return BAD_PARAM;
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        auto iter = FindSessionLocked(session);
+        if (iter == sessions_.end()) {
+            SGLOGE("session not found");
+            return BAD_PARAM;
+        }
+        auto &eventIds = (*iter)->GetEventIds();
+        if (eventIds.size() >= MAX_AUTH_EVENT_SUBSCRIBE_SIZE) {
+            SGLOGE("subscribe size limited");
+            return FILTER_EXCEED_LIMIT;
+        }
+        eventIds.insert(eventId);
     }
-    auto &eventIds = (*iter)->GetEventIds();
-    if (eventIds.size() >= MAX_AUTH_EVENT_SUBSCRIBE_SIZE) {
-        SGLOGE("subscribe size limited");
-        return FILTER_EXCEED_LIMIT;
-    }
-    eventIds.insert(eventId);
+    // 异步通知 Provider 刷新客户端列表
+    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
     SGLOGI("subscribe auth event, eventId=%{public}" PRId64, eventId);
     return SUCCESS;
 }
 
 int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId)
 {
-    std::lock_guard<ffrt::mutex> lock(mutex_);
-    auto iter = FindSessionLocked(session);
-    if (iter == sessions_.end()) {
-        SGLOGE("session not found");
-        return BAD_PARAM;
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        auto iter = FindSessionLocked(session);
+        if (iter == sessions_.end()) {
+            SGLOGE("session not found");
+            return BAD_PARAM;
+        }
+        (*iter)->GetEventIds().erase(eventId);
     }
-    (*iter)->GetEventIds().erase(eventId);
+    // 异步通知 Provider 刷新客户端列表
+    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
     SGLOGI("unsubscribe auth event, eventId=%{public}" PRId64, eventId);
     return SUCCESS;
 }
 
 // 验收: Client 扩展参数 — defaultTimeoutStrategy 保存到会话，供协调者超时处置时读取
+// 锁内存表，锁外转发到 Coordinator，驱动从严聚合与 promise 解阻塞（避免嵌套持锁）
 int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *session, const AuthEvent &event,
     int32_t authStrategy)
 {
@@ -206,10 +215,10 @@ int32_t AuthEventSubscribeManager::SetAuthResult(AuthEventSessionService *sessio
         }
         authResults_[event.GetEventId()] = strategy;
     }
-    if (strategy == AuthStrategy::DENY) {
-        AuthEventReporter::ReportAuthBlockResult(session->GetPid(), session->GetUid(), event);
-    }
-    SGLOGI("set auth result, eventId=%{public}" PRId64 ", authStrategy=%{public}d", event.GetEventId(), authStrategy);
+    // 锁外转发到 Coordinator，驱动从严聚合与 promise 解阻塞
+    int32_t coordResult = AuthCoordinator::GetInstance().SetAuthResult(session, event, authStrategy);
+    SGLOGI("set auth result, eventId=%{public}" PRId64 ", authStrategy=%{public}d, coordResult=%{public}d",
+        event.GetEventId(), authStrategy, coordResult);
     return SUCCESS;
 }
 
@@ -239,6 +248,8 @@ int32_t AuthEventSubscribeManager::DestroyAuthEventClient(AuthEventSessionServic
     if (callback != nullptr && recipient != nullptr) {
         callback->RemoveDeathRecipient(recipient);
     }
+    // 异步通知 Provider 刷新客户端列表
+    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
     SGLOGI("destroy auth event client");
     return SUCCESS;
 }
@@ -258,6 +269,8 @@ void AuthEventSubscribeManager::RemoveSession(const sptr<AuthEventSessionService
     if (callback != nullptr && recipient != nullptr) {
         callback->RemoveDeathRecipient(recipient);
     }
+    // 异步通知 Provider 刷新客户端列表
+    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
 }
 
 void AuthEventSubscribeManager::NotifyAuthEvent(const AuthEvent &event)
@@ -300,6 +313,19 @@ std::vector<sptr<AuthEventSessionService>> AuthEventSubscribeManager::GetSubscri
             continue;
         }
         if (session->IsEventSubscribed(eventId)) {
+            result.push_back(session);
+        }
+    }
+    return result;
+}
+
+// 供 AuthCoordinator 收集全量 Client 信息（锁内快照，锁外由调用方使用）
+std::vector<sptr<AuthEventSessionService>> AuthEventSubscribeManager::GetAllSessions()
+{
+    std::vector<sptr<AuthEventSessionService>> result;
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    for (const auto &session : sessions_) {
+        if (session != nullptr && session->IsValid()) {
             result.push_back(session);
         }
     }

@@ -35,7 +35,7 @@ using AuthProviderCallback = std::function<void(const std::vector<AuthClientInfo
 // SA 聚合完成后经回调通知 kit，kit 收到 AuthResult 后触发 Promise 或 std::function
 using AuthResultCallback = std::function<void(const AuthResult &result)>;
 
-class AuthProviderSubscribeClient {
+class AuthProviderSubscribeClient : public std::enable_shared_from_this<AuthProviderSubscribeClient> {
 private:
     struct ConstructTag {};
 
@@ -60,7 +60,8 @@ private:
         const sptr<IRemoteObject::DeathRecipient> &deathRecipient);
     bool IsDeleted();
     void HandleDeath();
-    bool RecoverSession();
+    // 退避重试循环：重新 CreateAuthProvider 注册
+    bool RecoverSession(const std::string &serviceId);
     bool SwitchSessionRemote(const sptr<IRemoteObject> &newSessionRemote,
         const sptr<AuthProviderSession> &sessionProxy);
     sptr<IRemoteObject> ReconnectService();

@@ -17,6 +17,7 @@
 #define SECURITY_GUARD_AUTH_PROVIDER_SESSION_SERVICE_H
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 
@@ -43,6 +44,31 @@ public:
     void MarkInvalid() { valid_ = false; }
     void SetDeathRecipient(const sptr<IRemoteObject::DeathRecipient> &recipient) { deathRecipient_ = recipient; }
     sptr<IRemoteObject::DeathRecipient> GetDeathRecipient() const { return deathRecipient_; }
+    // P1-1: 断开 Provider 与 DeathRecipient 的循环引用，防止内存泄漏
+    void ClearDeathRecipient() { deathRecipient_ = nullptr; }
+
+    // per-provider 并发请求计数（M6: 每 Provider 上限 128）
+    size_t GetActiveRequestCount() const { return activeRequestCount_.load(); }
+    void IncrementActiveRequest() { activeRequestCount_.fetch_add(1); }
+    void DecrementActiveRequest()
+    {
+        if (activeRequestCount_.load() > 0) {
+            activeRequestCount_.fetch_sub(1);
+        }
+    }
+    // 原子地"检查并递增"并发计数，消除 TOCTOU（避免多线程同时通过校验后递增超限）
+    // 返回 true 表示成功递增（未超 maxLimit），false 表示已达上限
+    bool TryIncrementActiveRequest(size_t maxLimit)
+    {
+        size_t current = activeRequestCount_.load(std::memory_order_relaxed);
+        while (current < maxLimit) {
+            if (activeRequestCount_.compare_exchange_weak(current, current + 1,
+                std::memory_order_relaxed, std::memory_order_relaxed)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
 private:
     pid_t pid_ {};
@@ -51,15 +77,18 @@ private:
     sptr<IRemoteObject> callback_ {};
     bool valid_ {true};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_ {};
+    std::atomic<size_t> activeRequestCount_ {0};  // per-provider 并发请求计数
 };
 
 class AuthProviderSessionDeathRecipient : public IRemoteObject::DeathRecipient {
 public:
-    explicit AuthProviderSessionDeathRecipient(sptr<AuthProviderSessionService> provider);
+    // wptr 避免与 AuthProviderSessionService::deathRecipient_ 形成循环引用
+    // (Provider 强引用 Recipient，Recipient 若也强引用 Provider 则循环)
+    explicit AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider);
     ~AuthProviderSessionDeathRecipient() override = default;
     void OnRemoteDied(const wptr<IRemoteObject> &remote) override;
 private:
-    sptr<AuthProviderSessionService> provider_ {};
+    wptr<AuthProviderSessionService> provider_ {};
 };
 } // namespace OHOS::Security::SecurityGuard
 

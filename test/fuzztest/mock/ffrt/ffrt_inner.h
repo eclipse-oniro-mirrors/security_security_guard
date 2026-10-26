@@ -17,5 +17,12 @@
 #define TEST_FUZZTEST_MOCK_FFRT_FFRT_INNER_H
 
 #include "ffrt.h"
+#include <future>
+
+namespace ffrt {
+    using future_status = std::future_status;
+    template<typename R> using promise = std::promise<R>;
+    template<typename R> using future = std::future<R>;
+}
 
 #endif  // TEST_FUZZTEST_MOCK_FFRT_FFRT_INNER_H

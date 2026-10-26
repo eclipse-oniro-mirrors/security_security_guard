@@ -24,14 +24,14 @@ namespace OHOS::Security::SecurityGuard {
 class AuthClientStatus : public Parcelable {
 public:
     AuthClientStatus() = default;
-    AuthClientStatus(const std::string &clientId, bool isDegrader)
-        : clientId_(clientId), isDegraded_(isDegrader) {};
+    AuthClientStatus(const std::string &clientId, bool isDegraded)
+        : clientId_(clientId), isDegraded_(isDegraded) {};
     ~AuthClientStatus() override = default;
 
     std::string GetClientId() const { return clientId_; };
     bool IsDegraded() const { return isDegraded_; };
     void SetClientId(const std::string &clientId) { clientId_ = clientId; };
-    void SetDegraded(bool isDegrader) { isDegraded_ = isDegrader; };
+    void SetDegraded(bool isDegraded) { isDegraded_ = isDegraded; };
     bool Marshalling(Parcel &parcel) const override;
     bool ReadFromParcel(Parcel &parcel);
     static AuthClientStatus *Unmarshalling(Parcel &parcel);

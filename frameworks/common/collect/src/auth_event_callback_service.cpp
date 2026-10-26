@@ -68,7 +68,10 @@ int32_t AuthEventCallbackService::OnAuthEvent(const AuthEvent &event, int64_t se
         return FAILED;
     }
     SGLOGD("OnAuthEvent eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64, event.GetEventId(), seqnum);
-    callback(event);
+    
+    AuthEvent eventWithSeqnum = event;
+    eventWithSeqnum.SetSeqnum(seqnum);
+    callback(eventWithSeqnum);
     return SUCCESS;
 }
 } // namespace OHOS::Security::SecurityGuard

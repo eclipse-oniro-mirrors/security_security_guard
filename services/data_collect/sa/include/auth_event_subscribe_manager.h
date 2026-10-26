@@ -68,6 +68,8 @@ public:
     void NotifyAuthEvent(const AuthEvent &event);
     // 获取订阅了指定 eventId 的所有有效会话（供 AuthCoordinator 调用）
     std::vector<sptr<AuthEventSessionService>> GetSubscribedSessions(int64_t eventId);
+    // 获取全量有效会话快照（供 AuthCoordinator 收集 ClientInfo，锁内快照锁外使用）
+    std::vector<sptr<AuthEventSessionService>> GetAllSessions();
     // 订阅者死亡清理入口（AuthEventSessionDeathRecipient 转调）
     void RemoveSession(const sptr<AuthEventSessionService> &session);
     // 双轨接入校验（主接口 CreatAuthEventClient 与 session 四方法前置共用）：

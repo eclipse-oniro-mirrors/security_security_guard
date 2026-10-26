@@ -36,6 +36,7 @@ using namespace OHOS::Security;
 using namespace OHOS::Security::SecurityGuard;
 
 namespace {
+constexpr int32_t TEST_DEFAULT_TIMEOUT_MS = 400;
 class AuthCoordinatorTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -46,7 +47,9 @@ public:
         std::lock_guard<ffrt::mutex> lock(coordinator.mutex_);
         coordinator.providerSessions_.clear();
         coordinator.routingContexts_.clear();
-        coordinator.seqnumToEventId_.clear();
+        for (auto &shard : coordinator.seqnumShards_) {
+            shard.seqnumToCtx.clear();
+        }
 
         auto &manager = AuthEventSubscribeManager::GetInstance();
         std::lock_guard<ffrt::mutex> mlock(manager.mutex_);
@@ -163,6 +166,5 @@ HWTEST_F(AuthCoordinatorTest, ProviderQuotaGlobalLimit001, TestSize.Level0)
     int32_t ret = coordinator.CreateAuthProvider(6999, 6000, cb, "overflow", remote);
     EXPECT_EQ(ret, AUTH_PROVIDER_EXCEED_GLOBAL_LIMIT);
 }
-} // namespace OHOS::Security::SecurityGuard
 
 #endif // SECURITY_GUARD_AUTH_EVENT_ENABLE

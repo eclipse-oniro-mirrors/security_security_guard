@@ -130,13 +130,14 @@ private:
 
 // 每会话独立的订阅者死亡观察者：挂在客户端回调对象上，
 // 客户端进程死亡时自治清理对应会话（无需按回调反查遍历）。
+// wptr 避免与 AuthEventSessionService::deathRecipient_ 形成循环引用
 class AuthEventSessionDeathRecipient : public IRemoteObject::DeathRecipient {
 public:
-    explicit AuthEventSessionDeathRecipient(sptr<AuthEventSessionService> session);
+    explicit AuthEventSessionDeathRecipient(wptr<AuthEventSessionService> session);
     ~AuthEventSessionDeathRecipient() override = default;
     void OnRemoteDied(const wptr<IRemoteObject> &remote) override;
 private:
-    sptr<AuthEventSessionService> session_ {};
+    wptr<AuthEventSessionService> session_ {};
 };
 } // namespace OHOS::Security::SecurityGuard
 

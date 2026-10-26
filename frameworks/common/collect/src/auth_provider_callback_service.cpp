@@ -50,11 +50,18 @@ void AuthProviderCallbackService::ClearCallBack()
     callback_ = nullptr;
 }
 
+// 批次二（待评估）: OnClientStatusChanged 持 notifyMutex_ 调用外部 callback 是反模式（持锁回调可能死锁）。
+// 但 notifyMutex_ 不能简单移除——它保护 callback_ 捕获资源（如 NAPI napi_ref）的生命周期：
+// ClearCallBack 必须等 OnClientStatusChanged 执行完才能销毁资源，否则 OnClientStatusChanged 持有的
+// callback 副本会引用已销毁的资源 → UAF。完整修复需重构为 shared_ptr<callback wrapper> 引用计数方案，
+// 让 callback 执行移到锁外同时保证资源安全。当前保持现状，添加注释说明语义约束。
 int32_t AuthProviderCallbackService::OnClientStatusChanged(const std::vector<AuthClientInfo> &clientsInfo)
 {
+    // notifyMutex_ 串行化回调执行 + 保护 callback_ 捕获资源的生命周期（防止 ClearCallBack 并发销毁资源）
     std::lock_guard<ffrt::mutex> execLock(mutexes_->notifyMutex_);
     std::function<void(const std::vector<AuthClientInfo> &clientsInfo)> callback;
     {
+        // callbackMutex_ 仅保护 callback_ 变量的读写，临界区极短
         std::lock_guard<ffrt::mutex> slotLock(mutexes_->callbackMutex_);
         callback = callback_;
     }
@@ -63,7 +70,7 @@ int32_t AuthProviderCallbackService::OnClientStatusChanged(const std::vector<Aut
         return FAILED;
     }
     SGLOGD("OnClientStatusChanged size=%{public}zu", clientsInfo.size());
-    callback(clientsInfo);
+    callback(clientsInfo);  // 持 notifyMutex_ 执行：保证 ClearCallBack 等待回调完成后再销毁资源
     return SUCCESS;
 }
 } // namespace OHOS::Security::SecurityGuard
