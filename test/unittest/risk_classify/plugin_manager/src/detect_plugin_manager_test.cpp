@@ -172,4 +172,34 @@ HWTEST_F(DetectPluginManagerTest, CheckPluginNameAndSize002, TestSize.Level1) {
     }
     EXPECT_FALSE(DetectPluginManager::getInstance().CheckPluginNameAndSize(pluginCfg));
 }
+
+// Covers StopRetryTask: idempotent when no retry thread exists (also converges
+// any thread left by earlier LoadAllPlugins cases).
+HWTEST_F(DetectPluginManagerTest, StopRetryTask001, TestSize.Level1) {
+    DetectPluginManager::getInstance().StopRetryTask();
+    DetectPluginManager::getInstance().StopRetryTask(); // 幂等
+    EXPECT_FALSE(DetectPluginManager::getInstance().retryThread_.joinable());
+    EXPECT_TRUE(DetectPluginManager::getInstance().isStopRetry_.load());
+    // 恢复状态，避免影响后续用例
+    DetectPluginManager::getInstance().isStopRetry_.store(false);
+}
+
+// Covers StopRetryTask: spawned retry thread exits at the next stop checkpoint
+// (1s sleep slice) and join completes; stop flag stays set.
+HWTEST_F(DetectPluginManagerTest, StopRetryTask002, TestSize.Level1) {
+    DetectPluginManager::getInstance().StopRetryTask(); // 先收敛既有线程，避免覆盖 joinable 线程
+    DetectPluginManager::getInstance().isStopRetry_.store(false);
+    DetectPluginManager::getInstance().isFailedEventStartRetry_ = false;
+    DetectPluginManager::getInstance().failedEventIdset_.insert(0x9999);
+    DetectPluginManager::getInstance().retryThread_ = ffrt::thread([]() {
+        DetectPluginManager::getInstance().RetrySubscriptionTask();
+    });
+    EXPECT_TRUE(DetectPluginManager::getInstance().retryThread_.joinable());
+    DetectPluginManager::getInstance().StopRetryTask();
+    EXPECT_FALSE(DetectPluginManager::getInstance().retryThread_.joinable()); // 已 join
+    EXPECT_TRUE(DetectPluginManager::getInstance().isStopRetry_.load());
+    // 清理状态，避免影响其他用例
+    DetectPluginManager::getInstance().failedEventIdset_.clear();
+    DetectPluginManager::getInstance().isFailedEventStartRetry_ = false;
+}
 }

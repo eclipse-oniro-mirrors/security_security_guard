@@ -48,14 +48,11 @@ bool ConfigDataManagerFuzzTest(const uint8_t* data, size_t size)
     int64_t eventId = fdp.ConsumeIntegral<int64_t>();
     uint32_t modelId = fdp.ConsumeIntegral<uint32_t>();
     std::string table = fdp.ConsumeRandomLengthString(MAX_STRING_SIZE);
-    std::set<int64_t> eventIds{eventId};
     ModelCfg modelCfg = {};
     EventCfg eventCfg = {};
     ConfigDataManager::GetInstance().InsertModelMap(modelId, modelCfg);
     ConfigDataManager::GetInstance().InsertEventMap(eventId, eventCfg);
-    ConfigDataManager::GetInstance().InsertModelToEventMap(modelId, eventIds);
     ConfigDataManager::GetInstance().InsertEventToTableMap(eventId, table);
-    ConfigDataManager::GetInstance().GetEventIds(modelId);
     ConfigDataManager::GetInstance().GetAllEventIds();
     ConfigDataManager::GetInstance().GetAllModelIds();
     ConfigDataManager::GetInstance().GetModelConfig(modelId, modelCfg);
@@ -63,7 +60,6 @@ bool ConfigDataManagerFuzzTest(const uint8_t* data, size_t size)
     ConfigDataManager::GetInstance().GetTableFromEventId(eventId);
     ConfigDataManager::GetInstance().ResetModelMap();
     ConfigDataManager::GetInstance().ResetEventMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     ConfigDataManager::GetInstance().ResetEventToTableMap();
     std::unordered_map<int64_t, EventCfg> mapTmp {};
     ConfigDataManager::GetInstance().SwapEventConfigMap(mapTmp);

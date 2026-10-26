@@ -39,6 +39,12 @@ DetectPluginManager& DetectPluginManager::getInstance()
     return instance;
 }
 
+DetectPluginManager::~DetectPluginManager()
+{
+    // 兜底：静态析构前先收敛重试线程，避免线程访问已析构成员
+    StopRetryTask();
+}
+
 void DetectPluginManager::LoadAllPlugins(const std::string &fileName)
 {
     SGLOGI("Start LoadAllPlugins.");
@@ -49,8 +55,14 @@ void DetectPluginManager::LoadAllPlugins(const std::string &fileName)
         LoadPlugin(plugin);
     }
     if (!isFailedEventStartRetry_) {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
         isFailedEventStartRetry_ = true;
-        ffrt::submit([this] { RetrySubscriptionTask(); });
+        // OnStop 已置停止标志则不再补启，保证停止语义闭环
+        if (isStopRetry_.load()) {
+            return;
+        }
+        // 保存可 join 句柄，退出时由 OnStop/析构置停止标志并等待线程退出
+        retryThread_ = ffrt::thread([this] { RetrySubscriptionTask(); });
     }
     SGLOGI("LoadAllPlugins finished");
 }
@@ -118,18 +130,33 @@ void DetectPluginManager::SubscribeEvent(int64_t eventId)
 void DetectPluginManager::RetrySubscriptionTask()
 {
     int32_t retryInterval = 10;
-    while (!failedEventIdset_.empty()) {
+    while (!isStopRetry_.load() && !failedEventIdset_.empty()) {
         auto tmpSet = failedEventIdset_;
         for (const auto eventId : tmpSet) {
+            if (isStopRetry_.load()) {
+                break;
+            }
             SGLOGI("Retry subscription event: 0x%{public}" PRIx64, eventId);
             failedEventIdset_.erase(eventId);
             SubscribeEvent(eventId);
         }
-        if (failedEventIdset_.empty()) {
+        if (failedEventIdset_.empty() || isStopRetry_.load()) {
             break;
         }
-        ffrt::this_task::sleep_for(std::chrono::seconds(retryInterval));
+        // 按 1 秒分片睡眠并在片间检查停止标志，保证 StopRetryTask 等待时限约为一个分片
+        for (int32_t slept = 0; slept < retryInterval && !isStopRetry_.load(); slept++) {
+            ffrt::this_task::sleep_for(std::chrono::seconds(1));
+        }
         retryInterval = std::min(retryInterval + RETRY_INTERVAL_INCREMENT, MAX_RETRY_INTERVAL);
+    }
+}
+
+void DetectPluginManager::StopRetryTask()
+{
+    isStopRetry_.store(true);
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    if (retryThread_.joinable()) {
+        retryThread_.join();
     }
 }
 

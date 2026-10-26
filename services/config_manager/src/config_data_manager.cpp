@@ -37,12 +37,6 @@ void ConfigDataManager::InsertEventMap(int64_t eventId, const EventCfg &config)
     eventMap_[eventId] = config;
 }
 
-void ConfigDataManager::InsertModelToEventMap(uint32_t modelId, std::set<int64_t> eventIds)
-{
-    std::lock_guard<ffrt::mutex> lock(modelToEventMutex_);
-    modelToEventMap_[modelId] = eventIds;
-}
-
 void ConfigDataManager::InsertEventToTableMap(int64_t eventId, std::string table)
 {
     std::lock_guard<ffrt::mutex> lock(eventToTableMutex_);
@@ -100,34 +94,21 @@ void ConfigDataManager::SwapModelMap(std::unordered_map<uint32_t, ModelCfg> newM
     modelMap_.swap(newModelMap);
 }
 
-void ConfigDataManager::SwapModelToEventMap(std::unordered_map<uint32_t, std::set<int64_t>> newModelToEventMap)
+void ConfigDataManager::SwapEventConfigMapWithTables(std::unordered_map<int64_t, EventCfg> newEventMap,
+    const std::vector<std::pair<int64_t, std::string>> &eventToTables)
 {
-    std::lock_guard<ffrt::mutex> lock(modelToEventMutex_);
-    modelToEventMap_.swap(newModelToEventMap);
-}
-
-void ConfigDataManager::ResetModelToEventMap()
-{
-    std::lock_guard<ffrt::mutex> lock(modelToEventMutex_);
-    modelToEventMap_.clear();
+    std::lock_guard<ffrt::mutex> eventLock(eventMutex_);
+    std::lock_guard<ffrt::mutex> tableLock(eventToTableMutex_);
+    eventMap_.swap(newEventMap);
+    for (const auto &[eventId, table] : eventToTables) {
+        eventToTableMap_[eventId] = table;
+    }
 }
 
 void ConfigDataManager::ResetEventToTableMap()
 {
     std::lock_guard<ffrt::mutex> lock(eventToTableMutex_);
     eventToTableMap_.clear();
-}
-
-std::vector<int64_t> ConfigDataManager::GetEventIds(uint32_t modelId)
-{
-    SGLOGD("modelId=%{public}u", modelId);
-    std::lock_guard<ffrt::mutex> lock(modelToEventMutex_);
-    std::vector<int64_t> vector;
-    if (modelToEventMap_.find(modelId) != modelToEventMap_.end()) {
-        SGLOGD("map contains modelId=%{public}u", modelId);
-        vector.assign(modelToEventMap_[modelId].begin(), modelToEventMap_[modelId].end());
-    }
-    return vector;
 }
 
 std::vector<int64_t> ConfigDataManager::GetAllEventIds()

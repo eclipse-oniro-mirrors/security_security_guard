@@ -116,8 +116,14 @@ bool EventConfig::Update()
         }
         newEventMap[config.eventId] = config;
     }
-    ConfigDataManager::GetInstance().SwapEventConfigMap(std::move(newEventMap));
-    EventConfig::CacheEventToTable(configs);
+    std::vector<std::pair<int64_t, std::string>> eventToTables {};
+    for (const auto &config : configs) {
+        if (config.oldEventId != 0) {
+            eventToTables.emplace_back(config.oldEventId, config.dbTable);
+        }
+        eventToTables.emplace_back(config.eventId, config.dbTable);
+    }
+    ConfigDataManager::GetInstance().SwapEventConfigMapWithTables(std::move(newEventMap), eventToTables);
     SGLOGI("cache EventConfig success");
     return true;
 }

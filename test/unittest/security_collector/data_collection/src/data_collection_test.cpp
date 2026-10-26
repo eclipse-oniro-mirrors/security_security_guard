@@ -13,6 +13,9 @@
  * limitations under the License.
  */
 #include <memory>
+#include <atomic>
+#include <thread>
+#include <unistd.h>
 #include "gmock/gmock.h"
 #define private public
 #include "data_collection.h"
@@ -559,5 +562,107 @@ HWTEST_F(DataCollectionTest, ICollectorBatchQuery03, testing::ext::TestSize.Leve
     EXPECT_EQ(collector.BatchQuery(rulers, events, failedEventIds), 0);
     EXPECT_EQ(events.size(), 1UL);
     EXPECT_EQ(failedEventIds.size(), 1UL);
+}
+
+// 覆盖 opMutex_ 串行化契约：查询（dlopen/登记/dlsym）与 CloseLib（dlclose）并发互斥，
+// 查询线程不会在执行期间被卸载其 .so（use-after-close 回归防护）。
+// 用非 gmock 覆写取路径（gmock 期望非线程安全），指向真实系统 so（无 GetCollector 导出，
+// 查询将失败于 dlsym，仍完整经过 dlopen -> needCloseLibMap_ 登记 -> CallGetCollector 竞争面）。
+// ARM32 板子无 /system/lib64，按 lib64/lib 顺序探测；两者皆缺失则跳过（dlopen 竞争面不可构造）。
+static std::string SelectSystemHilogSo()
+{
+    const std::vector<std::string> candidates = {
+        "/system/lib64/libhilog.z.so",
+        "/system/lib/libhilog.z.so",
+    };
+    for (const auto &path : candidates) {
+        if (access(path.c_str(), F_OK) == 0) {
+            return path;
+        }
+    }
+    return "";
+}
+
+class ConcurrentQueryCollection : public DataCollection {
+public:
+    ErrorCode GetCollectorPath(int64_t eventId, std::string &path) override
+    {
+        path = realSoPath;
+        return SUCCESS;
+    }
+
+    std::string realSoPath;
+};
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventConcurrentWithCloseLib001, TestSize.Level1)
+{
+    const std::string soPath = SelectSystemHilogSo();
+    if (soPath.empty()) {
+        GTEST_LOG_(WARNING) << "libhilog.z.so not present in /system/lib{,64}, skip";
+        return;
+    }
+    ConcurrentQueryCollection collection;
+    collection.realSoPath = soPath;
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(SecurityEventRuler(11111));
+    constexpr int loop = 200;
+    std::atomic<int> failedCount {0};
+    auto queryTask = [&collection, &rulers, &failedCount]() {
+        for (int i = 0; i < loop; i++) {
+            std::vector<SecurityEvent> events;
+            if (collection.QuerySecurityEvent(rulers, events) != SUCCESS) {
+                failedCount.fetch_add(1);
+            }
+        }
+    };
+    auto closeTask = [&collection]() {
+        for (int i = 0; i < loop; i++) {
+            collection.CloseLib();
+        }
+    };
+    std::thread queryThread1(queryTask);
+    std::thread queryThread2(queryTask);
+    std::thread closeThread(closeTask);
+    queryThread1.join();
+    queryThread2.join();
+    closeThread.join();
+    // 全部查询按预期 FAILED（so 无 GetCollector 导出），且全程无崩溃
+    EXPECT_EQ(failedCount.load(), 2 * loop);
+}
+
+HWTEST_F(DataCollectionTest, QuerySecurityEventBatchConcurrentWithCloseLib001, TestSize.Level1)
+{
+    const std::string soPath = SelectSystemHilogSo();
+    if (soPath.empty()) {
+        GTEST_LOG_(WARNING) << "libhilog.z.so not present in /system/lib{,64}, skip";
+        return;
+    }
+    ConcurrentQueryCollection collection;
+    collection.realSoPath = soPath;
+    std::vector<SecurityEventRuler> rulers;
+    rulers.emplace_back(SecurityEventRuler(11111));
+    constexpr int loop = 200;
+    std::atomic<int> failedIdsCount {0};
+    auto queryTask = [&collection, &rulers, &failedIdsCount]() {
+        for (int i = 0; i < loop; i++) {
+            std::vector<SecurityEvent> events;
+            std::vector<int64_t> failedEventIds;
+            (void)collection.QuerySecurityEventBatch(rulers, events, failedEventIds);
+            failedIdsCount.fetch_add(static_cast<int>(failedEventIds.size()));
+        }
+    };
+    auto closeTask = [&collection]() {
+        for (int i = 0; i < loop; i++) {
+            collection.CloseLib();
+        }
+    };
+    std::thread queryThread1(queryTask);
+    std::thread queryThread2(queryTask);
+    std::thread closeThread(closeTask);
+    queryThread1.join();
+    queryThread2.join();
+    closeThread.join();
+    // 每个 ruler 每次都失败登记（so 无 GetCollector 导出），且全程无崩溃
+    EXPECT_EQ(failedIdsCount.load(), 2 * loop);
 }
 }

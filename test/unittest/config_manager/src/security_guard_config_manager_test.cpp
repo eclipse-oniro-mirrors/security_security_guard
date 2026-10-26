@@ -190,24 +190,10 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestConfigDataManager002, TestSize.Leve
     EXPECT_FALSE(success);
 }
 
-HWTEST_F(SecurityGuardConfigManagerTest, TestConfigDataManager003, TestSize.Level1)
-{
-    std::set<int64_t> eventIds {1};
-    int32_t modelId = 0;
-    ConfigDataManager::GetInstance().InsertModelToEventMap(modelId, eventIds);
-    std::vector<int64_t> outEventIds = ConfigDataManager::GetInstance().GetEventIds(modelId);
-    EXPECT_TRUE(outEventIds.size() == 1);
-    EXPECT_TRUE(outEventIds[0] == 1);
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
-    outEventIds = ConfigDataManager::GetInstance().GetEventIds(modelId);
-    EXPECT_TRUE(outEventIds.size() == 0);
-}
-
 HWTEST_F(SecurityGuardConfigManagerTest, TestEventConfig002, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     EventConfig config;
     bool success = config.Parse();
     EXPECT_FALSE(success);
@@ -225,7 +211,6 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestEventConfig003, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     EventConfig config;
     bool success = config.Parse();
     EXPECT_FALSE(success);
@@ -261,7 +246,6 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestModelConfig002, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     ModelConfig config;
     bool success = config.Parse();
     EXPECT_FALSE(success);
@@ -280,7 +264,6 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestModelConfig003, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     ModelConfig config;
     bool success = config.Parse();
     EXPECT_FALSE(success);
@@ -299,7 +282,6 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestModelConfig004, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     ModelConfig config;
     nlohmann::json jsonObj;
     ModelCfg modelCfg;
@@ -328,7 +310,6 @@ HWTEST_F(SecurityGuardConfigManagerTest, TestModelConfig005, TestSize.Level1)
 {
     ConfigDataManager::GetInstance().ResetEventMap();
     ConfigDataManager::GetInstance().ResetModelMap();
-    ConfigDataManager::GetInstance().ResetModelToEventMap();
     ConfigDataManager::GetInstance().GetAllModelIds();
     ConfigDataManager::GetInstance().ResetEventToTableMap();
     EXPECT_TRUE(ConfigDataManager::GetInstance().GetTableFromEventId(0).empty());
@@ -1207,5 +1188,109 @@ HWTEST_F(SecurityGuardConfigManagerTest, UpdateConfig002, TestSize.Level1)
     bool ret = ConfigSubscriber::UpdateConfig(file);
     EXPECT_TRUE(ret);
     EXPECT_EQ(access(file.c_str(), F_OK), -1); // removed by UpdateConfig
+}
+
+// Covers SwapEventConfigMapWithTables: eventMap_ swapped and eventToTableMap_ upserted
+// in one atomic commit; stale table entries are kept (upsert semantics).
+HWTEST_F(SecurityGuardConfigManagerTest, TestConfigDataManager004, TestSize.Level1)
+{
+    ConfigDataManager::GetInstance().ResetEventMap();
+    ConfigDataManager::GetInstance().ResetEventToTableMap();
+    EventCfg oldCfg {};
+    oldCfg.eventId = 9001;
+    ConfigDataManager::GetInstance().InsertEventMap(9001, oldCfg);
+    ConfigDataManager::GetInstance().InsertEventToTableMap(9001, "old_table");
+
+    EventCfg newCfg {};
+    newCfg.eventId = 9002;
+    std::unordered_map<int64_t, EventCfg> newEventMap {};
+    newEventMap[9002] = newCfg;
+    std::vector<std::pair<int64_t, std::string>> eventToTables {};
+    eventToTables.emplace_back(9002, "new_table");
+    ConfigDataManager::GetInstance().SwapEventConfigMapWithTables(std::move(newEventMap), eventToTables);
+
+    EventCfg outCfg {};
+    EXPECT_FALSE(ConfigDataManager::GetInstance().GetEventConfig(9001, outCfg)); // 旧代换出
+    EXPECT_TRUE(ConfigDataManager::GetInstance().GetEventConfig(9002, outCfg)); // 新代换入
+    EXPECT_EQ(ConfigDataManager::GetInstance().GetTableFromEventId(9002), "new_table"); // 新表映射同时生效
+    EXPECT_EQ(ConfigDataManager::GetInstance().GetTableFromEventId(9001), "old_table"); // 旧表条目保留
+    ConfigDataManager::GetInstance().ResetEventMap();
+    ConfigDataManager::GetInstance().ResetEventToTableMap();
+}
+
+// 写入 EventConfig::Update 的输入流内容（含 oldEventId 别名与 db_table 表映射）
+static void WriteAtomicUpdateCfg(const std::string &file)
+{
+    std::ofstream out(file);
+    out << R"({
+    "eventcfg": [
+        {
+        "eventId" : "0000000009",
+        "oldEventId" : "0000000008",
+        "eventName" : "ut_atomic_event",
+        "version" : 0,
+        "eventType" : 0,
+        "dataSensitivityLevel" : 0,
+        "storageRamNums" : 1,
+        "storageRomNums" : 5,
+        "storageTime" : -1,
+        "owner":["3001000000"],
+        "source":0,
+        "isBatchUpload" : 0,
+        "db_table" : "ut_risk_table"
+        }
+    ]
+})";
+}
+
+// 兜底重建 Update 依赖的 cache 源（内容与部署资源一致，覆盖后跨轮行为不变），返回是否写入成功
+static bool RewriteCacheEventCfg()
+{
+    std::ofstream cacheOut(CONFIG_CACHE_FILES[EVENT_CFG_INDEX], std::ios::trunc);
+    cacheOut << R"({
+    "eventcfg": [
+        {
+        "eventId" : "0000000001",
+        "eventName" : "cache_event",
+        "version" : 0,
+        "eventType" : 0,
+        "dataSensitivityLevel" : 0,
+        "storageRamNums" : 1,
+        "storageRomNums" : 5,
+        "storageTime" : -1,
+        "owner":["3001000000"],
+        "source":0,
+        "isBatchUpload" : 0
+        }
+    ]
+})";
+    return !cacheOut.fail();
+}
+
+// Covers EventConfig::Update atomic commit: after update, every event of the new
+// config (including the oldEventId alias) is visible in eventMap_ with its table
+// mapping at the same time, no window of "new event without table".
+HWTEST_F(SecurityGuardConfigManagerTest, TestEventConfigUpdateTableAtomic001, TestSize.Level1)
+{
+    // 与其他用例同目录，规避 /data/local/tmp 在部分板子上的写权限差异
+    const std::string file = "/data/test/unittest/resource/ut_event_config_update_atomic.cfg";
+    WriteAtomicUpdateCfg(file);
+    EXPECT_EQ(access(file.c_str(), F_OK), 0);
+    // 资源未部署/不可读时兜底，保证 CopyFile 分支可走通
+    EXPECT_TRUE(RewriteCacheEventCfg());
+    ConfigDataManager::GetInstance().ResetEventMap();
+    ConfigDataManager::GetInstance().ResetEventToTableMap();
+    EventConfig config;
+    config.stream_.open(file);
+    EXPECT_TRUE(config.stream_.is_open());
+    EXPECT_TRUE(config.Update());
+    EventCfg outCfg {};
+    EXPECT_TRUE(ConfigDataManager::GetInstance().GetEventConfig(9, outCfg));
+    EXPECT_EQ(ConfigDataManager::GetInstance().GetTableFromEventId(9), "ut_risk_table");
+    EXPECT_TRUE(ConfigDataManager::GetInstance().GetEventConfig(8, outCfg)); // oldEventId 别名同代可见
+    EXPECT_EQ(ConfigDataManager::GetInstance().GetTableFromEventId(8), "ut_risk_table");
+    ConfigDataManager::GetInstance().ResetEventMap();
+    ConfigDataManager::GetInstance().ResetEventToTableMap();
+    unlink(file.c_str());
 }
 }

@@ -37,8 +37,12 @@ public:
     virtual void Release(uint32_t modelId);
     virtual int32_t StartSecurityModel(uint32_t modelId, const std::string &param);
 private:
+    void DropModelUse(uint32_t modelId);
+    bool ReuseModelIfInUse(uint32_t modelId);
+    std::unique_ptr<ModelAttrs> LoadModelLib(uint32_t modelId, const std::string &realPath);
     ffrt::mutex mutex_;
     std::unordered_map<uint32_t, std::unique_ptr<ModelAttrs>> modelIdApiMap_;
+    std::unordered_map<uint32_t, uint32_t> modelUseCount_;
     static std::shared_ptr<IModelManager> modelManagerApi_;
 };
 } // namespace OHOS::Security::SecurityGuard

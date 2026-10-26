@@ -48,10 +48,12 @@ public:
 private:
     DataCollection() = default;
     int LoadCollector(int64_t eventId, std::string path, std::shared_ptr<ICollectorFwk> api);
+    // 查询路径私有辅助方法，假设调用方已持有 opMutex_（CloseLib 依赖该约定避免查询期间 dlclose）
     ErrorCode LoadCollector(std::string path, const SecurityEventRuler &ruler, std::vector<SecurityEvent> &events);
     ErrorCode GetCollectorPath(int64_t eventId, std::string& path);
     ErrorCode CheckFileStream(std::ifstream &stream);
     bool IsCollectorStarted(int64_t eventId);
+    // 查询路径私有辅助方法，假设调用方已持有 opMutex_
     int LoadAndQueryBySoPath(const std::string &soPath, const std::vector<SecurityEventRuler> &rulers,
         std::vector<SecurityEvent> &events, std::vector<int64_t> &failedEventIds);
     // 以下两个方法假设调用方已持有 opMutex_（供启动失败回滚与公开入口复用，避免重复加锁）
@@ -63,7 +65,7 @@ private:
     bool DecrementSubscribeCount(int64_t eventId);
     void RebindStickyCollector(int64_t eventId, std::shared_ptr<ICollectorFwk> api);
     ffrt::mutex closeLibmutex_;
-    // 串行化"加载/启动采集器"与"停止/卸载采集器"整体操作（含 dlopen 与采集器代码执行）。
+    // 串行化"加载/启动/查询采集器"与"停止/卸载采集器"整体操作（含 dlopen/dlclose 与采集器代码执行）。
     // eventIdToLoaderMap_/eventIdToSubscribeCount_ 只在本锁串行化的操作内被访问，无需第二把锁。
     // 回调路径（采集器线程 -> ICollectorFwk::OnNotify）不取本锁；本锁永不在持 closeLibmutex_ 时获取，故无锁环。
     ffrt::mutex opMutex_{};

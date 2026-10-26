@@ -16,11 +16,12 @@
 #define DETECT_PLUGIN_MANAGER_H
 
 #include <dlfcn.h>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include "ffrt.h"
+#include "ffrt_inner.h"
 #include "cJSON.h"
 
 #include "i_collector_subscriber.h"
@@ -36,6 +37,8 @@ public:
     DetectPluginManager &operator=(const DetectPluginManager &) = delete;
     void LoadAllPlugins(const std::string &fileName);
     void DispatchEvent(const SecurityCollector::Event &event);
+    // 停止订阅重试后台任务并等待其退出（幂等），供服务 OnStop 与析构收敛线程
+    void StopRetryTask();
 
 private:
     class DetectPluginManagerSubscriber : public SecurityCollector::ICollectorSubscriber {
@@ -90,8 +93,10 @@ private:
     std::unordered_map<int64_t, std::vector<std::shared_ptr<DetectPluginAttrs>>> eventIdMap_;
     std::unordered_set<int64_t> failedEventIdset_;
     bool isFailedEventStartRetry_ = false;
+    std::atomic<bool> isStopRetry_ {false};
+    ffrt::thread retryThread_ {};
     DetectPluginManager() = default;
-    ~DetectPluginManager() = default;
+    ~DetectPluginManager();
     void LoadPlugin(const PluginCfg &pluginCfg);
     void SubscribeEvent(int64_t eventId);
     void RetrySubscriptionTask();

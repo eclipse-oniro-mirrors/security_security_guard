@@ -185,12 +185,14 @@ void EventSubscribeClientFuzzTest(const uint8_t* data, size_t size)
     validClient->ReconnectService();
 
     // OnRemoteDied: expired weak client returns directly
-    EventSubscribeClient::DeathRecipient expiredRecipient{std::weak_ptr<EventSubscribeClient>()};
-    expiredRecipient.OnRemoteDied(wptr<IRemoteObject>(remote));
+    sptr<EventSubscribeClient::DeathRecipient> expiredRecipient =
+        new EventSubscribeClient::DeathRecipient {std::weak_ptr<EventSubscribeClient>()};
+    expiredRecipient->OnRemoteDied(wptr<IRemoteObject>(remote));
 
     // OnRemoteDied: valid client, mocked ffrt submit runs HandleDeath synchronously
-    EventSubscribeClient::DeathRecipient recipient{validClient};
-    recipient.OnRemoteDied(wptr<IRemoteObject>(remote));
+    sptr<EventSubscribeClient::DeathRecipient> recipient =
+        new EventSubscribeClient::DeathRecipient {validClient};
+    recipient->OnRemoteDied(wptr<IRemoteObject>(remote));
 
     // HandleDeath directly: mocked sleep makes the retry loop finish fast
     validClient->HandleDeath();

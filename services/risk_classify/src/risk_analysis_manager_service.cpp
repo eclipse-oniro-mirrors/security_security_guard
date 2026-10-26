@@ -93,6 +93,7 @@ void RiskAnalysisManagerService::OnStart()
 
 void RiskAnalysisManagerService::OnStop()
 {
+    DetectPluginManager::getInstance().StopRetryTask();
 }
 
 int32_t RiskAnalysisManagerService::IsCallerHasApiPermission(const std::string &api)
