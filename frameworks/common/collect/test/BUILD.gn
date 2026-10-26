@@ -22,10 +22,12 @@ ohos_unittest("libsg_collect_sdk_test") {
   include_dirs = [
     "include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/services/risk_collect/include",
     "${sg_root_dir}/frameworks/common/constants/include",
     "${sg_root_dir}/frameworks/common/log/include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/frameworks/common/collect/include",
     "${sg_root_dir}/interfaces/inner_api/common/include",
     "${sg_root_dir}/interfaces/inner_api/collector/include",
@@ -52,7 +54,7 @@ ohos_unittest("libsg_collect_sdk_test") {
     "${sg_root_dir}/frameworks/common/collect/src/sg_obtaindata_client.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_service.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_stub.cpp",
-    "${sg_root_dir}/frameworks/common/collect/src/auth_event.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/event_subscribe_client.cpp",
     "unittest/src/data_collect_kit_test.cpp",
   ]
@@ -63,9 +65,9 @@ ohos_unittest("libsg_collect_sdk_test") {
   if (security_guard_auth_event_enable) {
     defines = [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
     sources += [
-      "${sg_root_dir}/frameworks/common/collect/src/auth_event_callback_service.cpp",
-      "${sg_root_dir}/frameworks/common/collect/src/auth_event_callback_stub.cpp",
-      "${sg_root_dir}/frameworks/common/collect/src/auth_event_subscribe_client.cpp",
+      "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event_callback_service.cpp",
+      "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event_callback_stub.cpp",
+      "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event_subscribe_client.cpp",
       "unittest/src/auth_event_sdk_test.cpp",
     ]
     deps += [ "${sg_root_dir}/services/data_collect/idl:auth_event_session_sa_proxy" ]
