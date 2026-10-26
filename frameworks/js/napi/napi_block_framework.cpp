@@ -538,7 +538,7 @@ napi_value CreateRequestAuthResultPromise(napi_env env, napi_callback_info info)
     // 创建 tsfn:SA回调在IPC线程投递 AuthResult 到 JS 主线程
     napi_value resourceName = NapiCreateString(env, "NapiRequestAuthResultTsfn");
     if (napi_create_threadsafe_function(env, nullptr, nullptr, resourceName,
-        0, 1, nullptr, nullptr, context, OnAuthResultTsfnJsCall ,&context->tsfn) != napi_ok) {
+            0, 1, nullptr, nullptr, context, OnAuthResultTsfnJsCall, &context->tsfn) != napi_ok) {
         delete context;
         napi_throw(env, GenerateBusinessError(env, AUTH_PROVIDER_INTERNAL_ERROR));
         return nullptr;

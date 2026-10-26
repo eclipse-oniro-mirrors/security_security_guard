@@ -752,8 +752,8 @@ if (security_guard_auth_event_enable) {
 | 场景 | 处置 |
 |---|---|
 | 订阅者崩溃 | DeathRecipient 清理会话，异步通知 Provider 状态变更；订阅者 SDK 退避重连重建会话并重新订阅 |
-| Provider 崩溃 | DeathRecipient 清理会话，异步通知其他 Provider 状态变更；Provider SDK 退避重连 `{1,5,15,30,60…}` 秒后重新 `CreateAuthProvider` 注册，SA 自动 `NotifyClientStatusChanged` 下发全量客户端列表 |
-| SG 崩溃 | 订阅者 SDK 与 Provider SDK 均通过 `DeathRecipient` 感知，退避重连 `{1,5,15,30,60…}` 秒后重建会话/重新注册 |
+| Provider 崩溃 | DeathRecipient 清理会话，异步通知其他 Provider 状态变更；Provider SDK 退避重连后重新 `CreateAuthProvider` 注册，SA 自动 `NotifyClientStatusChanged` 下发全量客户端列表 |
+| SG 崩溃 | 订阅者 SDK 与 Provider SDK 均通过 `DeathRecipient` 感知，退避重连后重建会话/重新注册 |
 
 ### 12.2 线程死锁
 
