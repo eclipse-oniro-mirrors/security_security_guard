@@ -18,6 +18,7 @@ config("security_guard_config") {
   visibility = [ ":*" ]
   include_dirs = [
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/interfaces/inner_api/common/include",
     "${sg_root_dir}/interfaces/inner_api/collector/include",
   ]
@@ -40,6 +41,7 @@ ohos_shared_library("libsg_collect_sdk") {
     "include",
     "${sg_root_dir}/frameworks/common/constants/include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/frameworks/common/collect/include",
     "${sg_root_dir}/interfaces/inner_api/collector/include",
     "${sg_root_dir}/frameworks/common/collector/include",
@@ -58,7 +60,7 @@ ohos_shared_library("libsg_collect_sdk") {
     "${sg_root_dir}/frameworks/common/utils/src/security_guard_utils.cpp",
     "src/acquire_data_manager_callback_service.cpp",
     "src/acquire_data_manager_callback_stub.cpp",
-    "src/auth_event.cpp",
+    "src/auth_event/auth_event.cpp",
     "src/data_collect_manager.cpp",
     "src/data_collect_manager_callback_service.cpp",
     "src/data_collect_manager_callback_stub.cpp",
@@ -76,19 +78,19 @@ ohos_shared_library("libsg_collect_sdk") {
   if (security_guard_auth_event_enable) {
     defines = [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
     sources += [
-      "src/auth_event_callback_service.cpp",
-      "src/auth_event_callback_stub.cpp",
-      "src/auth_event_subscribe_client.cpp",
-      "src/auth_event_info.cpp",
-      "src/auth_client_status.cpp",
-      "src/auth_client_info.cpp",
-      "src/client_auth_result.cpp",
-      "src/auth_result.cpp",
-      "src/auth_provider_callback_service.cpp",
-      "src/auth_provider_callback_stub.cpp",
-      "src/auth_provider_subscribe_client.cpp",
-      "src/auth_result_callback_stub.cpp",
-      "src/auth_result_callback_service.cpp",
+      "src/auth_event/auth_event_callback_service.cpp",
+      "src/auth_event/auth_event_callback_stub.cpp",
+      "src/auth_event/auth_event_subscribe_client.cpp",
+      "src/auth_event/auth_event_info.cpp",
+      "src/auth_event/auth_client_status.cpp",
+      "src/auth_event/auth_client_info.cpp",
+      "src/auth_event/client_auth_result.cpp",
+      "src/auth_event/auth_result.cpp",
+      "src/auth_event/auth_provider_callback_service.cpp",
+      "src/auth_event/auth_provider_callback_stub.cpp",
+      "src/auth_event/auth_provider_subscribe_client.cpp",
+      "src/auth_event/auth_result_callback_stub.cpp",
+      "src/auth_event/auth_result_callback_service.cpp",
     ]
     deps += [ "${sg_root_dir}/services/data_collect/idl:auth_event_session_sa_proxy" ]
     deps += [ "${sg_root_dir}/services/data_collect/idl:auth_provider_session_sa_proxy" ]

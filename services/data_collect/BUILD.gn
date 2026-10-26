@@ -41,6 +41,7 @@ ohos_shared_library("sg_collect_service") {
   include_dirs = [
     "${target_gen_dir}",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/frameworks/common/collect/include",
     "${sg_root_dir}/interfaces/inner_api/collector/include",
     "${sg_root_dir}/frameworks/common/collector/include",
@@ -51,6 +52,7 @@ ohos_shared_library("sg_collect_service") {
     "${sg_root_dir}/services/bigdata/include",
     "${sg_root_dir}/services/config_manager/include",
     "${sg_root_dir}/services/data_collect/sa/include",
+    "${sg_root_dir}/services/data_collect/sa/include/auth_event",
     "${sg_root_dir}/services/data_collect/store/include",
     "${sg_root_dir}/frameworks/common/constants/include",
     "${sg_root_dir}/frameworks/common/json/include",
@@ -65,7 +67,7 @@ ohos_shared_library("sg_collect_service") {
 
   sources = [
     "${sg_root_dir}/frameworks/common/collect/src/security_event_filter.cpp",
-    "${sg_root_dir}/frameworks/common/collect/src/auth_event.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event.cpp",
     "${sg_root_dir}/frameworks/common/collector/src/security_collector_subscribe_info.cpp",
     "${sg_root_dir}/frameworks/common/json/src/json_cfg.cpp",
     "${sg_root_dir}/frameworks/common/utils/src/security_guard_utils.cpp",
@@ -86,14 +88,14 @@ ohos_shared_library("sg_collect_service") {
   if (security_guard_auth_event_enable) {
     defines += [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
     sources += [
-      "${sg_root_dir}/services/data_collect/sa/auth_event_callback_proxy.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_reporter.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_session_service.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_subscribe_manager.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_coordinator.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_provider_session_service.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_provider_callback_proxy.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_result_callback_proxy.cpp"
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_callback_proxy.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_reporter.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_session_service.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_subscribe_manager.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_coordinator.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_provider_session_service.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_provider_callback_proxy.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_result_callback_proxy.cpp"
     ]
   }
 
@@ -180,6 +182,7 @@ ohos_shared_library("sg_collect_service_database") {
     "${sg_root_dir}/frameworks/common/classify/include",
     "${sg_root_dir}/frameworks/common/constants/include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
   ]
 
   sources = [

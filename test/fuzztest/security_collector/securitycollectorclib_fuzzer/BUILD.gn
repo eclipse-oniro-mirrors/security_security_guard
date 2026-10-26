@@ -40,6 +40,7 @@ ohos_fuzztest("SecurityCollectorClibFuzzTest") {
     "${sg_root_dir}/frameworks/common/log/include",
     "${sg_root_dir}/frameworks/common/constants/include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/frameworks/common/task_handler/include",
     "${sg_root_dir}/frameworks/common/json/include",
     "${sg_root_dir}/frameworks/common/utils/include",

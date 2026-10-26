@@ -26,11 +26,13 @@ ohos_fuzztest("DataCollectManagerServiceFuzzTest") {
     "${sg_root_dir}/services/risk_classify/model_manager/include",
     "${sg_root_dir}/interfaces/inner_api/common/include",
     "${sg_root_dir}/interfaces/inner_api/collect/include",
+    "${sg_root_dir}/interfaces/inner_api/collect/include/auth_event",
     "${sg_root_dir}/frameworks/common/collect/include",
     "${sg_root_dir}/interfaces/inner_api/collector/include",
     "${sg_root_dir}/frameworks/common/collector/include",
     "${sg_root_dir}/services/bigdata/include",
     "${sg_root_dir}/services/data_collect/sa/include",
+    "${sg_root_dir}/services/data_collect/sa/include/auth_event",
     "${sg_root_dir}/services/data_collect/store/include",
     "${sg_root_dir}/services/risk_collect/include",
     "${sg_root_dir}/frameworks/common/constants/include",
@@ -85,7 +87,7 @@ ohos_fuzztest("DataCollectManagerServiceFuzzTest") {
     "${sg_root_dir}/services/data_collect/sa/security_event_query_callback_proxy.cpp",
     "${sg_root_dir}/test/fuzztest/mock/data_base_manager/database_manager.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/security_event_filter.cpp",
-    "${sg_root_dir}/frameworks/common/collect/src/auth_event.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event.cpp",
     "${sg_root_dir}/test/fuzztest/mock/data_statistics/data_statistics.cpp",
     "${sg_root_dir}/services/security_collector/src/security_collector_run_manager.cpp",
     "${sg_root_dir}/frameworks/common/collector/src/security_event_ruler.cpp",
@@ -95,14 +97,14 @@ ohos_fuzztest("DataCollectManagerServiceFuzzTest") {
   if (security_guard_auth_event_enable) {
     defines += [ "SECURITY_GUARD_AUTH_EVENT_ENABLE" ]
     sources += [
-      "${sg_root_dir}/services/data_collect/sa/auth_event_callback_proxy.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_reporter.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_session_service.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_event_subscribe_manager.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_coordinator.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_result_callback_proxy.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_provider_session_service.cpp",
-      "${sg_root_dir}/services/data_collect/sa/auth_provider_callback_proxy.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_callback_proxy.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_reporter.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_session_service.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_event_subscribe_manager.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_coordinator.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_result_callback_proxy.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_provider_session_service.cpp",
+      "${sg_root_dir}/services/data_collect/sa/auth_event/auth_provider_callback_proxy.cpp",
     ]
   }
 
