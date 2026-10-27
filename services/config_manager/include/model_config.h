@@ -33,7 +33,6 @@ public:
 private:
     static bool ParseModelConfig(std::vector<ModelCfg> &configs, nlohmann::json &jsonObj);
     static void CacheModelConfig(const std::vector<ModelCfg> &configs);
-    static void CacheModelToEvent(const std::vector<ModelCfg> &configs);
 };
 } // OHOS::Security::SecurityGuard
 

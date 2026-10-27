@@ -38,8 +38,14 @@ public:
     int32_t StartSecurityModel(uint32_t modelId, const std::string &param);
 
 private:
+    void DropModelUse(uint32_t modelId);
+    bool ReuseModelIfInUse(uint32_t modelId);
+    std::unique_ptr<ModelAttrs> LoadModelLib(uint32_t modelId, const std::string &realPath);
     ffrt::mutex mutex_;
     std::unordered_map<uint32_t, std::unique_ptr<ModelAttrs>> modelIdApiMap_;
+    // 条目在途使用计数（与 mutex_ 同锁）：GetResult/SubscribeResult/StartSecurityModel 进入时占位，
+    // 计数大于 0 期间 InitModel 前言与 Release 不得卸载条目，避免在途用户被并发抹除
+    std::unordered_map<uint32_t, uint32_t> modelUseCount_;
     static std::shared_ptr<IModelManager> modelManagerApi_;
 };
 } // namespace OHOS::Security::SecurityGuard

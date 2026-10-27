@@ -29,7 +29,6 @@ public:
     static ConfigDataManager &GetInstance();
     void InsertModelMap(uint32_t modelId, const ModelCfg &config);
     void InsertEventMap(int64_t eventId, const EventCfg &config);
-    void InsertModelToEventMap(uint32_t modelId, std::set<int64_t> eventIds);
     void InsertEventToTableMap(int64_t eventId, std::string table);
     void InsertEventGroupMap(const std::unordered_map<std::string, EventGroupCfg> &eventGroupMap);
     bool GetEventGroupConfig(const std::string &groupName, EventGroupCfg &config);
@@ -37,11 +36,10 @@ public:
     void ResetModelMap();
     void ResetEventMap();
     void SwapEventConfigMap(std::unordered_map<int64_t, EventCfg> newEventMap);
+    void SwapEventConfigMapWithTables(std::unordered_map<int64_t, EventCfg> newEventMap,
+        const std::vector<std::pair<int64_t, std::string>> &eventToTables);
     void SwapModelMap(std::unordered_map<uint32_t, ModelCfg> newModelMap);
-    void SwapModelToEventMap(std::unordered_map<uint32_t, std::set<int64_t>> newModelToEventMap);
-    void ResetModelToEventMap();
     void ResetEventToTableMap();
-    std::vector<int64_t> GetEventIds(uint32_t modelId);
     std::vector<int64_t> GetAllEventIds();
     std::vector<uint32_t> GetAllModelIds();
     std::vector<EventCfg> GetAllEventConfigs();
@@ -49,12 +47,10 @@ public:
     bool GetEventConfig(int64_t eventId, EventCfg &config);
     std::string GetTableFromEventId(int64_t eventId);
 private:
-    std::unordered_map<uint32_t, std::set<int64_t>> modelToEventMap_;
     std::unordered_map<uint32_t, ModelCfg> modelMap_;
     std::unordered_map<int64_t, EventCfg> eventMap_;
     std::unordered_map<int64_t, std::string> eventToTableMap_;
     std::unordered_map<std::string, EventGroupCfg> eventGroupMap_;
-    ffrt::mutex modelToEventMutex_;
     ffrt::mutex modelMutex_;
     ffrt::mutex eventMutex_;
     ffrt::mutex eventGroupMutex_;

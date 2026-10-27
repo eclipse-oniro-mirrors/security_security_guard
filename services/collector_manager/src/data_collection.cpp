@@ -292,7 +292,7 @@ int DataCollection::UnsubscribeCollectors(const std::vector<int64_t> &eventIds)
 
 void DataCollection::CloseLib()
 {
-    // 与启停操作串行，避免在采集器代码执行期间 dlclose 卸载其 .so
+    // 与启停/查询操作串行，避免在采集器代码执行期间 dlclose 卸载其 .so
     std::lock_guard<ffrt::mutex> opLock(opMutex_);
     std::lock_guard<ffrt::mutex> lock(closeLibmutex_);
     for (auto &it : needCloseLibMap_) {
@@ -478,6 +478,8 @@ int32_t DataCollection::QuerySecurityEvent(const std::vector<SecurityEventRuler>
         LOGE("Invalid input parameter");
         return FAILED;
     }
+    // opMutex_ 串行化整个操作；采集器查询代码在锁内执行，与 CloseLib 的 dlclose 互斥
+    std::lock_guard<ffrt::mutex> opLock(opMutex_);
     for (const auto &ruler : rulers) {
         LOGD("QuerySecurityEvent eventId is 0x%{public}" PRIx64, ruler.GetEventId());
         std::string collectorPath;
@@ -504,6 +506,8 @@ int32_t DataCollection::QuerySecurityEventBatch(const std::vector<SecurityEventR
         LOGE("Invalid input parameter");
         return FAILED;
     }
+    // opMutex_ 串行化整个操作；采集器批量查询代码在锁内执行，与 CloseLib 的 dlclose 互斥
+    std::lock_guard<ffrt::mutex> opLock(opMutex_);
     // 按so路径对rulers分组
     std::unordered_map<std::string, std::vector<SecurityEventRuler>> soPathToRulers;
     for (const auto &ruler : rulers) {

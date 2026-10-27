@@ -25,7 +25,6 @@ public:
     static ConfigDataManager &GetInstance();
     void InsertModelMap(uint32_t modelId, const ModelCfg &config) {};
     void InsertEventMap(int64_t eventId, const EventCfg &config) {};
-    void InsertModelToEventMap(uint32_t modelId, std::set<int64_t> eventIds) {};
     void InsertEventToTableMap(int64_t eventId, std::string table) {};
     void InsertEventGroupMap(const std::unordered_map<std::string, EventGroupCfg> &eventGroupMap) {};
     bool GetIsBatchUpload(const std::string &groupName)
@@ -41,15 +40,7 @@ public:
     void ResetEventMap() {};
     void SwapEventConfigMap(std::unordered_map<int64_t, EventCfg> newEventMap) {};
     void SwapModelMap(std::unordered_map<uint32_t, ModelCfg> newModelMap);
-    void SwapModelToEventMap(std::unordered_map<uint32_t, std::set<int64_t>> newModelToEventMap);
-    void ResetModelToEventMap() {};
     void ResetEventToTableMap() {};
-    std::vector<int64_t> GetEventIds(uint32_t modelId)
-    {
-        std::vector<int64_t> ret {};
-        ret.emplace_back(1);
-        return ret;
-    }
     std::vector<int64_t> GetAllEventIds()
     {
         std::vector<int64_t> ret {};

@@ -33,6 +33,7 @@ public:
     DetectPluginManager &operator=(const DetectPluginManager &) = delete;
     void LoadAllPlugins(const std::string &fileName) {}
     void DispatchEvent(const SecurityCollector::Event &event) {}
+    void StopRetryTask() {}
 
 private:
     DetectPluginManager() = default;

@@ -55,7 +55,6 @@ bool ModelConfigFuzzTest(const uint8_t* data, size_t size)
     config.Update();
     config.ParseModelConfig(cfgs, jsonObj);
     config.CacheModelConfig(cfgs);
-    config.CacheModelToEvent(cfgs);
     return true;
 }
 

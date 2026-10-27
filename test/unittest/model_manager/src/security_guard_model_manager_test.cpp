@@ -360,4 +360,89 @@ HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerStartSecurityModel003, T
     });
     EXPECT_EQ(manager.StartSecurityModel(111, "test"), FAILED);
 }
+
+// Covers in-flight use count: InitModel reuses the live entry instead of erase-recreate.
+HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerInitModel004, TestSize.Level0)
+{
+    MockModel *model = new MockModel();
+    // 仅计数归零后的清理会调用一次；若在途复用失效（回归为拆建），会被调用两次导致用例失败
+    EXPECT_CALL(*model, Release()).Times(1);
+    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
+    attr->SetModelApi(model);
+    ModelManager::GetInstance().modelIdApiMap_[7777] = std::move(attr);
+    ModelManager::GetInstance().modelUseCount_[7777] = 1; // 模拟在途使用者
+    EXPECT_EQ(ModelManager::GetInstance().InitModel(7777), SUCCESS);
+    EXPECT_TRUE(ModelManager::GetInstance().modelIdApiMap_.find(7777) !=
+        ModelManager::GetInstance().modelIdApiMap_.end());
+    ModelManager::GetInstance().modelUseCount_.erase(7777);
+    ModelManager::GetInstance().Release(7777);
+    EXPECT_TRUE(ModelManager::GetInstance().modelIdApiMap_.find(7777) ==
+        ModelManager::GetInstance().modelIdApiMap_.end());
+}
+
+// Covers in-flight use count: Release skips unload while the entry is in use.
+HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerRelease001, TestSize.Level0)
+{
+    MockModel *model = new MockModel();
+    // 仅计数归零后的第二次 Release 卸载；在途期间的第一次 Release 不应触碰模型
+    EXPECT_CALL(*model, Release()).Times(1);
+    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
+    attr->SetModelApi(model);
+    ModelManager::GetInstance().modelIdApiMap_[6666] = std::move(attr);
+    ModelManager::GetInstance().modelUseCount_[6666] = 1; // 模拟在途使用者
+    ModelManager::GetInstance().Release(6666);
+    EXPECT_TRUE(ModelManager::GetInstance().modelIdApiMap_.find(6666) !=
+        ModelManager::GetInstance().modelIdApiMap_.end()); // 条目保留
+    ModelManager::GetInstance().modelUseCount_.erase(6666);
+    ModelManager::GetInstance().Release(6666);
+    EXPECT_TRUE(ModelManager::GetInstance().modelIdApiMap_.find(6666) ==
+        ModelManager::GetInstance().modelIdApiMap_.end()); // 归零后正常卸载
+}
+
+// Covers in-flight use count: ON_DEMAND GetResult full flow, entry visible during use and
+// unloaded at tail, use count cleaned on every path.
+HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerGetResult005, TestSize.Level0)
+{
+    MockMyModelManager manager {};
+    EXPECT_CALL(ConfigDataManager::GetInstance(), GetModelConfig)
+    .WillOnce([](uint32_t modelId, ModelCfg &config) {
+        config.startMode = START_ON_DEMAND;
+        return true;
+    });
+    EXPECT_CALL(manager, InitModel)
+    .WillOnce([](uint32_t modelId) {
+        return SUCCESS;
+    });
+    MockModel *model = new MockModel();
+    EXPECT_CALL(*model, GetResult(111, "test")).WillOnce(Return("ok"));
+    EXPECT_CALL(*model, Release()).Times(1); // 尾部 Release 卸载
+    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
+    attr->SetModelApi(model);
+    manager.modelIdApiMap_[111] = std::move(attr);
+    EXPECT_EQ(manager.GetResult(111, "test"), "ok");
+    EXPECT_TRUE(manager.modelUseCount_.find(111) == manager.modelUseCount_.end()); // 计数已清
+    EXPECT_TRUE(manager.modelIdApiMap_.find(111) == manager.modelIdApiMap_.end()); // 条目已卸载
+}
+
+// Covers in-flight use count: SubscribeResult keeps the entry alive (no unload at tail).
+HWTEST_F(SecurityGuardModelManagerTest, TestModelManagerSubscribeResult004, TestSize.Level0)
+{
+    MockMyModelManager manager {};
+    EXPECT_CALL(manager, InitModel)
+    .WillOnce([](uint32_t modelId) {
+        return SUCCESS;
+    });
+    MockModel *model = new MockModel();
+    auto listener = std::make_shared<ModelResultListener>();
+    EXPECT_CALL(*model, SubscribeResult(_)).WillOnce(Return(SUCCESS));
+    EXPECT_CALL(*model, Release()).Times(1); // 仅测试清理时调用
+    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
+    attr->SetModelApi(model);
+    manager.modelIdApiMap_[111] = std::move(attr);
+    EXPECT_EQ(manager.SubscribeResult(111, listener), SUCCESS);
+    EXPECT_TRUE(manager.modelUseCount_.find(111) == manager.modelUseCount_.end()); // 计数已清
+    EXPECT_TRUE(manager.modelIdApiMap_.find(111) != manager.modelIdApiMap_.end()); // 订阅不卸载条目
+    manager.Release(111);
+    EXPECT_TRUE(manager.modelIdApiMap_.find(111) == manager.modelIdApiMap_.end());
+}
 }

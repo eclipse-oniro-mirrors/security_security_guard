@@ -19,7 +19,6 @@
       OHOS::Security::SecurityGuard::ConfigDataManager::GetInstance*;
       OHOS::Security::SecurityGuard::ConfigDataManager::InsertModelMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::InsertEventMap*;
-      OHOS::Security::SecurityGuard::ConfigDataManager::InsertModelToEventMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::InsertEventToTableMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::InsertEventGroupMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetIsBatchUpload*;
@@ -27,9 +26,7 @@
       OHOS::Security::SecurityGuard::ConfigDataManager::ResetModelMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::ResetEventMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::SwapEventConfigMap*;
-      OHOS::Security::SecurityGuard::ConfigDataManager::ResetModelToEventMap*;
       OHOS::Security::SecurityGuard::ConfigDataManager::ResetEventToTableMap*;
-      OHOS::Security::SecurityGuard::ConfigDataManager::GetEventIds*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetAllEventIds*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetAllModelIds*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetAllEventConfigs*;
@@ -37,7 +34,7 @@
       OHOS::Security::SecurityGuard::ConfigDataManager::GetEventConfig*;
       OHOS::Security::SecurityGuard::ConfigDataManager::GetTableFromEventId*;
       OHOS::Security::SecurityGuard::ConfigDataManager::SwapModelMap*;
-      OHOS::Security::SecurityGuard::ConfigDataManager::SwapModelToEventMap*;
+      OHOS::Security::SecurityGuard::ConfigDataManager::SwapEventConfigMapWithTables*;
 
     };
   local:

@@ -53,18 +53,53 @@ void ModelManager::Init()
     }
 }
 
+// 锁内检查：条目在途使用则复用返回 true；否则卸载既有条目并返回 false（条目不存在亦返回 false）
+bool ModelManager::ReuseModelIfInUse(uint32_t modelId)
+{
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    auto iter = modelIdApiMap_.find(modelId);
+    if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
+        return false;
+    }
+    auto use = modelUseCount_.find(modelId);
+    if (use != modelUseCount_.end() && use->second > 0) {
+        SGLOGI("model is in use, reuse it, modelId=%{public}u", modelId);
+        return true;
+    }
+    iter->second->GetModelApi()->Release();
+    modelIdApiMap_.erase(iter);
+    return false;
+}
+
+// dlopen/dlsym 加载模型 so 并装配 ModelAttrs，失败返回 nullptr（句柄随 attr 析构关闭）
+std::unique_ptr<ModelAttrs> ModelManager::LoadModelLib(uint32_t modelId, const std::string &realPath)
+{
+    void *handle = dlopen(realPath.c_str(), RTLD_LAZY);
+    if (handle == nullptr) {
+        SGLOGE("modelId=%{public}u, open failed, reason:%{public}s", modelId, dlerror());
+        return nullptr;
+    }
+    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
+    attr->SetHandle(handle);
+    auto getModelApi = (GetModelApi)dlsym(handle, "GetModelApi");
+    if (getModelApi == nullptr) {
+        SGLOGE("get model api func is nullptr");
+        return nullptr;
+    }
+    IModel *api = getModelApi();
+    if (api == nullptr) {
+        SGLOGE("get model api is nullptr");
+        return nullptr;
+    }
+    attr->SetModelApi(api);
+    return attr;
+}
+
 int32_t ModelManager::InitModel(uint32_t modelId)
 {
-    std::unordered_map<uint32_t, std::unique_ptr<ModelAttrs>>::iterator iter;
-    {
-        std::lock_guard<ffrt::mutex> lock(mutex_);
-        iter = modelIdApiMap_.find(modelId);
-        if (iter != modelIdApiMap_.end() && iter->second != nullptr && iter->second->GetModelApi() != nullptr) {
-            iter->second->GetModelApi()->Release();
-            modelIdApiMap_.erase(iter);
-        }
+    if (ReuseModelIfInUse(modelId)) {
+        return SUCCESS;
     }
-
     ModelCfg cfg;
     bool success = ConfigDataManager::GetInstance().GetModelConfig(modelId, cfg);
     if (!success) {
@@ -75,24 +110,10 @@ int32_t ModelManager::InitModel(uint32_t modelId)
     if (!PathToRealPath(cfg.path, realPath) || realPath.find(PREFIX_MODEL_PATH) != 0) {
         return FILE_ERR;
     }
-    void *handle = dlopen(realPath.c_str(), RTLD_LAZY);
-    if (handle == nullptr) {
-        SGLOGE("modelId=%{public}u, open failed, reason:%{public}s", modelId, dlerror());
+    std::unique_ptr<ModelAttrs> attr = LoadModelLib(modelId, realPath);
+    if (attr == nullptr) {
         return FAILED;
     }
-    std::unique_ptr<ModelAttrs> attr = std::make_unique<ModelAttrs>();
-    attr->SetHandle(handle);
-    auto getModelApi = (GetModelApi)dlsym(handle, "GetModelApi");
-    if (getModelApi == nullptr) {
-        SGLOGE("get model api func is nullptr");
-        return FAILED;
-    }
-    IModel *api = getModelApi();
-    if (api == nullptr) {
-        SGLOGE("get model api is nullptr");
-        return FAILED;
-    }
-    attr->SetModelApi(api);
     int32_t ret = attr->GetModelApi()->Init(modelManagerApi_);
     if (ret != SUCCESS) {
         SGLOGE("model api init failed, ret=%{public}d", ret);
@@ -115,8 +136,14 @@ std::string ModelManager::GetResult(uint32_t modelId, const std::string &param)
         SGLOGI("GetResult GetModelConfig Failed, ModelId=%{public}u", modelId);
         return result;
     }
+    // 在途占位：计数大于 0 期间并发 InitModel/Release 不会卸载条目，关闭初始化与使用之间被抹除的窗口
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        ++modelUseCount_[modelId];
+    }
     if (config.startMode == START_ON_DEMAND) {
         if (InitModel(modelId) != SUCCESS) {
+            DropModelUse(modelId);
             return result;
         }
     }
@@ -125,10 +152,11 @@ std::string ModelManager::GetResult(uint32_t modelId, const std::string &param)
         auto iter = modelIdApiMap_.find(modelId);
         if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
             SGLOGI("the model has not been initialized, begin init, modelId=%{public}u", modelId);
-            return result;
+        } else {
+            result = iter->second->GetModelApi()->GetResult(modelId, param);
         }
-        result = iter->second->GetModelApi()->GetResult(modelId, param);
     }
+    DropModelUse(modelId);
     if (config.startMode == START_ON_DEMAND) {
         Release(modelId);
     }
@@ -141,24 +169,39 @@ int32_t ModelManager::SubscribeResult(uint32_t modelId, std::shared_ptr<IModelRe
         SGLOGE("listener is null, modelId=%{public}u", modelId);
         return BAD_PARAM;
     }
+    // 在途占位：防止初始化与使用之间条目被并发卸载
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        ++modelUseCount_[modelId];
+    }
     int32_t ret = InitModel(modelId);
     if (ret != SUCCESS) {
+        DropModelUse(modelId);
         return ret;
     }
 
-    std::lock_guard<ffrt::mutex> lock(mutex_);
-    auto iter = modelIdApiMap_.find(modelId);
-    if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
-        SGLOGI("the model has not been initialized, modelId=%{public}u", modelId);
-        return FAILED;
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        auto iter = modelIdApiMap_.find(modelId);
+        if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
+            SGLOGI("the model has not been initialized, modelId=%{public}u", modelId);
+            ret = FAILED;
+        } else {
+            ret = iter->second->GetModelApi()->SubscribeResult(listener);
+        }
     }
-
-    return iter->second->GetModelApi()->SubscribeResult(listener);
+    DropModelUse(modelId);
+    return ret;
 }
 
 void ModelManager::Release(uint32_t modelId)
 {
     std::lock_guard<ffrt::mutex> lock(mutex_);
+    auto use = modelUseCount_.find(modelId);
+    if (use != modelUseCount_.end() && use->second > 0) {
+        SGLOGI("model is in use, skip release, modelId=%{public}u", modelId);
+        return;
+    }
     auto iter = modelIdApiMap_.find(modelId);
     if (iter == modelIdApiMap_.end()) {
         SGLOGI("the model has not been initialized, modelId=%{public}u", modelId);
@@ -175,21 +218,43 @@ void ModelManager::Release(uint32_t modelId)
     modelIdApiMap_.erase(iter);
 }
 
+void ModelManager::DropModelUse(uint32_t modelId)
+{
+    std::lock_guard<ffrt::mutex> lock(mutex_);
+    auto use = modelUseCount_.find(modelId);
+    if (use == modelUseCount_.end()) {
+        return;
+    }
+    if (--(use->second) == 0) {
+        modelUseCount_.erase(use);
+    }
+}
+
 int32_t ModelManager::StartSecurityModel(uint32_t modelId, const std::string &param)
 {
+    // 在途占位：防止初始化与使用之间条目被并发卸载
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        ++modelUseCount_[modelId];
+    }
     int32_t ret = InitModel(modelId);
     if (ret != SUCCESS) {
         SGLOGE("InitModel fail, ret=%{public}d, modelId=%{public}u", ret, modelId);
+        DropModelUse(modelId);
         return ret;
     }
 
-    std::lock_guard<ffrt::mutex> lock(mutex_);
-    auto iter = modelIdApiMap_.find(modelId);
-    if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
-        SGLOGE("the model has not been initialized, modelId=%{public}u", modelId);
-        return FAILED;
+    {
+        std::lock_guard<ffrt::mutex> lock(mutex_);
+        auto iter = modelIdApiMap_.find(modelId);
+        if (iter == modelIdApiMap_.end() || iter->second == nullptr || iter->second->GetModelApi() == nullptr) {
+            SGLOGE("the model has not been initialized, modelId=%{public}u", modelId);
+            ret = FAILED;
+        } else {
+            ret = iter->second->GetModelApi()->StartSecurityModel(modelId, param);
+        }
     }
-
-    return iter->second->GetModelApi()->StartSecurityModel(modelId, param);
+    DropModelUse(modelId);
+    return ret;
 }
 } // namespace OHOS::Security::SecurityGuard
