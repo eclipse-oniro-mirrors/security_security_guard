@@ -47,6 +47,8 @@ public:
 
 private:
     int IsExistStore();
+    // 调用方需持有 storeMutex_：判定 store_ 底层 db_ 是否就绪
+    int CheckStoreReady();
     ffrt::mutex storeMutex_;
     std::shared_ptr<SgSqliteHelper> store_;
 };

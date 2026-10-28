@@ -46,6 +46,7 @@ public:
 
 private:
     int IsExistStore();
+    int CheckStoreReady();
     ffrt::mutex storeMutex_;
     std::shared_ptr<SgSqliteHelper> store_;
 };

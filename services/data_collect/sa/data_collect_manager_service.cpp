@@ -118,7 +118,7 @@ DataCollectManagerService::DataCollectManagerService(int32_t saId, bool runOnCre
     SGLOGW("%{public}s", __func__);
 }
 
-typedef void (*InitAllConfigFunc)();
+typedef bool (*InitAllConfigFunc)();
 typedef bool (*UpdateConfigFunc)(const std::string &);
 
 void DataCollectManagerService::OnStart()
@@ -133,7 +133,9 @@ void DataCollectManagerService::OnStart()
         auto func = (InitAllConfigFunc)dlsym(handle, "InitAllConfig");
         if (func != nullptr) {
             SGLOGI("begin init all config");
-            func();
+            if (!func()) {
+                SGLOGE("init all config failed");
+            }
         } else {
             SGLOGE("dlsym error: %{public}s", dlerror());
         }

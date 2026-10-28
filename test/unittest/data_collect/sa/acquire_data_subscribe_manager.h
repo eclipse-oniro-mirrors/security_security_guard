@@ -22,7 +22,7 @@
 #include <set>
 #include <vector>
 
-#include "ffrt.h"
+#include "ffrt_inner.h"
 #include "iremote_object.h"
 #include "timer.h"
 #include "tokenid_kit.h"
@@ -72,6 +72,8 @@ public:
     void StopTokenBucketTask();
     int UploadEvent(const SecurityCollector::Event &event);
     void DeInitDeviceId();
+    void InvalidateDeviceId();
+    void RecoverDeviceId();
     void InitEventQueue();
     void DeInitEventQueue();
     std::map<std::string, std::shared_ptr<ClientSession>> GetAuditClientSessionMap();
@@ -80,6 +82,10 @@ private:
     ~AcquireDataSubscribeManager();
     void InitUserId();
     void InitDeviceId();
+    void RefreshDeviceIdAsync();
+    void StartDeviceIdRecovery();
+    void DeviceIdRecoveryLoop();
+    void StopDeviceIdRecovery();
     int SubscribeSc(int64_t eventId);
     int UnSubscribeSc(int64_t eventId);
     int SubscribeScInSg(int64_t eventId, uint32_t isSticky);
@@ -152,6 +158,11 @@ private:
     ffrt::mutex userIdMutex_ {};
     ffrt::mutex queueMutex_ {};
     std::string deviceId_ {};
+    std::atomic<bool> deviceIdValid_ {false};
+    std::atomic<bool> deviceIdRefreshInFlight_ {false};
+    ffrt::mutex deviceIdRecoveryMutex_ {};
+    ffrt::thread deviceIdRecoveryThread_ {};
+    std::atomic<bool> isStopDeviceIdRecovery_ {false};
     int32_t userId_ {-1};
     std::atomic<bool> isDeviceManagerInit_ {false};
     // 只保护 sessionsMap_ / reportedStickyEvents_（纯数据）。临界区内禁止任何外部调用

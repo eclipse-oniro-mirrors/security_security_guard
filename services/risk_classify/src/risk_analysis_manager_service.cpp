@@ -55,7 +55,7 @@ namespace {
         {"RequestSecurityModelResult", {REQUEST_PERMISSION, QUERY_SECURITY_MODEL_RESULT_PERMISSION}},
         {"StartSecurityModel", {QUERY_SECURITY_MODEL_RESULT_PERMISSION}},
     };
-    typedef void (*InitAllConfigFunc)();
+    typedef bool (*InitAllConfigFunc)();
 }
 
 RiskAnalysisManagerService::RiskAnalysisManagerService(int32_t saId, bool runOnCreate)
@@ -73,7 +73,9 @@ void RiskAnalysisManagerService::OnStart()
     } else {
         auto func = (InitAllConfigFunc)dlsym(handle, "InitAllConfig");
         if (func != nullptr) {
-            func();
+            if (!func()) {
+                SGLOGE("init all config failed");
+            }
             SGLOGI("Call Init All Config");
         } else {
             SGLOGE("dlsym error: %{public}s", dlerror());

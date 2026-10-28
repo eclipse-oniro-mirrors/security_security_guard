@@ -40,8 +40,8 @@ void SgSqliteHelper::OnCreate()
     }
     for (size_t i = 0; i < size; i++) {
         ret = ExecuteSql(createSqls_[i]);
-        if (ret == 0) {
-            return;
+        if (ret != 0) {
+            SGLOGE("execute create sql failed, ret=%{public}d, sql=%{private}s", ret, createSqls_[i].c_str());
         }
     }
     return;

@@ -146,10 +146,12 @@ int Database::Attach(const std::string &alias, const std::string &pathName,
 
 int Database::IsExistStore()
 {
+    // 就绪判定：store_ 已创建且底层 db_ 已成功打开。CreateRdbStore 无条件创建 store_，
+    // Open 失败时 db_ 为空，仅判 store_ 非空会把后续操作放行到各底层接口的空句柄分支
     {
         std::lock_guard<ffrt::mutex> lock(storeMutex_);
         if (store_ != nullptr) {
-            return SUCCESS;
+            return CheckStoreReady();
         }
     }
     int32_t tryTimes = MAX_TIMES;
@@ -157,7 +159,7 @@ int Database::IsExistStore()
         {
             std::lock_guard<ffrt::mutex> lock(storeMutex_);
             if (store_ != nullptr) {
-                return SUCCESS;
+                return CheckStoreReady();
             }
         }
         SGLOGW("tryTimes = %{public}d", tryTimes);
@@ -170,6 +172,16 @@ int Database::IsExistStore()
         SGLOGE("EventStore::IsExistStore NativeRdb::RdbStore is null!");
         return FAILED;
     }
-    return SUCCESS;
+    return CheckStoreReady();
+}
+
+int Database::CheckStoreReady()
+{
+    // 调用方持有 storeMutex_
+    if (store_->CheckReady()) {
+        return SUCCESS;
+    }
+    SGLOGE("EventStore::IsExistStore db is not ready!");
+    return FAILED;
 }
 }

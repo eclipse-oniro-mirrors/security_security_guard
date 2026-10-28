@@ -48,6 +48,7 @@ protected:
     int QueryEventBase(const GenericValues &conditions, std::vector<SecEvent> &events,
         const QueryOptions &options = {});
     std::string CreateTable();
+    std::string CreateEventIdIndex();
     void SetValuesBucket(const SecEvent &event, GenericValues &values);
     std::string Join(const std::vector<int64_t> &vec, const std::string delimiter);
     std::string Join(const std::vector<std::string> &vec, const std::string delimiter);
