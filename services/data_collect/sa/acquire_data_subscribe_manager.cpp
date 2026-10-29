@@ -65,6 +65,7 @@ namespace {
     constexpr int64_t PUBLISH_EVENT_TO_SUB_STEP_TIME = 100;
 #ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
     constexpr int32_t DEVICE_ID_RECOVERY_INIT_INTERVAL_SEC = 1;
+    constexpr int32_t DEVICE_ID_RECOVERY_BACKOFF_MULTIPLIER = 2;
     constexpr int32_t DEVICE_ID_RECOVERY_MAX_INTERVAL_SEC = 30;
 #endif
     ffrt::thread g_tokenBucketThread {};
@@ -593,7 +594,7 @@ void AcquireDataSubscribeManager::InitDeviceId()
         }
     }
 
-    DistributedHardware::DmDeviceInfo deviceInfo;
+    DistributedHardware::DmDeviceInfo deviceInfo {};
     int32_t ret = DistributedHardware::DeviceManager::GetInstance().GetLocalDeviceInfo(PKG_NAME, deviceInfo);
     if (ret != SUCCESS) {
         SGLOGI("get local device into error, code=%{public}d", ret);
@@ -654,7 +655,8 @@ void AcquireDataSubscribeManager::DeviceIdRecoveryLoop()
         for (int32_t slept = 0; slept < backoffSec && !isStopDeviceIdRecovery_.load(); slept++) {
             ffrt::this_task::sleep_for(std::chrono::seconds(1));
         }
-        backoffSec = std::min(backoffSec * 2, DEVICE_ID_RECOVERY_MAX_INTERVAL_SEC);
+        backoffSec = std::min(backoffSec * DEVICE_ID_RECOVERY_BACKOFF_MULTIPLIER,
+            DEVICE_ID_RECOVERY_MAX_INTERVAL_SEC);
     }
     deviceIdRefreshInFlight_.store(false);
 #endif
@@ -674,6 +676,9 @@ void AcquireDataSubscribeManager::StopDeviceIdRecovery()
 void AcquireDataSubscribeManager::InvalidateDeviceId()
 {
 #ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    // 失效 = 注册态与数据态同时失效：DM 服务死亡后服务端注册表丢失，
+    // 恢复循环必须重新 InitDeviceManager，否则只重试取数永不收敛
+    isDeviceManagerInit_.store(false);
     deviceIdValid_.store(false);
     std::lock_guard<ffrt::mutex> lock(userIdMutex_);
     deviceId_ = "";
@@ -683,9 +688,10 @@ void AcquireDataSubscribeManager::InvalidateDeviceId()
 void AcquireDataSubscribeManager::DeInitDeviceId()
 {
 #ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
-    isDeviceManagerInit_.store(false);
-    // 服务停止：先停恢复线程再注销，避免注销后循环继续向设备管理注册
+    // 服务停止：先停恢复线程（消除并发刷新者），再统一失效注册态与数据态（InvalidateDeviceId
+    // 同时重置 isDeviceManagerInit_ 与 deviceIdValid_），最后注销，避免注销后循环继续注册
     StopDeviceIdRecovery();
+    InvalidateDeviceId();
     int ret = DistributedHardware::DeviceManager::GetInstance().UnInitDeviceManager(PKG_NAME);
     if (ret != SUCCESS) {
         SGLOGE("UnInitDeviceManager fail, code =%{public}d", ret);
