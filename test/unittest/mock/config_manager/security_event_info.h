@@ -38,6 +38,7 @@ using EventCfg = struct {
     std::string prog;
     uint32_t isBatchUpload;
     uint32_t isSticky;
+    std::string serviceId;
 };
 
 using EventGroupCfg = struct {

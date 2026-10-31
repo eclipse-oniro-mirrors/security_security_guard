@@ -55,14 +55,16 @@
 ### 3.1 关键流程/状态变化
 
 - 创建会话：使用者调 `AuthEventSubscribeClient::CreatClient(callback, client)` → SDK 构造本地回调 service（`AuthEventCallbackService` 包 `std::function`）→ 现取 SA 3524 proxy 调 `CreatAuthEventClient(cb, session)` → 服务端依次执行：双轨校验 → 回调判空（`NULL_OBJECT`）→ 同 cb 重复创建检查（`BAD_PARAM`）→ 配额检查（该 callerPid 名下会话数 <2 且会话总数 <16）→ 创建 `AuthEventSessionService` 并登记会话集合（含 per-session DeathRecipient，失败回滚）→ session 远端引用经 `[out]` 回传。SDK 保存 session 代理。
-- 订阅：`client->Subscribe(eventId)` → session 代理调 `Subscribe(eventId)`（服务端 session stub 方法）→ 双轨校验 → **事件配置校验**（`ConfigDataManager::GetEventConfig` 未命中 → `BAD_PARAM`，对齐 CollectorStart 范式）→ 会话已销毁检查（`BAD_PARAM`）→ pid 归属校验（`BAD_PARAM`）→ 会话 eventIds 集合登记（重复登记幂等，单会话上限 1024）。
+- 订阅：`client->Subscribe(eventId)` → session 代理调 `Subscribe(eventId)`（服务端 session stub 方法）→ 双轨校验 → **事件配置校验**（`ConfigDataManager::GetEventConfig` 未命中 → `BAD_PARAM`，对齐 CollectorStart 范式）→ **serviceId 必填校验**（PR #534：命中后校验 `config.serviceId` 非空，空则 `BAD_PARAM`）→ 会话已销毁检查（`BAD_PARAM`）→ pid 归属校验（`BAD_PARAM`）→ `SubscribeAuthEvent(session, eventId, config.serviceId)`（PR #534：管理器锁内同时 insert `eventIds_` 和 `RegisterEventService(eventId, serviceId)`，同步维护 `eventServiceMap_`）→ 异步 `NotifyClientStatusChanged`。
 - 分发（预留源触发）：内部生产者调 `AuthEventSubscribeManager::NotifyAuthEvent(event)` → 入口长度守卫（>4096 丢弃）→ 锁内快照命中会话（eventId 已订阅的 callback 列表）→ 锁外逐客户端推送 `OnAuthEvent(event)`（TF_ASYNC，事件本体，不携带 allowFlag）。
 - 结果回填：订阅者完成决策后调 `client->SetAuthResult(event, allowFlag)` → session 代理调 `SetAuthResult(event, allowFlag)` → 服务端双轨校验 → 会话已销毁检查（`BAD_PARAM`）→ pid 归属校验（`BAD_PARAM`）→ content/metadata 长度校验（>4096 → `BAD_PARAM`）→ 记录结果状态表（eventId → allowFlag，覆盖更新，新键受 1024 上限）→ allowFlag=false 时锁外 HA 打点 AUTH_BLOCK_RESULT → `SUCCESS`。
-- 退订：`client->Unsubscribe(eventId)` → session 代理调 `Unsubscribe(eventId)` → 服务端双轨校验 → 会话已销毁检查 → pid 归属校验 → 从会话 eventIds 集合移除（未订阅的 eventId 幂等返回 SUCCESS；不做配置校验：配置运行中可被移除）。
+- 退订：`client->Unsubscribe(eventId)` → session 代理调 `Unsubscribe(eventId)` → 服务端双轨校验 → 会话已销毁检查 → pid 归属校验 → 从会话 `eventIds_` 集合移除并 `UnregisterEventService(eventId)`（PR #534：同步清理 `eventServiceMap_`，未订阅的 eventId 幂等返回 SUCCESS；不做配置校验：配置运行中可被移除）→ 异步 `NotifyClientStatusChanged`。
+- **provider 状态通知（按 serviceId 过滤，PR #534）**：`NotifyClientStatusChanged` → 锁内收集所有有效 provider 的 `(callback, serviceId)` 对 → 锁外对每个 provider 调 `CollectClientInfos(providerServiceId)` 过滤（只收集订阅了属于该 serviceId 的 eventId 的 client，`subscribedEvents` 只含匹配的 eventId；同一 client 订阅不同 serviceId 的 eventId 时，在不同 provider 列表里各出现一次，`subscribedEvents` 不同）→ `proxy->OnClientStatusChanged(filteredClientInfos)`（每个 provider 收到各自过滤后的列表，不再全量广播）。
 - 销毁：`client->DeleteClient()`（或最后一个 shared_ptr 释放触发 Deleter）→ SDK 排空在途 OnAuthEvent → session 代理调 `Destroy()` → 服务端双轨校验 → pid 归属校验 → manager 会话集合移除 + 会话置无效（重复 Destroy 幂等返回 SUCCESS；销毁后再调其他方法 → `BAD_PARAM`）→ 锁外 RemoveDeathRecipient。
 - 异常：订阅者进程死亡 → per-session DeathRecipient（持该会话对象引用）→ manager 移除会话并置无效；服务端死亡 → SDK DeathRecipient 触发 HandleDeath 退避自动重连重建（重新走 CreatAuthEventClient 拿新 session 代理 + 按快照重订阅，对齐 EventSubscribeClient 范式）；调用方 DeleteClient 后重连被 deleted_ 标志终止。
 - 配额超限：`CreatAuthEventClient` 时进程内已有 2 个会话 → `CLIENT_EXCEED_PROCESS_LIMIT`；会话集合已有 16 个 → `CLIENT_EXCEED_GLOBAL_LIMIT`；同一 cb 重复创建 → `BAD_PARAM`。
 - 功能裁剪：gni 开关 `security_guard_auth_event_enable=false`（默认）时，主接口 `CreatAuthEventClient` 退化为占位实现（`FAILED`，session 不下发），功能源不编入，对既有 3524 零影响；`auth_event.cpp` 与其单测无条件编入（IDL 生成 stub/proxy 引用其序列化符号）；**5 个对外头位于 `interfaces/inner_api/collect/include/`（声明常驻、不做功能宏包裹），未开启设备上调用方链接期失败（so 无符号）——头内注释声明仅特定设备开放**。
+- **serviceId 过滤增强（PR #534）**：`EventCfg` 配置新增 `serviceId` 字段（阻断服务提供者标识），建立 eventId → serviceId 静态映射。client 订阅 eventId 时，SA 通过配置查到该 eventId 所属 serviceId 并存入会话（`eventServiceMap_`）；provider 的 `OnClientStatusChanged` 回调只上报订阅了与该 provider serviceId 相匹配的 eventId 的订阅者（按 serviceId 拆分，`subscribedEvents` 只含属于该 serviceId 的 eventId）。设计决策：1 eventId : 1 serviceId；按 serviceId 拆分；serviceId 必填校验在 Subscribe 时做（`EventCfg` 是通用配置，含非 auth_event 的普通 eventId，启动期无法区分，auth_event 订阅的 eventId 在 Subscribe 时校验 `config.serviceId` 非空）。
 
 ## 4. 契约变更
 
@@ -74,6 +76,7 @@
   - 字段（三字段）：`int64_t eventId`（阻断/鉴权事件标识）；`std::string content`（事件内容，JSON 扩展）；`std::string metadata`（元数据，JSON 扩展，由订阅者与事件源约定，框架不解析）；
   - 实现手写 `Marshalling/Unmarshalling`（对齐 `security_event.h:24-47` 范式），实现文件 `frameworks/common/collect/src/auth_event.cpp`。
 - ~~`AuthEventSubscribeInfo`~~ — v2 取消（会话模式按 eventId 逐个订阅，无需批量结构）。
+- `EventCfg` 新增字段 `std::string serviceId`（PR #534，阻断服务提供者标识，`interfaces/inner_api/common/include/security_event_info.h`），JSON key `"serviceId"`（`EVENT_CFG_SERVICE_ID_KEY`，`services/config_manager/include/model_analysis_define.h`），序列化在 `services/config_manager/src/model_cfg_marshalling.cpp` 的 `to_json`/`from_json`。auth_event 订阅的 eventId 必须配 serviceId（Subscribe 时校验非空）。
 
 ### 4.2 IPC 接口（3524 扩展，方案 D：主接口 1 方法 + 独立会话接口）
 
@@ -149,7 +152,7 @@ void Destroy();
   3. HAP token：`AccessTokenKit::VerifyAccessToken(callerToken, "ohos.permission.kernel.AUTH_AUDIT_EVENT")` 为 GRANTED 放行，否则 `NO_PERMISSION`；
   4. 其他 token 类型：`NO_PERMISSION`。
 - **会话进程绑定**：session 方法中比对会话记录的 `pid` 与 `IPCSkeleton::GetCallingPid()`，不一致返回 `BAD_PARAM`（binder handle 理论上不可被第三方获取，此为纵深防御）。
-- **订阅配置校验**：`Subscribe` 在权限/会话校验后执行 `ConfigDataManager::GetEventConfig(eventId, config)`，未命中返回 `BAD_PARAM`（事件须在事件配置中，对齐 `CollectorStart` 范式）；`Unsubscribe` 不做配置校验（配置运行中可被移除）。
+- **订阅配置校验（含 serviceId 必填，PR #534）**：`Subscribe` 在权限/会话校验后执行 `ConfigDataManager::GetEventConfig(eventId, config)`，未命中返回 `BAD_PARAM`（事件须在事件配置中，对齐 `CollectorStart` 范式）；**命中后校验 `config.serviceId` 非空**（空则 `BAD_PARAM`，该 eventId 未配置为 auth_event 事件，对齐"启动期无法区分 auth_event 与普通 eventId"的现状）；`Unsubscribe` 不做配置校验（配置运行中可被移除）。
 
 ### 4.6 服务端会话对象与管理器（新增）
 
@@ -157,14 +160,15 @@ void Destroy();
 
 - 构造入参：`pid_t callerPid, int32_t callerUid, const sptr<IRemoteObject> &callback`（状态即成员，非查表所得）；
 - 四个 IDL 方法覆写（Subscribe/Unsubscribe/SetAuthResult/Destroy）：前置 `IsCallerAllowed()` 双轨校验 → 会话有效性检查（已销毁 → `BAD_PARAM`，Destroy 幂等 `SUCCESS`）→ pid 归属校验 → 转调 `AuthEventSubscribeManager` 对应状态操作（manager 单锁内操作本会话 eventIds）；
-- 状态成员：`pid_/uid_/callback_/eventIds_/valid_`；状态操作全部经 manager 持锁进行（session 自身无锁，锁纪律见 manager）；
+- 状态成员：`pid_/uid_/callback_/eventIds_/eventServiceMap_/valid_`（`eventServiceMap_` 为 eventId→serviceId 映射，PR #534）；状态操作全部经 manager 持锁进行（session 自身无锁，锁纪律见 manager）；
+- **serviceId 映射方法（PR #534，管理器锁内调用）**：`RegisterEventService(eventId, serviceId)` / `UnregisterEventService(eventId)` / `GetServiceIdForEvent(eventId)`，与 `eventIds_` 同步维护（SubscribeAuthEvent 锁内同时 insert，UnsubscribeAuthEvent 锁内同时 erase）。
 - per-session 死亡清理：构造时由 manager 在 cb 上挂 `AuthEventSessionDeathRecipient`（持本会话 weak 引用），客户端死亡 → `manager->RemoveSession(session)`。
 
 **管理器 `AuthEventSubscribeManager`**（`services/data_collect/sa/include/auth_event_subscribe_manager.h` + `services/data_collect/sa/auth_event_subscribe_manager.cpp`，单例，NoCopyable）：
 
 - `int32_t CreatAuthEventClient(pid_t callerPid, int32_t callerUid, const sptr<IRemoteObject> &callback, sptr<IRemoteObject> &sessionRemote);` — cb 判空（`NULL_OBJECT`）+ 同 cb 重复创建检查（`BAD_PARAM`）+ 配额检查 + 创建 session 对象登记集合（AddDeathRecipient 失败回滚）
-- `int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);`（会话无效/已销毁 → `BAD_PARAM`；重复 eventId 幂等；单会话上限 1024）
-- `int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);`（未订阅幂等 `SUCCESS`）
+- `int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId, const std::string &serviceId);`（PR #534：加 `serviceId` 参数，锁内同时 insert `eventIds_` 和 `RegisterEventService(eventId, serviceId)`；会话无效/已销毁 → `BAD_PARAM`；重复 eventId 幂等；单会话上限 1024）
+- `int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);`（未订阅幂等 `SUCCESS`；PR #534：锁内同时 erase `eventIds_` 和 `UnregisterEventService(eventId)`）
 - `int32_t SetAuthResult(AuthEventSessionService *session, pid_t callerPid, int32_t callerUid, const AuthEvent &event, bool allowFlag);` — 记录结果状态表（覆盖更新，新键受 1024 上限）→ 阻断结果锁外 HA 打点
 - `int32_t DestroyAuthEventClient(AuthEventSessionService *session);` — 幂等销毁（重复 `SUCCESS`），置会话无效
 - `int32_t GetAuthResult(int64_t eventId, bool &allowFlag);` — 预留读取口（`NOT_FOUND`）
@@ -175,6 +179,12 @@ void Destroy();
 - 配额常量（置于管理器头文件）：`MAX_AUTH_EVENT_CLIENT_SIZE = 16`（设备全局）、`MAX_AUTH_EVENT_CLIENT_SIZE_ONE_PROCESS = 2`（单进程）；检查逻辑对齐 `IsExceedLimited`（`acquire_data_subscribe_manager.cpp:1132-1166`）：按 callerPid 统计该 pid 名下会话数 ≥2 → `CLIENT_EXCEED_PROCESS_LIMIT`；会话集合总数 ≥16 → `CLIENT_EXCEED_GLOBAL_LIMIT`；
 - 常量：字符串 `MAX_AUTH_EVENT_STR_LEN=4096`、集合 `MAX_AUTH_EVENT_SUBSCRIBE_SIZE / MAX_AUTH_EVENT_RESULT_SIZE=1024`。
 - ~~超时跟踪表 / CheckAuthResultTimeout / AUTH_RESULT_TIMEOUT_MS~~ — v9 删除（超时属另一需求）。
+
+**协调者 `AuthCoordinator`**（`services/data_collect/sa/include/auth_event/auth_coordinator.h` + `services/data_collect/sa/auth_event/auth_coordinator.cpp`，单例，NoCopyable）——provider 侧会话管理与状态通知（PR #534 serviceId 过滤增强）：
+
+- `std::set<sptr<AuthProviderSessionService>> providerSessions_` — provider 会话集合（按 sptr 排序，无 serviceId 索引；`CreateAuthProvider`/`DestroyAuthProvider`/`RemoveProvider` 增删，`FindProviderLocked` 按裸指针查）。
+- `std::vector<AuthClientInfo> CollectClientInfos(const std::string &serviceId)`（PR #534：签名加 `serviceId` 参数）——遍历所有 session，每个 session 按 `serviceId` 过滤 `eventIds`（`GetServiceIdForEvent(eventId) == serviceId`），只收集订阅了属于该 serviceId 的 eventId 的 client；同一 client 订阅不同 serviceId 的 eventId 时，在不同 provider 列表里各出现一次，`subscribedEvents` 只含属于该 serviceId 的 eventId。
+- `void NotifyClientStatusChanged()`（PR #534：按 provider 过滤）——锁内收集所有有效 provider 的 `(callback, serviceId)` 对，锁外对每个 provider 调 `CollectClientInfos(providerServiceId)` 过滤后单独发送 `OnClientStatusChanged(filteredClientInfos)`（不再全量广播同一份 clientInfos 给所有 provider）。
 
 ### 4.7 错误码 / 兼容
 
@@ -320,6 +330,8 @@ void Destroy();
 - [ ] 死亡清理：单测模拟订阅者远端对象死亡（触发 DeathRecipient）后 Notify 不再向其推送、且无崩溃。
 - [ ] SDK 客户端：单测覆盖 CreatClient/Subscribe/Unsubscribe/SetAuthResult/DeleteClient 经 session 代理到达服务端路径，回调 function 被触发。
 - [ ] 回归：现有 3524 单测（test/unittest/data_collect/）全部仍通过。
+- [ ] serviceId 必填校验（PR #534）：单测覆盖——Subscribe 时 `config.serviceId` 为空 → `BAD_PARAM`；`config.serviceId` 非空 → SUCCESS（`eventServiceMap_` 正常登记）。
+- [ ] serviceId 过滤（PR #534）：单测覆盖——client 订阅 eventId A（serviceId="P1"）和 eventId B（serviceId="P2"）；provider P1 收到的 `OnClientStatusChanged` 只含该 client 且 `subscribedEvents` 只含 A；provider P2 只含该 client 且 `subscribedEvents` 只含 B；无 provider 时 client 仍可订阅（`eventServiceMap_` 正常登记）；client 订阅了某 serviceId 的 eventId 但无对应 serviceId 的 provider 时，该订阅不发给任何 provider。
 - ~~[ ] 回填超时跟踪 / 超时处置策略~~ —— v9 删除（超时属另一需求）。
 
 ## 7. 存疑

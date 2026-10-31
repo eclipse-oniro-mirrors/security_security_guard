@@ -66,6 +66,7 @@ namespace OHOS::Security::SecurityGuard {
     constexpr const char* EVENT_CFG_BATCH_UPLOAD_KEY = "isBatchUpload";
     constexpr const char* EVENT_CFG_IS_STICKY_KEY = "isSticky";
     constexpr const char* EVENT_CFG_OLD_EVENT_ID_KEY = "oldEventId";
+    constexpr const char* EVENT_CFG_SERVICE_ID_KEY = "serviceId";
     // date manager key
     constexpr const char* DATA_MGR_DEVICE_ROM_KEY = "deviceRom";
     constexpr const char* DATA_MGR_DEVICE_RAM_KEY = "deviceRam";

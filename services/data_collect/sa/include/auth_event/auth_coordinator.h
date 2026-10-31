@@ -142,7 +142,7 @@ private:
         const std::vector<std::string> &clientIds);
     void BuildAuthResult(RoutingContext &ctx, AuthResult &result);
     void NotifyAuthResult(const sptr<IRemoteObject> &callback, const AuthResult &result);
-    std::vector<AuthClientInfo> CollectClientInfos();
+    std::vector<AuthClientInfo> CollectClientInfos(const std::string &serviceId);
     // P1-3: 按 hash(seqnumKey) 分片，返回对应分片索引
     static size_t GetSeqnumShardIndex(const std::string &seqnumKey);
 

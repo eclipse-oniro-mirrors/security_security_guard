@@ -38,6 +38,7 @@ using EventCfg = struct {
     std::string prog;
     uint32_t isBatchUpload;
     uint32_t isSticky;
+    std::string serviceId;  // 阻断服务提供者标识：auth_event 订阅的 eventId 必须声明所属 serviceId
 };
 
 using EventGroupCfg = struct {

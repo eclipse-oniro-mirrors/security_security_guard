@@ -72,7 +72,13 @@ ErrCode AuthEventSessionService::Subscribe(int64_t eventId)
         SGLOGE("GetEventConfig error, eventId is 0x%{public}" PRIx64, eventId);
         return BAD_PARAM;
     }
-    return AuthEventSubscribeManager::GetInstance().SubscribeAuthEvent(this, eventId);
+    // auth_event 订阅的 eventId 必须在配置里声明 serviceId（阻断服务提供者）。
+    // serviceId 为空说明该 eventId 未配置为 auth_event 事件，拒绝订阅。
+    if (config.serviceId.empty()) {
+        SGLOGE("serviceId is empty, eventId=0x%{public}" PRIx64, eventId);
+        return BAD_PARAM;
+    }
+    return AuthEventSubscribeManager::GetInstance().SubscribeAuthEvent(this, eventId, config.serviceId);
 }
 
 ErrCode AuthEventSessionService::Unsubscribe(int64_t eventId)
@@ -108,6 +114,11 @@ ErrCode AuthEventSessionService::SetAuthResult(const AuthEvent &event, bool allo
     }
     if (IPCSkeleton::GetCallingPid() != pid_) {
         SGLOGE("session not belong to caller");
+        return BAD_PARAM;
+    }
+    EventCfg config {};
+    if (!ConfigDataManager::GetInstance().GetEventConfig(event.GetEventId(), config)) {
+        SGLOGE("GetEventConfig error, eventId is 0x%{public}" PRIx64, event.GetEventId());
         return BAD_PARAM;
     }
     XCollie_Utils xcollie("SGIPC_AuthSessionSetAuthResult", XCOLLIE_FLAG);
