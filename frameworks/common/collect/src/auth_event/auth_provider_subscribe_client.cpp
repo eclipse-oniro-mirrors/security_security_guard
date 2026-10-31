@@ -15,8 +15,13 @@
 
 #include "auth_provider_subscribe_client.h"
 
-#include <chrono>
 #include <cinttypes>
+
+#include "security_guard_define.h"
+#include "security_guard_log.h"
+
+#ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+#include <chrono>
 #include <set>
 
 #include "auth_result_callback_service.h"
@@ -26,10 +31,9 @@
 #include "ffrt.h"
 #include "i_auth_provider_callback.h"
 #include "ipc_skeleton.h"
-#include "security_guard_define.h"
-#include "security_guard_log.h"
 #include "system_ability_definition.h"
 #include "iservice_registry.h"
+#endif
 
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 namespace OHOS::Security::SecurityGuard {

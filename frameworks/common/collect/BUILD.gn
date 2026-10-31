@@ -71,6 +71,9 @@ ohos_shared_library("libsg_collect_sdk") {
     "src/sg_collect_client.cpp",
     "src/sg_obtaindata_client.cpp",
     "src/event_subscribe_client.cpp",
+    "src/auth_event/auth_provider_subscribe_client.cpp",
+    "src/auth_event/auth_event_info.cpp",
+    "src/auth_event/auth_client_status.cpp",
   ]
 
   deps = [ "${sg_root_dir}/services/data_collect/idl:data_collect_manager_idl_sa_proxy" ]
@@ -80,15 +83,12 @@ ohos_shared_library("libsg_collect_sdk") {
     sources += [
       "src/auth_event/auth_event_callback_service.cpp",
       "src/auth_event/auth_event_callback_stub.cpp",
-      "src/auth_event/auth_event_subscribe_client.cpp",
-      "src/auth_event/auth_event_info.cpp",
-      "src/auth_event/auth_client_status.cpp",
       "src/auth_event/auth_client_info.cpp",
       "src/auth_event/client_auth_result.cpp",
       "src/auth_event/auth_result.cpp",
+      "src/auth_event/auth_event_subscribe_client.cpp",
       "src/auth_event/auth_provider_callback_service.cpp",
       "src/auth_event/auth_provider_callback_stub.cpp",
-      "src/auth_event/auth_provider_subscribe_client.cpp",
       "src/auth_event/auth_result_callback_stub.cpp",
       "src/auth_event/auth_result_callback_service.cpp",
     ]
