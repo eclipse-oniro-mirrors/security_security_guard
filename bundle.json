@@ -115,6 +115,7 @@
             "header_files": [],
             "header_base": [
               "//base/security/security_guard/interfaces/inner_api/collect/include",
+              "//base/security/security_guard/interfaces/inner_api/collect/include/auth_event",
               "//base/security/security_guard/interfaces/inner_api/common/include"
             ]
           }
