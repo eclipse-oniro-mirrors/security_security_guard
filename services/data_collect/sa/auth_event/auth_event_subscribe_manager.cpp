@@ -152,7 +152,8 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams
     return SUCCESS;
 }
 
-int32_t AuthEventSubscribeManager::SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId)
+int32_t AuthEventSubscribeManager::SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId,
+    const std::string &serviceId)
 {
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
@@ -167,10 +168,11 @@ int32_t AuthEventSubscribeManager::SubscribeAuthEvent(AuthEventSessionService *s
             return FILTER_EXCEED_LIMIT;
         }
         eventIds.insert(eventId);
+        (*iter)->RegisterEventService(eventId, serviceId);
     }
     // 异步通知 Provider 刷新客户端列表
     ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
-    SGLOGI("subscribe auth event, eventId=%{public}" PRId64, eventId);
+    SGLOGI("subscribe auth event, eventId=%{public}" PRId64 ", serviceId=%{public}s", eventId, serviceId.c_str());
     return SUCCESS;
 }
 
@@ -184,6 +186,7 @@ int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService 
             return BAD_PARAM;
         }
         (*iter)->GetEventIds().erase(eventId);
+        (*iter)->UnregisterEventService(eventId);
     }
     // 异步通知 Provider 刷新客户端列表
     ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });

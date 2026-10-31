@@ -341,9 +341,9 @@ HWTEST_F(AuthEventSubscribeManagerTest, SubscribeAndNotify001, TestSize.Level0)
     EXPECT_CALL(*obj, SendRequest(IAuthEventCallback::CMD_ON_AUTH_EVENT, _, _, _)).Times(1);
     auto *session = CreateManagedSession(9401, 9401 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
-    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1001), SUCCESS);
+    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1001, "test_service"), SUCCESS);
     // 重复订阅幂等
-    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1001), SUCCESS);
+    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1001, "test_service"), SUCCESS);
     AuthEvent event(1001);
     manager.NotifyAuthEvent(event);
     // 未订阅的 eventId 不推送
@@ -359,7 +359,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, UnsubscribeAndNotify002, TestSize.Level0
     EXPECT_CALL(*obj, SendRequest(_, _, _, _)).Times(0);
     auto *session = CreateManagedSession(9402, 9402 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
-    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1002), SUCCESS);
+    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1002, "test_service"), SUCCESS);
     EXPECT_EQ(manager.UnsubscribeAuthEvent(session, 1002), SUCCESS);
     AuthEvent event(1002);
     manager.NotifyAuthEvent(event);
@@ -382,7 +382,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, InvalidSession004, TestSize.Level0)
     ASSERT_NE(nullptr, session);
     ASSERT_EQ(manager.DestroyAuthEventClient(session), SUCCESS);
     // 已销毁会话（不在会话集合）-> BAD_PARAM
-    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1004), BAD_PARAM);
+    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1004, "test_service"), BAD_PARAM);
     EXPECT_EQ(manager.UnsubscribeAuthEvent(session, 1004), BAD_PARAM);
     AuthEvent event(1004, "content", "metadata");
     EXPECT_EQ(manager.SetAuthResult(session, event, AuthStrategy::ALLOW), BAD_PARAM);
@@ -467,10 +467,11 @@ HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit001, TestSize.Level0)
     auto *session = CreateManagedSession(9510, 9510 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     for (int64_t eventId = 1; eventId <= static_cast<int64_t>(MAX_AUTH_EVENT_SUBSCRIBE_SIZE); eventId++) {
-        ASSERT_EQ(manager.SubscribeAuthEvent(session, eventId), SUCCESS);
+        ASSERT_EQ(manager.SubscribeAuthEvent(session, eventId, "test_service"), SUCCESS);
     }
     // 单会话订阅数超限
-    EXPECT_EQ(manager.SubscribeAuthEvent(session, MAX_AUTH_EVENT_SUBSCRIBE_SIZE + 1), FILTER_EXCEED_LIMIT);
+    EXPECT_EQ(manager.SubscribeAuthEvent(session, MAX_AUTH_EVENT_SUBSCRIBE_SIZE + 1, "test_service"),
+        FILTER_EXCEED_LIMIT);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, CollectionSizeLimit002, TestSize.Level0)
@@ -494,13 +495,13 @@ HWTEST_F(AuthEventSubscribeManagerTest, SubscriberDied007, TestSize.Level0)
     EXPECT_CALL(*obj, SendRequest(_, _, _, _)).Times(0);
     auto *session = CreateManagedSession(9601, 9601 + 100, AuthStrategy::ALLOW, obj);
     ASSERT_NE(nullptr, session);
-    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1007), SUCCESS);
+    ASSERT_EQ(manager.SubscribeAuthEvent(session, 1007, "test_service"), SUCCESS);
     // 经真实 per-session DeathRecipient 回调链路触发清理
     auto recipient = session->GetDeathRecipient();
     ASSERT_NE(recipient, nullptr);
     recipient->OnRemoteDied(obj);
     // 会话移除后再订阅 -> BAD_PARAM
-    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1007), BAD_PARAM);
+    EXPECT_EQ(manager.SubscribeAuthEvent(session, 1007, "test_service"), BAD_PARAM);
     AuthEvent event(1007);
     manager.NotifyAuthEvent(event);
     testing::Mock::VerifyAndClearExpectations(obj.GetRefPtr());

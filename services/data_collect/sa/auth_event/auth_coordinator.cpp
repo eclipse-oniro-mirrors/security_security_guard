@@ -732,7 +732,7 @@ void AuthCoordinator::NotifyAuthResult(const sptr<IRemoteObject> &callback, cons
     proxy->OnAuthResult(result);
 }
 
-std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos()
+std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos(const std::string &serviceId)
 {
     std::vector<AuthClientInfo> infos;
     auto sessions = AuthEventSubscribeManager::GetInstance().GetAllSessions();
@@ -740,44 +740,56 @@ std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos()
         if (session == nullptr) {
             continue;
         }
+        // 按 provider 的 serviceId 过滤：只收集订阅了属于该 serviceId 的 eventId 的 client。
+        // 同一 client 若订阅了不同 serviceId 的 eventId，会在不同 provider 的列表里各出现一次，
+        // 但 subscribedEvents 只含属于该 serviceId 的 eventId（按 serviceId 拆分）。
+        std::vector<int64_t> matchedEvents;
+        for (const auto &eventId : session->GetEventIds()) {
+            if (session->GetServiceIdForEvent(eventId) == serviceId) {
+                matchedEvents.push_back(eventId);
+            }
+        }
+        if (matchedEvents.empty()) {
+            continue;  // 该 client 未订阅属于此 serviceId 的 eventId，跳过
+        }
         AuthClientInfo info;
         info.SetClientId(session->GetClientId());
         // 本期置空，待产品确认后按 calling token 查 BundleManager 补全
         info.SetBundleName("");
-        std::vector<int64_t> events(session->GetEventIds().begin(), session->GetEventIds().end());
-        info.SetSubscribedEvents(events);
+        info.SetSubscribedEvents(matchedEvents);
         info.SetDefaultTimeoutStrategy(session->GetTimeoutStrategy());
         info.SetDefaultTimeoutMs(session->GetDefaultTimeoutMs());
         infos.push_back(info);
     }
-    SGLOGI("collect client infos, count=%{public}zu", infos.size());
+    SGLOGD("collect client infos, serviceId=%{public}s, count=%{public}zu", serviceId.c_str(), infos.size());
     return infos;
 }
 
-// 验收: Client 状态通知 — 阻断服务 SA 同步调用回调通知事件提供者，事件提供者异步返回结果
+// 验收: Client 状态通知 — 阻断服务 SA 按 provider 的 serviceId 过滤后通知事件提供者，
+// 每个 provider 只收到订阅了自己 serviceId 的 client 列表（含各自 subscribedEvents）。
 void AuthCoordinator::NotifyClientStatusChanged()
 {
-    auto clientInfos = CollectClientInfos();
-    std::vector<sptr<IRemoteObject>> callbacks;
+    // 收集所有有效 provider 的 (callback, serviceId) 对（锁内收集，锁外发 IPC 避免嵌套持锁调 IPC）
+    std::vector<std::pair<sptr<IRemoteObject>, std::string>> providerCallbacks;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         for (const auto &provider : providerSessions_) {
             if (provider != nullptr && provider->IsValid()) {
-                callbacks.push_back(provider->GetCallback());
+                providerCallbacks.emplace_back(provider->GetCallback(), provider->GetServiceId());
             }
         }
     }
-    SGLOGI("notify client status changed, clientCount=%{public}zu, providerCount=%{public}zu",
-        clientInfos.size(), callbacks.size());
-    for (const auto &cb : callbacks) {
-        auto proxy = iface_cast<IAuthProviderCallback>(cb);
-        if (proxy != nullptr) {
-            proxy->OnClientStatusChanged(clientInfos);
-        } else {
+    SGLOGI("notify client status changed, providerCount=%{public}zu", providerCallbacks.size());
+    for (const auto &entry : providerCallbacks) {
+        auto proxy = iface_cast<IAuthProviderCallback>(entry.first);
+        if (proxy == nullptr) {
             SGLOGE("auth provider callback proxy is null");
+            continue;
         }
+        auto clientInfos = CollectClientInfos(entry.second);  // 按 provider 的 serviceId 过滤
+        proxy->OnClientStatusChanged(clientInfos);
     }
-    SGLOGD("notify clients status changed done, providerCount=%{public}zu", callbacks.size());
+    SGLOGD("notify clients status changed done, providerCount=%{public}zu", providerCallbacks.size());
 }
 
 AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider)

@@ -19,6 +19,8 @@
 
 #include <cstdint>
 #include <set>
+#include <string>
+#include <unordered_map>
 
 #include "auth_event.h"
 #include "auth_event_session_stub.h"
@@ -94,6 +96,27 @@ public:
         return eventIds_;
     }
 
+    // 管理器锁内调用：登记 eventId 所属的 serviceId（阻断服务提供者）。
+    // Subscribe 时由 SubscribeAuthEvent 在管理器锁内写入，与 eventIds_ 同步维护。
+    void RegisterEventService(int64_t eventId, const std::string &serviceId)
+    {
+        eventServiceMap_[eventId] = serviceId;
+    }
+
+    // 管理器锁内调用：移除 eventId 的 serviceId 映射。Unsubscribe 时同步清理。
+    void UnregisterEventService(int64_t eventId)
+    {
+        eventServiceMap_.erase(eventId);
+    }
+
+    // 查询某 eventId 所属 serviceId（CollectClientInfos 按 provider serviceId 过滤时调用）。
+    // 返回空串表示该 eventId 未声明 serviceId（旧配置兼容，不应出现在 auth_event 订阅链路）。
+    std::string GetServiceIdForEvent(int64_t eventId) const
+    {
+        auto it = eventServiceMap_.find(eventId);
+        return it != eventServiceMap_.end() ? it->second : "";
+    }
+
     // 会话有效性快速检查（权威判定以"是否在管理器会话集合中"为准）
     bool IsValid() const
     {
@@ -124,6 +147,7 @@ private:
     int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};
     sptr<IRemoteObject> callback_ {};
     std::set<int64_t> eventIds_ {};
+    std::unordered_map<int64_t, std::string> eventServiceMap_ {};  // eventId → serviceId（阻断服务提供者）
     bool valid_ {true};
     sptr<IRemoteObject::DeathRecipient> deathRecipient_ {};
 };

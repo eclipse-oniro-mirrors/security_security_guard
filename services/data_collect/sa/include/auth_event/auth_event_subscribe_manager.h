@@ -58,7 +58,7 @@ public:
     // 主接口路径：创建会话对象并经 sessionRemote 下发其远端引用（binder handle 即会话路由）。
     int32_t CreatAuthEventClient(const CreateClientParams &params, sptr<IRemoteObject> &sessionRemote);
     // 会话对象方法路径（AuthEventSessionService 转调，会话有效性以"在会话集合中"为权威判定）
-    int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
+    int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId, const std::string &serviceId);
     int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
     int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy);
     int32_t DestroyAuthEventClient(AuthEventSessionService *session);
