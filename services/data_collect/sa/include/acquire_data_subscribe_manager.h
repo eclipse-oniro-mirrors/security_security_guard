@@ -22,7 +22,7 @@
 #include <set>
 #include <vector>
 
-#include "ffrt.h"
+#include "ffrt_inner.h"
 #include "iremote_object.h"
 #include "timer.h"
 #include "tokenid_kit.h"
@@ -70,6 +70,10 @@ public:
     };
     int UploadEvent(const SecurityCollector::Event &event);
     void DeInitDeviceId();
+    // 标记缓存的 deviceId 失效并清空，供设备管理服务死亡回调（DmInitCallback::OnRemoteDied）调用
+    void InvalidateDeviceId();
+    // 失效缓存并启动退避自动重新注册（OnRemoteDied 入口），直至重新取回 deviceId 或服务停止
+    void RecoverDeviceId();
     void InitEventQueue();
     void DeInitEventQueue();
     void StartTokenBucketTask();
@@ -80,6 +84,14 @@ private:
     ~AcquireDataSubscribeManager();
     void InitUserId();
     void InitDeviceId();
+    // 订阅路径的异步入口：缓存有效直接返回，失效则启动后台退避刷新，不阻塞订阅接口
+    void RefreshDeviceIdAsync();
+    // 派发退避恢复线程：CAS 防重复派发，与 StopDeviceIdRecovery 经 deviceIdRecoveryMutex_ 串行
+    void StartDeviceIdRecovery();
+    // 退避重试循环（1s 起倍增、上限 30s，1s 分片睡眠检查停止标志），成功或停止后清在途标记
+    void DeviceIdRecoveryLoop();
+    // 停止并 join 恢复线程（DeInitDeviceId/析构路径）
+    void StopDeviceIdRecovery();
     int SubscribeSc(int64_t eventId);
     int UnSubscribeSc(int64_t eventId);
     int SubscribeScInSg(int64_t eventId, uint32_t isSticky);
@@ -151,6 +163,14 @@ private:
     ffrt::mutex userIdMutex_ {};
     ffrt::mutex queueMutex_ {};
     std::string deviceId_ {};
+    // deviceId 缓存有效性：InitDeviceId 成功置 true，OnRemoteDied 失效置 false
+    std::atomic<bool> deviceIdValid_ {false};
+    // 异步刷新在途标记：避免并发订阅触发重复的设备管理 IPC
+    std::atomic<bool> deviceIdRefreshInFlight_ {false};
+    // 恢复线程派发与停止的串行锁（join 前置，保证不覆盖 joinable 线程）
+    ffrt::mutex deviceIdRecoveryMutex_ {};
+    ffrt::thread deviceIdRecoveryThread_ {};
+    std::atomic<bool> isStopDeviceIdRecovery_ {false};
     int32_t userId_ {-1};
     std::atomic<bool> isDeviceManagerInit_ {false};
     // 只保护 sessionsMap_ / reportedStickyEvents_（纯数据）。临界区内禁止任何外部调用

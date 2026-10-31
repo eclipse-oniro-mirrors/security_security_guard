@@ -293,6 +293,14 @@ std::string DatabaseHelper::CreateTable()
     return table;
 }
 
+std::string DatabaseHelper::CreateEventIdIndex()
+{
+    std::string index;
+    index.append("CREATE INDEX IF NOT EXISTS idx_").append(dbTable_).append("_event_id ON ");
+    index.append(dbTable_).append("(").append(EVENT_ID).append(")");
+    return index;
+}
+
 std::string DatabaseHelper::FilterSpecialChars(const std::string &input)
 {
     std::string filtered;

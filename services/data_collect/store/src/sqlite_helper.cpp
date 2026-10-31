@@ -55,6 +55,9 @@ void SqliteHelper::Open() __attribute__ ((no_sanitize("cfi")))
     int32_t res = sqlite3_open_v2(fileName.c_str(), &db_, falg, NULL);
     if (res != SQLITE_OK) {
         SGLOGE("Failed to open db: %{public}s", sqlite3_errmsg(db_));
+        // 失败时句柄仍会被分配，关闭并置空，避免泄漏并保证 db_ 非空等价于打开成功
+        sqlite3_close(db_);
+        db_ = nullptr;
         return;
     }
     sqlite3_busy_timeout(db_, DB_BUSY_TIMEOUT);
@@ -90,6 +93,11 @@ void SqliteHelper::Close()
         return;
     }
     db_ = nullptr;
+}
+
+bool SqliteHelper::CheckReady() const
+{
+    return db_ != nullptr;
 }
 
 int32_t SqliteHelper::BeginTransaction() const

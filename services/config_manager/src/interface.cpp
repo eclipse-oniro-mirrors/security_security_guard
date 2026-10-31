@@ -18,19 +18,24 @@
 #include "event_group_config.h"
 #include "security_guard_log.h"
 
-extern "C" void InitAllConfig()
+extern "C" bool InitAllConfig()
 {
+    bool success = true;
     if (!OHOS::Security::SecurityGuard::ConfigManager::InitConfig<OHOS::Security::SecurityGuard::EventConfig>()) {
         SGLOGE("init event config error");
+        success = false;
     }
 
     if (!OHOS::Security::SecurityGuard::ConfigManager::InitConfig<OHOS::Security::SecurityGuard::ModelConfig>()) {
         SGLOGE("init model config error");
+        success = false;
     }
 
     if (!OHOS::Security::SecurityGuard::ConfigManager::InitConfig<OHOS::Security::SecurityGuard::EventGroupConfig>()) {
         SGLOGE("init event group config error");
+        success = false;
     }
+    return success;
 }
 
 extern "C" bool UpdateConfig(const std::string &file)

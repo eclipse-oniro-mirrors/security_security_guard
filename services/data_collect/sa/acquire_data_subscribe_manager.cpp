@@ -63,6 +63,11 @@ namespace {
     constexpr int64_t FILE_EVENT_ID = 0x01C000007;
     constexpr uint32_t PUBLISH_EVENT_TO_SUB_STEP_COUNT = 100;
     constexpr int64_t PUBLISH_EVENT_TO_SUB_STEP_TIME = 100;
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    constexpr int32_t DEVICE_ID_RECOVERY_INIT_INTERVAL_SEC = 1;
+    constexpr int32_t DEVICE_ID_RECOVERY_BACKOFF_MULTIPLIER = 2;
+    constexpr int32_t DEVICE_ID_RECOVERY_MAX_INTERVAL_SEC = 30;
+#endif
     ffrt::thread g_tokenBucketThread {};
     ffrt::thread g_cleanEventCacheThread {};
 
@@ -77,7 +82,11 @@ namespace {
 class InitCallback : public DistributedHardware::DmInitCallback {
 public:
     ~InitCallback() override = default;
-    void OnRemoteDied() override {};
+    void OnRemoteDied() override
+    {
+        // 设备管理服务死亡：失效缓存并按退避自动重新注册获取
+        AcquireDataSubscribeManager::GetInstance().RecoverDeviceId();
+    };
 };
 #endif
 
@@ -108,6 +117,10 @@ AcquireDataSubscribeManager::AcquireDataSubscribeManager() : collectorListener_(
 
 AcquireDataSubscribeManager::~AcquireDataSubscribeManager()
 {
+    // 兜底：静态析构前先收敛 deviceId 恢复线程，避免线程访问已析构成员
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    StopDeviceIdRecovery();
+#endif
     if (handle_ != nullptr) {
         dlclose(handle_);
         handle_ = nullptr;
@@ -121,7 +134,7 @@ AcquireDataSubscribeManager::~AcquireDataSubscribeManager()
 int AcquireDataSubscribeManager::InsertSubscribeRecord(int64_t eventId, const std::string &clientId)
 {
     AcquireDataSubscribeManager::GetInstance().InitUserId();
-    AcquireDataSubscribeManager::GetInstance().InitDeviceId();
+    AcquireDataSubscribeManager::GetInstance().RefreshDeviceIdAsync();
     std::vector<EventMuteFilter> filtersToSet {};
     {
         std::lock_guard<ffrt::mutex> lock(sessionMutex_);
@@ -169,7 +182,7 @@ int AcquireDataSubscribeManager::InsertSubscribeRecord(
     int64_t eventId = subscribeInfo.GetEvent().eventId;
     std::string eventGroup = subscribeInfo.GetEventGroup();
     AcquireDataSubscribeManager::GetInstance().InitUserId();
-    AcquireDataSubscribeManager::GetInstance().InitDeviceId();
+    AcquireDataSubscribeManager::GetInstance().RefreshDeviceIdAsync();
     bool sessionCreated = false;
     {
         std::lock_guard<ffrt::mutex> lock(sessionMutex_);
@@ -581,21 +594,104 @@ void AcquireDataSubscribeManager::InitDeviceId()
         }
     }
 
-    DistributedHardware::DmDeviceInfo deviceInfo;
+    DistributedHardware::DmDeviceInfo deviceInfo {};
     int32_t ret = DistributedHardware::DeviceManager::GetInstance().GetLocalDeviceInfo(PKG_NAME, deviceInfo);
     if (ret != SUCCESS) {
         SGLOGI("get local device into error, code=%{public}d", ret);
         return;
     }
+    {
+        std::lock_guard<ffrt::mutex> lock(userIdMutex_);
+        deviceId_ = deviceInfo.deviceId;
+    }
+    deviceIdValid_.store(true);
+#endif
+}
+
+void AcquireDataSubscribeManager::RefreshDeviceIdAsync()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    StartDeviceIdRecovery();
+#endif
+}
+
+void AcquireDataSubscribeManager::RecoverDeviceId()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    InvalidateDeviceId();
+    StartDeviceIdRecovery();
+#endif
+}
+
+void AcquireDataSubscribeManager::StartDeviceIdRecovery()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    if (deviceIdValid_.load()) {
+        return; // 缓存有效，无需重复获取
+    }
+    bool inFlight = false;
+    if (!deviceIdRefreshInFlight_.compare_exchange_strong(inFlight, true)) {
+        return; // 已有恢复在途，避免重复发起设备管理 IPC
+    }
+    std::lock_guard<ffrt::mutex> lock(deviceIdRecoveryMutex_);
+    if (deviceIdRecoveryThread_.joinable()) {
+        deviceIdRecoveryThread_.join(); // 上一轮已结束（在途标记已清），立即回收
+    }
+    isStopDeviceIdRecovery_.store(false);
+    deviceIdRecoveryThread_ = ffrt::thread([this]() { DeviceIdRecoveryLoop(); });
+#endif
+}
+
+void AcquireDataSubscribeManager::DeviceIdRecoveryLoop()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    int32_t backoffSec = DEVICE_ID_RECOVERY_INIT_INTERVAL_SEC;
+    while (!isStopDeviceIdRecovery_.load() && !deviceIdValid_.load()) {
+        InitDeviceId();
+        if (deviceIdValid_.load()) {
+            break;
+        }
+        // 1 秒分片睡眠并在片间检查停止标志，保证停止等待上限约为一个分片
+        for (int32_t slept = 0; slept < backoffSec && !isStopDeviceIdRecovery_.load(); slept++) {
+            ffrt::this_task::sleep_for(std::chrono::seconds(1));
+        }
+        backoffSec = std::min(backoffSec * DEVICE_ID_RECOVERY_BACKOFF_MULTIPLIER,
+            DEVICE_ID_RECOVERY_MAX_INTERVAL_SEC);
+    }
+    deviceIdRefreshInFlight_.store(false);
+#endif
+}
+
+void AcquireDataSubscribeManager::StopDeviceIdRecovery()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    std::lock_guard<ffrt::mutex> lock(deviceIdRecoveryMutex_);
+    isStopDeviceIdRecovery_.store(true);
+    if (deviceIdRecoveryThread_.joinable()) {
+        deviceIdRecoveryThread_.join();
+    }
+#endif
+}
+
+void AcquireDataSubscribeManager::InvalidateDeviceId()
+{
+#ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
+    // 失效 = 注册态与数据态同时失效：DM 服务死亡后服务端注册表丢失，
+    // 恢复循环必须重新 InitDeviceManager，否则只重试取数永不收敛
+    isDeviceManagerInit_.store(false);
+    deviceIdValid_.store(false);
     std::lock_guard<ffrt::mutex> lock(userIdMutex_);
-    deviceId_ = deviceInfo.deviceId;
+    deviceId_ = "";
 #endif
 }
 
 void AcquireDataSubscribeManager::DeInitDeviceId()
 {
 #ifdef SECURITY_GUARD_ENABLE_DEVICE_ID
-    isDeviceManagerInit_.store(false);
+    // 服务停止：先停恢复线程（消除并发刷新者），再统一失效注册态与数据态（InvalidateDeviceId
+    // 同时重置 isDeviceManagerInit_ 与 deviceIdValid_），最后注销，避免注销后循环继续注册
+    StopDeviceIdRecovery();
+    InvalidateDeviceId();
     int ret = DistributedHardware::DeviceManager::GetInstance().UnInitDeviceManager(PKG_NAME);
     if (ret != SUCCESS) {
         SGLOGE("UnInitDeviceManager fail, code =%{public}d", ret);
