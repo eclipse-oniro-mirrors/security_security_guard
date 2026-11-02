@@ -38,7 +38,7 @@ GetEventWrapperFunc GetEventWrapperEntry()
             SGLOGI("dlsym GetEventWrapper failed");
             return nullptr;
         }
-        SGLOGE("dlopen event wrapper success");
+        SGLOGD("dlopen event wrapper success");
         return entry;
     }();
     return func;
