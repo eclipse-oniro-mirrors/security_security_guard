@@ -64,9 +64,7 @@ classDiagram
 
     class AuthCoordinator {
         -providerSessions_ set
-        -routingContexts_ map~requestId, shared_ptr~RoutingContext~~
         -seqnumShards_ [16] SeqnumShard
-        -requestCounter_ atomic
         +CreateAuthProvider(pid, uid, cb, serviceId, provider)
         +DestroyAuthProvider(provider)
         +RequestAuthResult(provider, event, resultCallback)
@@ -74,14 +72,13 @@ classDiagram
         +RemoveProvider(provider)
         -DispatchEventToClients(params)
         -NotifyDegradedClient(eventId, session)
-        -RegisterNormalClient(requestId, eventId, session, ctx, result, targets, ctxPtr)
+        -RegisterNormalClient(params, session, targets)
         -PushEventsToClients(eventId, targets, result)
         -HandleTimeout(ctxPtr)
         -EvaluateStrictPolicy(ctx, authStrategy, eventId)
         -DecrementCounters(ctx, clientId)
-        -WaitForCompletion(ctxPtr, result, requestId, seqnums, clientIds)
-        -ProcessAuthResultAsync(provider, requestId, event, resultCallback)
-        -RegisterRoutingContext(requestId, ctx)
+        -WaitForCompletion(ctxPtr, result, seqnums, clientIds)
+        -ProcessAuthResultAsync(provider, event, resultCallback)
         -NotifyClientStatusChanged()
         -CollectClientInfos()
         -GetSeqnumShardIndex(seqnumKey)
@@ -133,17 +130,13 @@ classDiagram
 | AuthEventSessionService | Client 服务端会话对象，持有 clientId | `services/data_collect/sa/` |
 | AuthResultCallbackService | 回调 stub，包装 std::function，SA 聚合完成后触发 | `frameworks/common/collect/src/` |
 
-### 2.2 三层标识体系
+### 2.2 两层标识体系
 
 ```mermaid
 flowchart LR
     subgraph 会话级
         A["会话创建"] --> B["clientId 生成\nConstructClientId 范式\n时间戳+指针hash"]
         B --> C["clientId 存储\nsession.clientId_"]
-    end
-    subgraph 请求级
-        D["Provider发起请求"] --> E["requestId 生成\n全局原子递增"]
-        E --> F["requestId 存储\nroutingContexts_[requestId]=shared_ptr ctx"]
     end
     subgraph 事件级
         G["事件路由"] --> H["seqnum 生成\nsession.GenerateSeqnum()\nper-client递增"]
@@ -153,14 +146,13 @@ flowchart LR
     C --> K["结果聚合\nclientResults[clientId]\nclientPromises[clientId]"]
     J --> L["路由查找\nseqnumKey=clientId+seqnum\n分片锁内→shared_ptr ctx"]
     L --> K
-    K --> M["聚合完成\n清理 routingContexts_[requestId]\n+ seqnumShards_ 分片条目"]
+    K --> M["聚合完成\n清理 seqnumShards_ 分片条目"]
 ```
 
 | 标识 | 生成方式 | 用途 | 生命周期 | 唯一性 |
 |---|---|---|---|---|
 | clientId | `ConstructClientId` 范式（时间戳 + 指针 hash） | 结果聚合、状态通知、结果返回 | 会话级 | 全局唯一 |
-| requestId | 全局原子递增 | 隔离同一 eventId 的多次请求（高频并发） | 请求级（400ms） | 全局唯一 |
-| seqnum | `session->GenerateSeqnum()` per-client 递增 | 路由查找（组合 key → requestId → ctx） | 事件级 | **per-client 唯一**，不同客户端可能相同 |
+| seqnum | `session->GenerateSeqnum()` per-client 递增 | 路由查找（组合 key → ctx） | 事件级 | **per-client 唯一**，不同客户端可能相同 |
 
 **组合 key 策略**：seqnum per-client 递增，不同客户端可能产生相同值。用 `clientId + "_" + seqnum` 组合作为 `seqnumShards_[hash(key)%16].seqnumToCtx` 的 key，避免冲突。分片存储降低高并发下锁竞争（P1-3）。
 
@@ -230,7 +222,6 @@ sequenceDiagram
 
         Note over AC: ffrt 异步任务
 
-        AC->>AC: 生成 requestId（全局递增）
         AC->>SM: GetSubscribedSessions(eventId)
         SM-->>AC: [session1, session2]
 
@@ -247,7 +238,6 @@ sequenceDiagram
         AC->>C1: OnAuthEvent(event, seqnum=1) 同步通知
         AC->>C2: OnAuthEvent(event, seqnum=1) 同步通知
 
-        AC->>AC: routingContexts_[requestId] = shared_ptr ctx
         AC->>AC: 创建 promise + future.wait_for(400ms)
 
         Note over C1: Client-1 收到事件，生成阻断策略
@@ -275,7 +265,6 @@ sequenceDiagram
 
         Note over EP: 事件提供者拿到阻断策略，执行阻断
 
-        AC->>AC: 清理 routingContexts_[requestId]
         AC->>AC: 清理 seqnumShards_ 分片条目
     end
 ```
@@ -509,17 +498,13 @@ struct RoutingContext {
     map<string, AuthStrategy> clientResults;   // clientId → 回填策略
     map<string, AuthStrategy> clientTimeoutStrategies; // clientId → 超时策略
     map<string, shared_ptr<promise<AuthStrategy>>> clientPromises; // clientId → promise
-    struct ClientAppInfo { pid_t pid; int32_t uid; };
+    struct ClientAppInfo { pid_t pid; int32_t uid; int64_t seqnum; };
     map<string, ClientAppInfo> clientAppInfos; // clientId → pid/uid, 供超时 HA 打点
     shared_ptr<promise<AuthResult>> resultPromise; // 最终结果 promise
     ffrt::mutex ctxMutex;                       // per-request 锁, 保护字段修改
     bool completed;
     AuthStrategy mergedAuthStrategy;
 };
-
-// 按 requestId 索引（隔离同一 eventId 的高频并发请求）
-// shared_ptr: SetAuthResult 持拷贝延长生命周期, 避免 erase 后 UAF (P0-1)
-map<int64_t, shared_ptr<RoutingContext>> routingContexts_;
 
 // seqnum per-client 递增，用 clientId+seqnum 组合 key 避免冲突
 // 分片存储降低高并发下锁竞争 (P1-3)
@@ -530,7 +515,6 @@ struct SeqnumShard {
 };
 SeqnumShard seqnumShards_[SEQNUM_SHARD_COUNT];
 
-atomic<int64_t> requestCounter_ {0};  // requestId 全局递增
 
 // Provider 会话管理
 class AuthProviderSessionService : public AuthProviderSessionStub, public NoCopyable {
@@ -584,8 +568,7 @@ cJSON_Delete(root);
 输入：eventId, AuthEventInfo.AuthClientStatus[], 已订阅 Client 列表
 输出：AuthResult{mergedAuthStrategy, clientAuthResult[]}
 
-0. 生成 requestId（全局递增，隔离同一 eventId 的并发请求）
-   创建 shared_ptr<RoutingContext> ctxPtr（生命周期由 shared_ptr 管理）
+0. 创建 shared_ptr<RoutingContext> ctxPtr（生命周期由 shared_ptr 管理）
 
 1. 从入参 AuthClientStatus 获取降级 clientId 集合
 
@@ -605,8 +588,7 @@ cJSON_Delete(root);
 
 3. 推送 OnAuthEvent 给所有 Client（含降级）
 
-4. 注册 RoutingContext 到 routingContexts_[requestId] = ctxPtr
-   创建 promise<AuthResult>, future.wait_for(400ms)
+4. 创建 promise<AuthResult>, future.wait_for(400ms)
 
 5. 每次收到 SetAuthResult(seqnum, authStrategy):
    clientId = session.GetClientId()
@@ -634,7 +616,7 @@ cJSON_Delete(root);
    HA 打点
 
 7. 构建 AuthResult, OnAuthResult 回调通知 kit → Promise resolve
-8. 清理: routingContexts_.erase(requestId) + seqnumShards_ 分片条目 erase
+8. 清理: seqnumShards_ 分片条目 erase
    shared_ptr 引用计数归零后 ctx 析构
 ```
 
@@ -726,7 +708,7 @@ if (security_guard_auth_event_enable) {
 | 16 | 超时 ALLOW 不阻断 |
 | 17 | 降级 Client 只通知不参与聚合 |
 | 18 | 无订阅 Client 默认放行 |
-| 19 | 聚合完成后清理 routingContexts_[requestId] + seqnumShards_ 分片条目 |
+| 19 | 聚合完成后清理 seqnumShards_ 分片条目 |
 | 20 | 回调链路：SA → IAuthResultCallback → kit → Promise resolve |
 | 21 | Client 状态变更通知 Provider；CreateAuthProvider 成功后通过 IAuthProviderCallback::OnClientStatusChanged 下发全量客户端会话信息 |
 | 22 | Destroy 幂等 |
@@ -796,7 +778,7 @@ if (security_guard_auth_event_enable) {
 
 ### 12.7 并发安全与资源释放
 
-**RoutingContext 生命周期（P0-1）**：`routingContexts_` 存 `shared_ptr<RoutingContext>`，`SetAuthResult` 在分片锁内拷贝 `shared_ptr` 后释放分片锁，再用 per-request `ctxMutex` 修改字段。即使 `WaitForCompletion` 已 `erase` map 条目，`SetAuthResult` 持有的 `shared_ptr` 仍保证 ctx 存活到函数结束，消除 UAF。
+**RoutingContext 生命周期（P0-1）**：`seqnumShards_` 存 `shared_ptr<RoutingContext>`，`SetAuthResult` 在分片锁内拷贝 `shared_ptr` 后释放分片锁，再用 per-request `ctxMutex` 修改字段。即使 `WaitForCompletion` 已清理对应分片条目，`SetAuthResult` 持有的 `shared_ptr` 仍保证 ctx 存活到函数结束，消除 UAF。
 
 **HandleTimeout 数据竞争修复（P0-2）**：`HandleTimeout` 全程持 `ctxMutex`，与 `SetAuthResult` 互斥访问 `clientResults`/`completed`/`mergedAuthStrategy` 等字段。`HandleTimeout` 设置 `completed=true` 后，迟到的 `SetAuthResult` 检查 `completed` 直接返回，不再修改字段。`HandleTimeout` 末尾与 `EvaluateStrictPolicy` 风格对齐，调用 `resultPromise->set_value(result)` 唤醒 `WaitForCompletion` 的 `future.wait_for`；因 `HandleTimeout` 仅在 `wait_for` 超时（未 set_value）时被调用，此处 set_value 不会重复。
 
@@ -812,11 +794,10 @@ if (security_guard_auth_event_enable) {
 
 **notifyMutex_ 语义约束（批次二待评估）**：`AuthResultCallbackService`/`AuthProviderCallbackService` 的 `notifyMutex_` 保护 `callback_` 捕获资源（promise / NAPI napi_ref）的生命周期，`ClearCallBack` 必须等 `OnAuthResult`/`OnClientStatusChanged` 执行完才能销毁资源。**简单移除 notifyMutex_ 会引入 UAF**：ClearCallBack 置 null 后，回调持有的 callback 副本会引用已销毁的 promise/napi_ref。完整修复需重构为 `shared_ptr<callback wrapper>` 引用计数方案，让 callback 执行移到锁外同时保证资源安全。当前保持 notifyMutex_ 持锁回调现状，添加注释说明语义约束。
 
-**分片锁降低竞争（P1-3）**：`seqnumToCtx_` 按 `hash(seqnumKey) % 16` 分片，每分片独立锁。`SetAuthResult` 只锁对应分片（~2μs），替代原全局 `mutex_` 两级查找（~30μs）。20+ Provider × 128 并发场景下锁利用率从 ~19% 降至 ~1.2%。`mutex_` 仍保护 `routingContexts_` 和 `providerSessions_`，但访问频率低。
+**分片锁降低竞争（P1-3）**：`seqnumToCtx_` 按 `hash(seqnumKey) % 16` 分片，每分片独立锁。`SetAuthResult` 只锁对应分片（~2μs），替代原全局 `mutex_` 两级查找（~30μs）。20+ Provider × 128 并发场景下锁利用率从 ~19% 降至 ~1.2%。`mutex_` 仍保护 `providerSessions_`，访问频率低。
 
 **锁层次（避免死锁）**：
 ```
 seqnumShard[idx].mutex  →  ctxPtr->ctxMutex     （SetAuthResult: 先分片锁查找，再 ctxMutex 修改）
-mutex_                   →  seqnumShard[idx].mutex  （WaitForCompletion: 先 mutex_ erase routingContexts_，再分片锁 erase seqnumToCtx）
 ```
 不存在反向获取顺序，无死锁风险。

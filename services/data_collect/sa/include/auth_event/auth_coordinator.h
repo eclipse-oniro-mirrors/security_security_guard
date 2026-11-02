@@ -17,7 +17,6 @@
 #define SECURITY_GUARD_AUTH_COORDINATOR_H
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -107,7 +106,6 @@ private:
     void RemoveProviderLocked(const sptr<AuthProviderSessionService> &provider);
     // DispatchEventToClients 入参超过 5，用结构体收拢
     struct DispatchParams {
-        int64_t requestId;
         const AuthEventInfo &eventInfo;
         RoutingContext &ctx;
         DispatchResult &result;
@@ -134,11 +132,11 @@ private:
     void RecordClientResult(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
     void ReportDenyResult(const RoutingContext &ctx, const std::string &clientId);
     // P0-3: ffrt 任务捕获 sptr<AuthProviderSessionService>，避免 provider 析构后 UAF
-    void ProcessAuthResultAsync(sptr<AuthProviderSessionService> provider, int64_t requestId,
+    void ProcessAuthResultAsync(sptr<AuthProviderSessionService> provider,
         const AuthEventInfo &event, const sptr<IRemoteObject> &resultCallback);
     // P0-1: WaitForCompletion 持有 shared_ptr 保证 ctx 存活，wait_for 不持锁
     void WaitForCompletion(std::shared_ptr<RoutingContext> ctxPtr, AuthResult &result,
-        int64_t requestId, const std::vector<int64_t> &seqnums,
+        const std::vector<int64_t> &seqnums,
         const std::vector<std::string> &clientIds);
     void BuildAuthResult(RoutingContext &ctx, AuthResult &result);
     void NotifyAuthResult(const sptr<IRemoteObject> &callback, const AuthResult &result);
@@ -152,16 +150,13 @@ private:
 
     ffrt::mutex mutex_{};
     std::set<sptr<AuthProviderSessionService>> providerSessions_{};
-    // P0-1: unique_ptr → shared_ptr，SetAuthResult 持拷贝延长生命周期，避免 erase 后 UAF
-    std::map<int64_t, std::shared_ptr<RoutingContext>> routingContexts_{};  // requestId → ctx
-    // P1-3: seqnumKey → ctx 分片索引，替代原 seqnumToRequestId_ + routingContexts_ 两级查找
-    // 每 SetAuthResult 只需锁对应分片（~2μs），替代原全局 mutex_（~30μs）
+    // P1-3: seqnumKey → ctx 分片索引，按 hash(clientId+seqnum) 分片
+    // 每 SetAuthResult 只需锁对应分片（~2μs），不同 request 可并发查找
     struct SeqnumShard {
         ffrt::mutex mutex;
         std::map<std::string, std::shared_ptr<RoutingContext>> seqnumToCtx;
     };
     SeqnumShard seqnumShards_[SEQNUM_SHARD_COUNT];
-    std::atomic<int64_t> requestCounter_ {0};
 };
 } // namespace OHOS::Security::SecurityGuard
 
