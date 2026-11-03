@@ -59,7 +59,7 @@
 - 分发（预留源触发）：内部生产者调 `AuthEventSubscribeManager::NotifyAuthEvent(event)` → 入口长度守卫（>4096 丢弃）→ 锁内快照命中会话（eventId 已订阅的 callback 列表）→ 锁外逐客户端推送 `OnAuthEvent(event)`（TF_ASYNC，事件本体，不携带 allowFlag）。
 - 结果回填：订阅者完成决策后调 `client->SetAuthResult(event, allowFlag)` → session 代理调 `SetAuthResult(event, allowFlag)` → 服务端双轨校验 → 会话已销毁检查（`BAD_PARAM`）→ pid 归属校验（`BAD_PARAM`）→ content/metadata 长度校验（>4096 → `BAD_PARAM`）→ 记录结果状态表（eventId → allowFlag，覆盖更新，新键受 1024 上限）→ allowFlag=false 时锁外 HA 打点 AUTH_BLOCK_RESULT → `SUCCESS`。
 - 退订：`client->Unsubscribe(eventId)` → session 代理调 `Unsubscribe(eventId)` → 服务端双轨校验 → 会话已销毁检查 → pid 归属校验 → 从会话 `eventIds_` 集合移除并 `UnregisterEventService(eventId)`（PR #534：同步清理 `eventServiceMap_`，未订阅的 eventId 幂等返回 SUCCESS；不做配置校验：配置运行中可被移除）→ 异步 `NotifyClientStatusChanged`。
-- **provider 状态通知（按 serviceId 过滤，PR #534）**：`NotifyClientStatusChanged` → 锁内收集所有有效 provider 的 `(callback, serviceId)` 对 → 锁外对每个 provider 调 `CollectClientInfos(providerServiceId)` 过滤（只收集订阅了属于该 serviceId 的 eventId 的 client，`subscribedEvents` 只含匹配的 eventId；同一 client 订阅不同 serviceId 的 eventId 时，在不同 provider 列表里各出现一次，`subscribedEvents` 不同）→ `proxy->OnClientStatusChanged(filteredClientInfos)`（每个 provider 收到各自过滤后的列表，不再全量广播）。
+- **provider 状态通知（只回调变更 serviceId 对应的 provider，PR #543）**：`NotifyClientStatusChanged(serviceId)` → 锁内只收集 serviceId 匹配的有效 provider callback（无匹配则直接 return，不发空 IPC）→ `CollectClientInfos(serviceId)` 收集订阅该 serviceId 的**全量** client 列表（非增量，遍历所有 session 按 serviceId 匹配）→ 只对匹配的 provider 回调 `OnClientStatusChanged(clientInfos)`，其他 provider 不受影响。调用方传入变更的 serviceId：Subscribe/Unsubscribe 传变更 eventId 的 serviceId；Destroy/RemoveSession 传该 client 订阅过的所有 serviceId（逐个通知）；CreateAuthProvider 传新 provider 的 serviceId（只通知自己）；DestroyAuthProvider/RemoveProvider 不通知任何 provider。
 - 销毁：`client->DeleteClient()`（或最后一个 shared_ptr 释放触发 Deleter）→ SDK 排空在途 OnAuthEvent → session 代理调 `Destroy()` → 服务端双轨校验 → pid 归属校验 → manager 会话集合移除 + 会话置无效（重复 Destroy 幂等返回 SUCCESS；销毁后再调其他方法 → `BAD_PARAM`）→ 锁外 RemoveDeathRecipient。
 - 异常：订阅者进程死亡 → per-session DeathRecipient（持该会话对象引用）→ manager 移除会话并置无效；服务端死亡 → SDK DeathRecipient 触发 HandleDeath 退避自动重连重建（重新走 CreatAuthEventClient 拿新 session 代理 + 按快照重订阅，对齐 EventSubscribeClient 范式）；调用方 DeleteClient 后重连被 deleted_ 标志终止。
 - 配额超限：`CreatAuthEventClient` 时进程内已有 2 个会话 → `CLIENT_EXCEED_PROCESS_LIMIT`；会话集合已有 16 个 → `CLIENT_EXCEED_GLOBAL_LIMIT`；同一 cb 重复创建 → `BAD_PARAM`。
@@ -184,7 +184,7 @@ void Destroy();
 
 - `std::set<sptr<AuthProviderSessionService>> providerSessions_` — provider 会话集合（按 sptr 排序，无 serviceId 索引；`CreateAuthProvider`/`DestroyAuthProvider`/`RemoveProvider` 增删，`FindProviderLocked` 按裸指针查）。
 - `std::vector<AuthClientInfo> CollectClientInfos(const std::string &serviceId)`（PR #534：签名加 `serviceId` 参数）——遍历所有 session，每个 session 按 `serviceId` 过滤 `eventIds`（`GetServiceIdForEvent(eventId) == serviceId`），只收集订阅了属于该 serviceId 的 eventId 的 client；同一 client 订阅不同 serviceId 的 eventId 时，在不同 provider 列表里各出现一次，`subscribedEvents` 只含属于该 serviceId 的 eventId。
-- `void NotifyClientStatusChanged()`（PR #534：按 provider 过滤）——锁内收集所有有效 provider 的 `(callback, serviceId)` 对，锁外对每个 provider 调 `CollectClientInfos(providerServiceId)` 过滤后单独发送 `OnClientStatusChanged(filteredClientInfos)`（不再全量广播同一份 clientInfos 给所有 provider）。
+- `void NotifyClientStatusChanged(const std::string &serviceId)`（PR #543：只回调 serviceId 匹配的 provider）——锁内只收集 serviceId 匹配的有效 provider callback（无匹配则直接 return）；`CollectClientInfos(serviceId)` 收集订阅该 serviceId 的全量 client 列表（非增量）；只对匹配的 provider 回调 `OnClientStatusChanged(clientInfos)`，其他 provider 不受影响。调用方传变更的 serviceId：Subscribe/Unsubscribe 传变更 eventId 的 serviceId；Destroy/RemoveSession 遍历该 client 订阅过的所有 serviceId 逐个通知；CreateAuthProvider 传新 provider 的 serviceId（只通知自己）；DestroyAuthProvider/RemoveProvider 不通知任何 provider。
 
 ### 4.7 错误码 / 兼容
 
@@ -332,6 +332,7 @@ void Destroy();
 - [ ] 回归：现有 3524 单测（test/unittest/data_collect/）全部仍通过。
 - [ ] serviceId 必填校验（PR #534）：单测覆盖——Subscribe 时 `config.serviceId` 为空 → `BAD_PARAM`；`config.serviceId` 非空 → SUCCESS（`eventServiceMap_` 正常登记）。
 - [ ] serviceId 过滤（PR #534）：单测覆盖——client 订阅 eventId A（serviceId="P1"）和 eventId B（serviceId="P2"）；provider P1 收到的 `OnClientStatusChanged` 只含该 client 且 `subscribedEvents` 只含 A；provider P2 只含该 client 且 `subscribedEvents` 只含 B；无 provider 时 client 仍可订阅（`eventServiceMap_` 正常登记）；client 订阅了某 serviceId 的 eventId 但无对应 serviceId 的 provider 时，该订阅不发给任何 provider。
+- [ ] 只回调相关 provider（PR #543）：单测覆盖——clientB 只订阅 P_B 事件时，providerA（P_A）和 providerC（P_C 无订阅者）的 `OnClientStatusChanged` 回调不被触发，只触发 providerB；clientA 订阅 P_A+P_B 事件退订 P_A 的 eventId 时，只触发 providerA，不触发 providerB；provider 销毁/死亡时不通知其他 provider；无匹配 provider 时 `NotifyClientStatusChanged` 不触发任何回调。
 - ~~[ ] 回填超时跟踪 / 超时处置策略~~ —— v9 删除（超时属另一需求）。
 
 ## 7. 存疑
