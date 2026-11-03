@@ -167,7 +167,8 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
     providerRemote = provider;
     SGLOGI("create auth provider success, serviceId=%{public}s, pid=%{private}d",
         serviceId.c_str(), static_cast<int32_t>(callerPid));
-    NotifyClientStatusChanged();
+    // 新 provider 上线：只通知自己，下发当前订阅了该 serviceId 的全量 client 列表
+    NotifyClientStatusChanged(serviceId);
     return SUCCESS;
 }
 
@@ -199,7 +200,7 @@ void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
     // provider 持 sptr<DeathRecipient>，DeathRecipient 持 sptr<provider>，不显式断开则两者无法析构
     keepAlive->ClearDeathRecipient();
     SGLOGI("destroy auth provider success, pid=%{private}d", static_cast<int32_t>(keepAlive->GetPid()));
-    NotifyClientStatusChanged();
+    // provider 销毁只影响自己，不通知其他 provider
 }
 
 void AuthCoordinator::RemoveProvider(const sptr<AuthProviderSessionService> &provider)
@@ -215,7 +216,7 @@ void AuthCoordinator::RemoveProvider(const sptr<AuthProviderSessionService> &pro
     }
     // P1-1: 死亡回调路径同样需断开循环引用
     provider->ClearDeathRecipient();
-    NotifyClientStatusChanged();
+    // provider 死亡只影响自己，不通知其他 provider
 }
 
 // 降级客户端: 生成 per-client seqnum，用 cJSON 填充 metadata，通知该客户端
@@ -753,31 +754,38 @@ std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos(const std::strin
     return infos;
 }
 
-// 验收: Client 状态通知 — 阻断服务 SA 按 provider 的 serviceId 过滤后通知事件提供者，
-// 每个 provider 只收到订阅了自己 serviceId 的 client 列表（含各自 subscribedEvents）。
-void AuthCoordinator::NotifyClientStatusChanged()
+// 验收: Client 状态通知 — 只回调 serviceId 匹配的 provider，上报订阅该 serviceId 的全量 client 列表。
+// 调用方传入变更的 serviceId，本函数只通知 serviceId 相同的 provider，其他 provider 不受影响。
+void AuthCoordinator::NotifyClientStatusChanged(const std::string &serviceId)
 {
-    // 收集所有有效 provider 的 (callback, serviceId) 对（锁内收集，锁外发 IPC 避免嵌套持锁调 IPC）
-    std::vector<std::pair<sptr<IRemoteObject>, std::string>> providerCallbacks;
+    // 锁内收集 serviceId 匹配的有效 provider callback（锁外发 IPC 避免嵌套持锁调 IPC）
+    std::vector<sptr<IRemoteObject>> callbacks;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         for (const auto &provider : providerSessions_) {
-            if (provider != nullptr && provider->IsValid()) {
-                providerCallbacks.emplace_back(provider->GetCallback(), provider->GetServiceId());
+            if (provider != nullptr && provider->IsValid() && provider->GetServiceId() == serviceId) {
+                callbacks.push_back(provider->GetCallback());
             }
         }
     }
-    SGLOGI("notify client status changed, providerCount=%{public}zu", providerCallbacks.size());
-    for (const auto &entry : providerCallbacks) {
-        auto proxy = iface_cast<IAuthProviderCallback>(entry.first);
-        if (proxy == nullptr) {
-            SGLOGE("auth provider callback proxy is null");
-            continue;
-        }
-        auto clientInfos = CollectClientInfos(entry.second);  // 按 provider 的 serviceId 过滤
-        proxy->OnClientStatusChanged(clientInfos);
+    if (callbacks.empty()) {
+        SGLOGD("no matching provider, serviceId=%{public}s", serviceId.c_str());
+        return;
     }
-    SGLOGD("notify clients status changed done, providerCount=%{public}zu", providerCallbacks.size());
+    // 全量收集订阅了该 serviceId 的 client 信息（非增量）
+    auto clientInfos = CollectClientInfos(serviceId);
+    SGLOGI("notify client status changed, serviceId=%{public}s, clientCount=%{public}zu, providerCount=%{public}zu",
+        serviceId.c_str(), clientInfos.size(), callbacks.size());
+    for (const auto &cb : callbacks) {
+        auto proxy = iface_cast<IAuthProviderCallback>(cb);
+        if (proxy != nullptr) {
+            proxy->OnClientStatusChanged(clientInfos);
+        } else {
+            SGLOGE("auth provider callback proxy is null, serviceId=%{public}s", serviceId.c_str());
+        }
+    }
+    SGLOGD("notify clients status changed done, serviceId=%{public}s, providerCount=%{public}zu",
+        serviceId.c_str(), callbacks.size());
 }
 
 AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider)

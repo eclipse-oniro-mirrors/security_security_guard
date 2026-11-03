@@ -58,7 +58,7 @@ public:
         const sptr<IRemoteObject> &resultCallback);
     int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy);
     void RemoveProvider(const sptr<AuthProviderSessionService> &provider);
-    void NotifyClientStatusChanged();
+    void NotifyClientStatusChanged(const std::string &serviceId);
     static int32_t IsProviderAllowed();
 
 private:

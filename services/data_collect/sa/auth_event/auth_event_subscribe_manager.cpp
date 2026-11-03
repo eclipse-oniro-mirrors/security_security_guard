@@ -170,14 +170,15 @@ int32_t AuthEventSubscribeManager::SubscribeAuthEvent(AuthEventSessionService *s
         eventIds.insert(eventId);
         (*iter)->RegisterEventService(eventId, serviceId);
     }
-    // 异步通知 Provider 刷新客户端列表
-    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
+    // 异步通知该 serviceId 对应的 provider，上报订阅该 serviceId 的全量 client 列表
+    ffrt::submit([serviceId]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(serviceId); });
     SGLOGI("subscribe auth event, eventId=%{public}" PRId64 ", serviceId=%{public}s", eventId, serviceId.c_str());
     return SUCCESS;
 }
 
 int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId)
 {
+    std::string serviceId;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         auto iter = FindSessionLocked(session);
@@ -185,11 +186,15 @@ int32_t AuthEventSubscribeManager::UnsubscribeAuthEvent(AuthEventSessionService 
             SGLOGE("session not found");
             return BAD_PARAM;
         }
+        // erase 前保存 serviceId，用于通知对应的 provider
+        serviceId = (*iter)->GetServiceIdForEvent(eventId);
         (*iter)->GetEventIds().erase(eventId);
         (*iter)->UnregisterEventService(eventId);
     }
-    // 异步通知 Provider 刷新客户端列表
-    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
+    // 异步通知该 serviceId 对应的 provider，上报订阅该 serviceId 的全量 client 列表
+    if (!serviceId.empty()) {
+        ffrt::submit([serviceId]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(serviceId); });
+    }
     SGLOGI("unsubscribe auth event, eventId=%{public}" PRId64, eventId);
     return SUCCESS;
 }
@@ -241,8 +246,13 @@ int32_t AuthEventSubscribeManager::DestroyAuthEventClient(AuthEventSessionServic
     if (session == nullptr) {
         return BAD_PARAM;
     }
+    // 锁内收集该 client 订阅过的所有 serviceId（remove 后 eventServiceMap_ 随 session 析构，需提前保存）
+    std::set<std::string> serviceIds;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
+        for (const auto &eventId : session->GetEventIds()) {
+            serviceIds.insert(session->GetServiceIdForEvent(eventId));
+        }
         RemoveSessionLocked(session);
     }
     // RemoveDeathRecipient 是跨进程调用，放锁外执行；重复 Destroy 幂等返回 SUCCESS
@@ -251,9 +261,13 @@ int32_t AuthEventSubscribeManager::DestroyAuthEventClient(AuthEventSessionServic
     if (callback != nullptr && recipient != nullptr) {
         callback->RemoveDeathRecipient(recipient);
     }
-    // 异步通知 Provider 刷新客户端列表
-    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
-    SGLOGI("destroy auth event client");
+    // 异步通知该 client 订阅过的每个 serviceId 对应的 provider，上报全量 client 列表
+    for (const auto &sid : serviceIds) {
+        if (!sid.empty()) {
+            ffrt::submit([sid]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(sid); });
+        }
+    }
+    SGLOGI("destroy auth event client, notifiedServiceCount=%{public}zu", serviceIds.size());
     return SUCCESS;
 }
 
@@ -262,8 +276,13 @@ void AuthEventSubscribeManager::RemoveSession(const sptr<AuthEventSessionService
     if (session == nullptr) {
         return;
     }
+    // 锁内收集该 client 订阅过的所有 serviceId（remove 后 eventServiceMap_ 随 session 析构，需提前保存）
+    std::set<std::string> serviceIds;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
+        for (const auto &eventId : session->GetEventIds()) {
+            serviceIds.insert(session->GetServiceIdForEvent(eventId));
+        }
         RemoveSessionLocked(session);
     }
     // RemoveDeathRecipient 是跨进程调用，放锁外执行
@@ -272,8 +291,12 @@ void AuthEventSubscribeManager::RemoveSession(const sptr<AuthEventSessionService
     if (callback != nullptr && recipient != nullptr) {
         callback->RemoveDeathRecipient(recipient);
     }
-    // 异步通知 Provider 刷新客户端列表
-    ffrt::submit([]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(); });
+    // 异步通知该 client 订阅过的每个 serviceId 对应的 provider，上报全量 client 列表
+    for (const auto &sid : serviceIds) {
+        if (!sid.empty()) {
+            ffrt::submit([sid]() { AuthCoordinator::GetInstance().NotifyClientStatusChanged(sid); });
+        }
+    }
 }
 
 void AuthEventSubscribeManager::NotifyAuthEvent(const AuthEvent &event)
