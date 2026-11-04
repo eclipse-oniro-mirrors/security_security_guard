@@ -118,6 +118,14 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
     AuthResultCallback callback)
 {
     SGLOGI("RequestAuthResult");
+    // content 大小校验: 必须非空且不超过 10240 字节
+    const size_t CONTENT_MAX_SIZE = 10240;
+    const std::string &content = event.GetContent();
+    if (content.empty() || content.size() > CONTENT_MAX_SIZE) {
+        SGLOGE("invalid content size=%{public}zu (must be in (0, %{public}zu])",
+            content.size(), CONTENT_MAX_SIZE);
+        return AUTH_INVALID_PARAM;
+    }
     sptr<AuthProviderSession> session {};
     {
         std::lock_guard<ffrt::mutex> lock(g_providerMutex);
