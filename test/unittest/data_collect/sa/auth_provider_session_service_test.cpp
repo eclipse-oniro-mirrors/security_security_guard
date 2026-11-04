@@ -43,7 +43,6 @@ public:
         auto &coordinator = AuthCoordinator::GetInstance();
         std::lock_guard<ffrt::mutex> lock(coordinator.mutex_);
         coordinator.providerSessions_.clear();
-        coordinator.routingContexts_.clear();
         for (auto &shard : coordinator.seqnumShards_) {
             shard.seqnumToCtx.clear();
         }
