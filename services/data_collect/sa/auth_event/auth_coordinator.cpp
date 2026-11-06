@@ -399,16 +399,17 @@ void AuthCoordinator::HandleTimeoutClient(RoutingContext &ctx, const std::string
     if (appIt != ctx.clientAppInfos.end()) {
         seqnum = appIt->second.seqnum;
     }
+    // 超时场景：无论默认策略是 ALLOW 还是 DENY，clientResults 统一记 TIMEOUT（表示该 client 超时未回填）
+    // mergedAuthStrategy 才记录聚合策略（DENY 触发阻断）
+    ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
     if (strategy == AuthStrategy::DENY) {
-        // 超时且默认 DENY → 记 DENY，触发阻断
-        ctx.clientResults[clientId] = AuthStrategy::DENY;
+        // 超时且默认 DENY → mergedAuthStrategy 记 DENY 触发阻断
         ctx.mergedAuthStrategy = AuthStrategy::DENY;
         ctx.completed = true;
         SGLOGW("timeout DENY triggers block, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
             ctx.eventId, clientId.c_str(), seqnum);
     } else {
-        // 超时且默认 ALLOW → 记 TIMEOUT（对齐 JS 枚举语义）
-        ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
+        // 超时且默认 ALLOW → 仅记 TIMEOUT，不影响聚合策略
         SGLOGW("timeout ALLOW client, record TIMEOUT, eventId=%{public}" PRId64 ", clientId=%{public}s"
             ", seqnum=%{public}" PRId64, ctx.eventId, clientId.c_str(), seqnum);
     }
