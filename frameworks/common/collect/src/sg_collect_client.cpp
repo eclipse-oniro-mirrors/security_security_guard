@@ -28,7 +28,7 @@ namespace OHOS::Security::SecurityGuard {
 
 static std::shared_ptr<EventInfo> ApplyRegionFilter(const std::shared_ptr<EventInfo> &info)
 {
-    if(info == nullptr) {
+    if (info == nullptr) {
         return info;
     }
     ReportRegionFilter::GetInstance().Init();
