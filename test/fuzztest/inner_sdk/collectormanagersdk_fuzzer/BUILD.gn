@@ -65,6 +65,8 @@ ohos_fuzztest("CollcetorManagerSdkFuzzTest") {
     "${sg_root_dir}/frameworks/common/collect/src/security_event_query_callback_stub.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/sg_collect_client.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/sg_obtaindata_client.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_policy.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_filter.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_service.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_stub.cpp",
     "${sg_root_dir}/frameworks/common/classify/src/risk_analysis_manager_callback_service.cpp",
@@ -89,5 +91,7 @@ ohos_fuzztest("CollcetorManagerSdkFuzzTest") {
     "hilog:libhilog",
     "ipc:ipc_core",
     "samgr:samgr_proxy",
+    "init:libbegetutil",
+    "cJSON:cjson",
   ]
 }
