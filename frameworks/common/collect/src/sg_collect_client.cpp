@@ -22,16 +22,35 @@
 #include "security_guard_utils.h"
 #include "sg_collect_client.h"
 #include "data_collect_manager.h"
+#include "report_region_filter.h"
 
 namespace OHOS::Security::SecurityGuard {
+
+static std::shared_ptr<EventInfo> ApplyRegionFilter(const std::shared_ptr<EventInfo> &info)
+{
+    if(info == nullptr) {
+        return info;
+    }
+    ReportRegionFilter::GetInstance().Init();
+    int64_t eventId = info->GetEventId();
+    std::string content = info->GetContent();
+    std::string filtered = ReportRegionFilter::GetInstance().FilterContent(eventId, content);
+    if (filtered == content) {
+        return info;
+    }
+    return std::make_shared<EventInfo>(eventId, info->GetVersion(), filtered);
+}
+
 int32_t NativeDataCollectKit::ReportSecurityInfo(const std::shared_ptr<EventInfo> &info)
 {
-    return DataCollectManager::GetInstance().ReportSecurityEvent(info, true);
+    auto filteredInfo = ApplyRegionFilter(info);
+    return DataCollectManager::GetInstance().ReportSecurityEvent(filteredInfo, true);
 }
 
 int32_t NativeDataCollectKit::ReportSecurityInfoAsync(const std::shared_ptr<EventInfo> &info)
 {
-    return DataCollectManager::GetInstance().ReportSecurityEvent(info, false);
+    auto filteredInfo = ApplyRegionFilter(info);
+    return DataCollectManager::GetInstance().ReportSecurityEvent(filteredInfo, false);
 }
 
 int32_t NativeDataCollectKit::SecurityGuardConfigUpdate(int32_t fd, const std::string &name)

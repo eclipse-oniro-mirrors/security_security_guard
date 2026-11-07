@@ -74,6 +74,8 @@ ohos_shared_library("libsg_collect_sdk") {
     "src/auth_event/auth_provider_subscribe_client.cpp",
     "src/auth_event/auth_event_info.cpp",
     "src/auth_event/auth_client_status.cpp",
+    "src/report_region_policy.cpp",
+    "src/report_region_filter.cpp",
   ]
 
   deps = [ "${sg_root_dir}/services/data_collect/idl:data_collect_manager_idl_sa_proxy" ]
@@ -121,5 +123,7 @@ ohos_shared_library("libsg_collect_sdk") {
     "ipc:ipc_core",
     "samgr:samgr_proxy",
     "ffrt:libffrt",
+    "init:libbegetutil",
+    "cJSON:cjson",
   ]
 }
