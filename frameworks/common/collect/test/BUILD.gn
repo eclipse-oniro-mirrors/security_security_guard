@@ -56,6 +56,8 @@ ohos_unittest("libsg_collect_sdk_test") {
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_stub.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/event_subscribe_client.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_policy.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_filter.cpp",
     "unittest/src/data_collect_kit_test.cpp",
   ]
 
@@ -86,6 +88,8 @@ ohos_unittest("libsg_collect_sdk_test") {
     "samgr:samgr_proxy",
     "selinux_adapter:librestorecon",
     "ffrt:libffrt",
+    "init:libbegetutil",
+    "cJSON:cjson",
   ]
 }
 

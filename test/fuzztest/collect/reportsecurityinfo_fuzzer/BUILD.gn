@@ -45,6 +45,8 @@ ohos_fuzztest("ReportSecurityInfoFuzzTest") {
     "${sg_root_dir}/frameworks/common/collect/src/data_collect_manager.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/sg_collect_client.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/sg_obtaindata_client.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_policy.cpp",
+    "${sg_root_dir}/frameworks/common/collect/src/report_region_filter.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/auth_event/auth_event.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_service.cpp",
     "${sg_root_dir}/frameworks/common/collect/src/acquire_data_manager_callback_stub.cpp",
@@ -70,5 +72,7 @@ ohos_fuzztest("ReportSecurityInfoFuzzTest") {
     "hilog:libhilog",
     "ipc:ipc_core",
     "samgr:samgr_proxy",
+    "init:libbegetutil",
+    "cJSON:cjson",
   ]
 }
