@@ -643,7 +643,8 @@ void NapiAuthProviderFinalize(napi_env env, void *data, void *hint)
         return;
     }
     if (provider->provider != nullptr) {
-        provider->provider->DeleteProvider();
+        // GC 场景无法抛 BusinessError，忽略错误码；DeleteProvider 内部已保证本地资源被清理
+        (void)provider->provider->DeleteProvider();
         provider->provider = nullptr;
     }
     if (provider->statusTsfn != nullptr) {
@@ -669,10 +670,16 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
     NapiAuthProvider *nativeProvider = nullptr;
     napi_unwrap(env, argv[0], reinterpret_cast<void **>(&nativeProvider));
     if (nativeProvider == nullptr) {
-        return WrapVoidToJS(env);
+        // 入参校验在权限校验之前：provider 为空/无效直接抛 401
+        // 与 NapiRequestAuthResult(CreateAuthResultContext) 对齐
+        SGLOGE("destroyAuthProvider provider is null");
+        napi_throw(env, GenerateBusinessError(env, BAD_PARAM));
+        return nullptr;
     }
+    int32_t destroyCode = SUCCESS;
     if (nativeProvider->provider != nullptr) {
-        nativeProvider->provider->DeleteProvider();
+        // 透传 SA 侧 Destroy() 的错误码(201/202/27000001)
+        destroyCode = nativeProvider->provider->DeleteProvider();
         nativeProvider->provider = nullptr;
     }
     if (nativeProvider->statusTsfn != nullptr) {
@@ -685,6 +692,13 @@ napi_value NapiDestroyAuthProvider(napi_env env, napi_callback_info info)
     }
     // 不取回指针，不手动 delete，交给 NapiAuthProviderFinalize 在 GC 时释放
     napi_remove_wrap(env, argv[0], nullptr);
+    if (destroyCode != SUCCESS) {
+        // 权限/系统应用/内部错误经 g_errorStringMap 映射后抛出
+        int32_t jsErr = NormalizeProviderError(destroyCode);
+        SGLOGE("destroyAuthProvider failed, code=%{public}d, jsErr=%{public}d", destroyCode, jsErr);
+        napi_throw(env, GenerateBusinessError(env, jsErr));
+        return nullptr;
+    }
     SGLOGI("destroyAuthProvider success");
     return WrapVoidToJS(env);
 }

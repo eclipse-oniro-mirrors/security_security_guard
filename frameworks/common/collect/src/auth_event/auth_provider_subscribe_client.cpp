@@ -62,7 +62,7 @@ AuthProviderSubscribeClient::AuthProviderSubscribeClient(ConstructTag tag) {}
 
 AuthProviderSubscribeClient::~AuthProviderSubscribeClient()
 {
-    Release();
+    (void)Release();  // 析构场景忽略返回值
 }
 
 int32_t AuthProviderSubscribeClient::CreateProvider(AuthProviderCallback callback,
@@ -160,16 +160,18 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
     return SUCCESS;
 }
 
-void AuthProviderSubscribeClient::DeleteProvider()
+int32_t AuthProviderSubscribeClient::DeleteProvider()
 {
-    Release();
+    return Release();
 }
 
-void AuthProviderSubscribeClient::Release()
+// 返回 Destroy() 的 ErrCode，便于 NAPI 层抛出 BusinessError(201/202/27000001)
+int32_t AuthProviderSubscribeClient::Release()
 {
     bool expected = false;
     if (!deleted_.compare_exchange_strong(expected, true)) {
-        return;
+        // 已被销毁（重复调用），返回 SUCCESS：无新错误可上报
+        return SUCCESS;
     }
     sptr<AuthProviderCallbackService> callback;
     sptr<IRemoteObject> sessionRemote;
@@ -183,9 +185,13 @@ void AuthProviderSubscribeClient::Release()
     if (callback != nullptr) {
         callback->ClearCallBack();
     }
+    int32_t destroyCode = SUCCESS;
     sptr<AuthProviderSession> session = iface_cast<AuthProviderSession>(sessionRemote);
     if (session != nullptr) {
-        session->Destroy();
+        destroyCode = session->Destroy();  // 透传 SA 侧权限校验结果(201/202/27000001)
+        if (destroyCode != SUCCESS) {
+            SGLOGE("session Destroy failed, code=%{public}d", destroyCode);
+        }
     }
     DestroyRemoteObjects(sessionRemote, deathRecipient);
     {
@@ -194,6 +200,7 @@ void AuthProviderSubscribeClient::Release()
         sessionRemote_ = nullptr;
         deathRecipient_ = nullptr;
     }
+    return NormalizeErrorCode(destroyCode);
 }
 
 void AuthProviderSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &sessionRemote,
@@ -354,8 +361,14 @@ int32_t AuthProviderSubscribeClient::RequestAuthResult(const AuthEventInfo &even
     return API_SUPPORT_ERROR;
 }
 
-void AuthProviderSubscribeClient::DeleteProvider()
+int32_t AuthProviderSubscribeClient::DeleteProvider()
 {
+    return API_SUPPORT_ERROR;
+}
+
+int32_t AuthProviderSubscribeClient::Release()
+{
+    return SUCCESS;
 }
 
 AuthProviderSubscribeClient::AuthProviderSubscribeClient(ConstructTag tag) {}
