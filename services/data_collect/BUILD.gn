@@ -138,6 +138,7 @@ ohos_shared_library("sg_collect_service") {
     "access_token:libtokenid_sdk",
     "cJSON:cjson",
     "c_utils:utils",
+    "bounds_checking_function:libsec_shared",
     "ffrt:libffrt",
     "hilog:libhilog",
     "hisysevent:libhisysevent",
