@@ -14,6 +14,7 @@
  */
 
 #include "auth_result.h"
+#include "security_guard_define.h"
 
 namespace OHOS::Security::SecurityGuard {
 bool AuthResult::Marshalling(Parcel &parcel) const
@@ -43,7 +44,7 @@ bool AuthResult::ReadFromParcel(Parcel &parcel)
     if (!parcel.ReadInt32(size)) {
         return false;
     }
-    if (size < 0) {
+    if (size < 0 || size > MAX_AUTH_CLIENT_SIZE) {
         return false;
     }
     clientAuthResults_.clear();

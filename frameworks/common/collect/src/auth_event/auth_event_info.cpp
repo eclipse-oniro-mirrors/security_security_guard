@@ -14,6 +14,7 @@
  */
 
 #include "auth_event_info.h"
+#include "security_guard_define.h"
 
 namespace OHOS::Security::SecurityGuard {
 bool AuthEventInfo::Marshalling(Parcel &parcel) const
@@ -53,7 +54,7 @@ bool AuthEventInfo::ReadFromParcel(Parcel &parcel)
     if (!parcel.ReadInt32(size)) {
         return false;
     }
-    if (size < 0) {
+    if (size < 0 || size > MAX_AUTH_CLIENT_SIZE) {
         return false;
     }
     clientStatus_.clear();
