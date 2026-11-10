@@ -58,7 +58,7 @@ public:
         const sptr<IRemoteObject> &resultCallback);
     int32_t SetAuthResult(AuthEventSessionService *session, const AuthEvent &event, int32_t authStrategy);
     void RemoveProvider(const sptr<AuthProviderSessionService> &provider);
-    void NotifyClientStatusChanged();
+    void NotifyClientStatusChanged(const std::string &serviceId);
     static int32_t IsProviderAllowed();
 
 private:
@@ -120,7 +120,8 @@ private:
         const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
         const DispatchResult &result);
     void DecrementCounters(RoutingContext &ctx, const std::string &clientId);
-    void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId);
+    void EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId,
+        const std::string &clientId);
     // 拆分 HandleTimeout: 超时单个 client 处置 + 聚合结果通知，避免单函数超过 50 行
     void HandleTimeoutClient(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy);
     void NotifyTimeoutResult(RoutingContext &ctx, const std::string &clientId);

@@ -167,7 +167,8 @@ int32_t AuthCoordinator::CreateAuthProvider(pid_t callerPid, int32_t callerUid,
     providerRemote = provider;
     SGLOGI("create auth provider success, serviceId=%{public}s, pid=%{private}d",
         serviceId.c_str(), static_cast<int32_t>(callerPid));
-    NotifyClientStatusChanged();
+    // 新 provider 上线：只通知自己，下发当前订阅了该 serviceId 的全量 client 列表
+    NotifyClientStatusChanged(serviceId);
     return SUCCESS;
 }
 
@@ -199,7 +200,7 @@ void AuthCoordinator::DestroyAuthProvider(AuthProviderSessionService *provider)
     // provider 持 sptr<DeathRecipient>，DeathRecipient 持 sptr<provider>，不显式断开则两者无法析构
     keepAlive->ClearDeathRecipient();
     SGLOGI("destroy auth provider success, pid=%{private}d", static_cast<int32_t>(keepAlive->GetPid()));
-    NotifyClientStatusChanged();
+    // provider 销毁只影响自己，不通知其他 provider
 }
 
 void AuthCoordinator::RemoveProvider(const sptr<AuthProviderSessionService> &provider)
@@ -215,31 +216,30 @@ void AuthCoordinator::RemoveProvider(const sptr<AuthProviderSessionService> &pro
     }
     // P1-1: 死亡回调路径同样需断开循环引用
     provider->ClearDeathRecipient();
-    NotifyClientStatusChanged();
+    // provider 死亡只影响自己，不通知其他 provider
 }
 
-// 降级客户端: 生成 per-client seqnum，用 cJSON 填充 metadata，通知该客户端
+// 降级客户端: 生成 per-client seqnum 赋值到 AuthEvent.seqnum，通知该客户端
+// metadata 不在此填充，由消费方（另一仓）解析 seqnum 后自行塞入 metadata
 void AuthCoordinator::NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthEventSessionService *session)
 {
+    std::string clientId = session->GetClientId();
     int64_t seqnum = session->GenerateSeqnum();
-    SGLOGI("notify degraded client, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64,
-        eventInfo.GetEventId(), seqnum);
+    SGLOGI("notify degraded client, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
+        eventInfo.GetEventId(), clientId.c_str(), seqnum);
     AuthEvent event(eventInfo.GetEventId(), eventInfo.GetContent());
     event.SetSeqnum(seqnum);
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "seqNum", static_cast<double>(seqnum));
-    char *jsonStr = cJSON_PrintUnformatted(root);
-    if (jsonStr != nullptr) {
-        event.SetMetadata(std::string(jsonStr));
-        cJSON_free(jsonStr);
-    }
-    cJSON_Delete(root);
     auto proxy = iface_cast<IAuthEventCallback>(session->GetCallback());
     if (proxy == nullptr) {
-        SGLOGE("degraded client callback proxy is null, seqnum=%{public}" PRId64, seqnum);
+        SGLOGE("degraded client callback proxy is null, eventId=%{public}" PRId64 ", clientId=%{public}s"
+            ", seqnum=%{public}" PRId64, eventInfo.GetEventId(), clientId.c_str(), seqnum);
         return;
     }
-    proxy->OnAuthEvent(event, seqnum);
+    int32_t ret = proxy->OnAuthEvent(event, seqnum);
+    if (ret != SUCCESS) {
+        SGLOGE("degraded client OnAuthEvent failed, eventId=%{public}" PRId64 ", clientId=%{public}s"
+            ", seqnum=%{public}" PRId64 ", ret=%{public}d", eventInfo.GetEventId(), clientId.c_str(), seqnum, ret);
+    }
     SGLOGD("degraded client notified, seqnum=%{public}" PRId64, seqnum);
 }
 
@@ -259,8 +259,10 @@ void AuthCoordinator::RegisterNormalClient(const DispatchParams &params, AuthEve
     params.ctx.clientAppInfos[clientId] = {session->GetPid(), session->GetUid(), seqnum};
     params.result.seqnums.push_back(seqnum);
     params.result.clientIds.push_back(clientId);
-    SGLOGD("dispatch, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64 ", clientId=%{public}s",
-        params.eventInfo.GetEventId(), seqnum, clientId.c_str());
+    SGLOGI("register normal client, eventId=%{public}" PRId64
+        ", seqnum=%{public}" PRId64 ", clientId=%{public}s, timeoutStrategy=%{public}d",
+        params.eventInfo.GetEventId(), seqnum, clientId.c_str(),
+        static_cast<int32_t>(timeoutStrategy));
     {
         std::lock_guard<ffrt::mutex> lk(params.ctx.ctxMutex);
         params.ctx.clientTimeoutStrategies[clientId] = timeoutStrategy;
@@ -276,35 +278,39 @@ void AuthCoordinator::RegisterNormalClient(const DispatchParams &params, AuthEve
     targets.emplace_back(session->GetCallback(), timeoutStrategy);
 }
 
-// 推送 OnAuthEvent: 用 cJSON 填充 AuthEvent.metadata（key=seqNum）
+// 推送 OnAuthEvent: 把 seqnum 赋值到 AuthEvent.seqnum
+// metadata 不在此填充，由消费方（另一仓）解析 seqnum 后自行塞入 metadata
 void AuthCoordinator::PushEventsToClients(const AuthEventInfo &eventInfo,
     const std::vector<std::pair<sptr<IRemoteObject>, AuthStrategy>> &targets,
     const DispatchResult &result)
 {
     SGLOGI("push events to clients, eventId=%{public}" PRId64 ", count=%{public}zu",
         eventInfo.GetEventId(), targets.size());
-    for (size_t i = 0; i < targets.size() && i < result.seqnums.size(); ++i) {
+    size_t pushFailed = 0;
+    for (size_t i = 0; i < targets.size() && i < result.seqnums.size() && i < result.clientIds.size(); ++i) {
         AuthEvent event(eventInfo.GetEventId(), eventInfo.GetContent());
         int64_t seqnum = result.seqnums[i];
+        const std::string &clientId = result.clientIds[i];
         event.SetSeqnum(seqnum);
-        cJSON *root = cJSON_CreateObject();
-        cJSON_AddNumberToObject(root, "seqNum", static_cast<double>(seqnum));
-        char *jsonStr = cJSON_PrintUnformatted(root);
-        if (jsonStr != nullptr) {
-            event.SetMetadata(std::string(jsonStr));
-            cJSON_free(jsonStr);
-        }
-        cJSON_Delete(root);
         auto proxy = iface_cast<IAuthEventCallback>(targets[i].first);
         if (proxy == nullptr) {
-            SGLOGE("callback proxy is null, seqnum=%{public}" PRId64, seqnum);
+            pushFailed++;
+            SGLOGE("callback proxy is null, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
+                eventInfo.GetEventId(), clientId.c_str(), seqnum);
             continue;
         }
-        proxy->OnAuthEvent(event, seqnum);
-        SGLOGD("OnAuthEvent pushed, eventId=%{public}" PRId64 ", seqnum=%{public}" PRId64,
-            eventInfo.GetEventId(), seqnum);
+        int32_t ret = proxy->OnAuthEvent(event, seqnum);
+        if (ret != SUCCESS) {
+            pushFailed++;
+            SGLOGE("OnAuthEvent failed, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64
+                ", ret=%{public}d", eventInfo.GetEventId(), clientId.c_str(), seqnum, ret);
+            continue;
+        }
+        SGLOGD("OnAuthEvent pushed, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
+            eventInfo.GetEventId(), clientId.c_str(), seqnum);
     }
-    SGLOGD("push events done, eventId=%{public}" PRId64, eventInfo.GetEventId());
+    SGLOGI("push events done, eventId=%{public}" PRId64 ", count=%{public}zu, failed=%{public}zu",
+        eventInfo.GetEventId(), targets.size(), pushFailed);
 }
 
 // 事件路由: 逐个 Client 生成独有 seqnum 并推送 OnAuthEvent
@@ -321,19 +327,29 @@ void AuthCoordinator::DispatchEventToClients(const DispatchParams &params)
     std::vector<sptr<AuthEventSessionService>> sessions = manager.GetSubscribedSessions(params.eventInfo.GetEventId());
     SGLOGI("eventId=%{public}" PRId64 ", subscribed=%{public}zu",
         params.eventInfo.GetEventId(), sessions.size());
+    size_t skipped = 0;
+    size_t degraded = 0;
     for (const auto &session : sessions) {
         if (session == nullptr || !session->IsValid()) {
+            skipped++;
+            SGLOGW("skip null/invalid session, eventId=%{public}" PRId64
+                ", clientId=%{public}s", params.eventInfo.GetEventId(),
+                (session != nullptr ? session->GetClientId().c_str() : "null"));
             continue;
         }
         std::string clientId = session->GetClientId();
         if (degraderClientIds.count(clientId) > 0) {
+            degraded++;
             NotifyDegradedClient(params.eventInfo, session);
             continue;
         }
         RegisterNormalClient(params, session, targets);
     }
-    SGLOGI("dispatch done, sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
-        params.ctx.sentClientCount, params.ctx.defaultDenyCount);
+    SGLOGI("dispatch done, eventId=%{public}" PRId64
+        ", subscribed=%{public}zu, sentClientCount=%{public}zu, defaultDenyCount=%{public}zu"
+        ", degraded=%{public}zu, skipped=%{public}zu",
+        params.eventInfo.GetEventId(), sessions.size(),
+        params.ctx.sentClientCount, params.ctx.defaultDenyCount, degraded, skipped);
     PushEventsToClients(params.eventInfo, targets, params.result);
 }
 
@@ -346,20 +362,31 @@ void AuthCoordinator::HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr)
         return;
     }
     auto &ctx = *ctxPtr;
-    SGLOGW("eventId=%{public}" PRId64 " timeout, handling pending clients", ctx.eventId);
+    SGLOGW("eventId=%{public}" PRId64 " timeout, handling pending clients, totalClients=%{public}zu"
+        ", alreadyReplied=%{public}zu", ctx.eventId, ctx.clientTimeoutStrategies.size(),
+        ctx.clientResults.size());
+    size_t timeoutHandled = 0;
+    size_t alreadyReplied = 0;
     std::lock_guard<ffrt::mutex> cvLock(ctx.ctxMutex);
     for (auto &[clientId, strategy] : ctx.clientTimeoutStrategies) {
         if (ctx.clientResults.find(clientId) != ctx.clientResults.end()) {
+            alreadyReplied++;
+            SGLOGD("timeout handle skip already-replied client, eventId=%{public}" PRId64
+                ", clientId=%{public}s", ctx.eventId, clientId.c_str());
             continue;
         }
         HandleTimeoutClient(ctx, clientId, strategy);
         NotifyTimeoutResult(ctx, clientId);
+        timeoutHandled++;
     }
     if (!ctx.completed) {
         ctx.mergedAuthStrategy = AuthStrategy::ALLOW;
         ctx.completed = true;
         SGLOGI("all timeout clients ALLOW, mergedAuthStrategy=ALLOW, eventId=%{public}" PRId64, ctx.eventId);
     }
+    SGLOGW("eventId=%{public}" PRId64 " timeout handled, timeoutClients=%{public}zu"
+        ", alreadyReplied=%{public}zu, mergedStrategy=%{public}d",
+        ctx.eventId, timeoutHandled, alreadyReplied, static_cast<int32_t>(ctx.mergedAuthStrategy));
     SatisfyResultPromise(ctx);
 }
 
@@ -367,16 +394,23 @@ void AuthCoordinator::HandleTimeout(std::shared_ptr<RoutingContext> ctxPtr)
 // 调用方（HandleTimeout）已持 ctxMutex，本函数不重复加锁
 void AuthCoordinator::HandleTimeoutClient(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy)
 {
+    int64_t seqnum = 0;
+    auto appIt = ctx.clientAppInfos.find(clientId);
+    if (appIt != ctx.clientAppInfos.end()) {
+        seqnum = appIt->second.seqnum;
+    }
     if (strategy == AuthStrategy::DENY) {
         // 超时且默认 DENY → 记 DENY，触发阻断
         ctx.clientResults[clientId] = AuthStrategy::DENY;
         ctx.mergedAuthStrategy = AuthStrategy::DENY;
         ctx.completed = true;
-        SGLOGW("timeout DENY triggers block, clientId=%{public}s", clientId.c_str());
+        SGLOGW("timeout DENY triggers block, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
+            ctx.eventId, clientId.c_str(), seqnum);
     } else {
         // 超时且默认 ALLOW → 记 TIMEOUT（对齐 JS 枚举语义）
         ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
-        SGLOGD("timeout ALLOW client, record TIMEOUT, clientId=%{public}s", clientId.c_str());
+        SGLOGW("timeout ALLOW client, record TIMEOUT, eventId=%{public}" PRId64 ", clientId=%{public}s"
+            ", seqnum=%{public}" PRId64, ctx.eventId, clientId.c_str(), seqnum);
     }
     auto promiseIter = ctx.clientPromises.find(clientId);
     if (promiseIter != ctx.clientPromises.end() && promiseIter->second != nullptr &&
@@ -384,8 +418,6 @@ void AuthCoordinator::HandleTimeoutClient(RoutingContext &ctx, const std::string
         ctx.satisfiedClientIds.insert(clientId);
         promiseIter->second->set_value(strategy);
     }
-    SGLOGD("timeout, clientId=%{public}s, strategy=%{public}d",
-        clientId.c_str(), static_cast<int32_t>(strategy));
 }
 
 // 超时 HA 打点: 所有超时订阅者都需上报 TIMEOUT 结果
@@ -394,6 +426,8 @@ void AuthCoordinator::NotifyTimeoutResult(RoutingContext &ctx, const std::string
 {
     auto appIt = ctx.clientAppInfos.find(clientId);
     if (appIt == ctx.clientAppInfos.end()) {
+        SGLOGW("notify timeout result skip, appInfo not found, eventId=%{public}" PRId64 ", clientId=%{public}s",
+            ctx.eventId, clientId.c_str());
         return;
     }
     cJSON *root = cJSON_CreateObject();
@@ -412,7 +446,12 @@ void AuthCoordinator::NotifyTimeoutResult(RoutingContext &ctx, const std::string
 // 调用方已持 ctxMutex，本函数不重复加锁
 void AuthCoordinator::SatisfyResultPromise(RoutingContext &ctx)
 {
-    if (ctx.resultPromise == nullptr || ctx.resultPromiseSatisfied) {
+    if (ctx.resultPromise == nullptr) {
+        SGLOGE("resultPromise is null, eventId=%{public}" PRId64, ctx.eventId);
+        return;
+    }
+    if (ctx.resultPromiseSatisfied) {
+        SGLOGD("resultPromise already satisfied, skip, eventId=%{public}" PRId64, ctx.eventId);
         return;
     }
     ctx.resultPromiseSatisfied = true;
@@ -433,13 +472,18 @@ void AuthCoordinator::WaitForCompletion(std::shared_ptr<RoutingContext> ctxPtr, 
     SGLOGI("wait for completion, eventId=%{public}" PRId64
         ", pendingCount=%{public}zu", ctxPtr->eventId, seqnums.size());
     auto future = ctxPtr->resultPromise->get_future();
+    auto waitStart = std::chrono::steady_clock::now();
     auto status = future.wait_for(std::chrono::milliseconds(AUTH_RESULT_TIMEOUT_MS));
+    auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - waitStart).count();
     if (status == ffrt::future_status::timeout) {
-        SGLOGW("eventId=%{public}" PRId64 " timeout, handling", ctxPtr->eventId);
+        SGLOGW("eventId=%{public}" PRId64 " timeout, elapsed=%{public}lldms, handling",
+            ctxPtr->eventId, static_cast<long long>(elapsedMs));
         HandleTimeout(ctxPtr);
     } else {
-        SGLOGI("eventId=%{public}" PRId64 " completed, mergedStrategy=%{public}d",
-            ctxPtr->eventId, static_cast<int32_t>(ctxPtr->mergedAuthStrategy));
+        SGLOGI("eventId=%{public}" PRId64 " completed, mergedStrategy=%{public}d, elapsed=%{public}lldms",
+            ctxPtr->eventId, static_cast<int32_t>(ctxPtr->mergedAuthStrategy),
+            static_cast<long long>(elapsedMs));
     }
     BuildAuthResult(*ctxPtr, result);
     // 清理: seqnumShards_ 用分片锁，逐分片 erase 路由索引
@@ -492,8 +536,9 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
         ctxPtr->beginTime = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         ctxPtr->eventContent = event.GetContent();
-        // eventMetadata 留空: metadata 是 SA 在 PushEventsToClients 中 per-client 生成的 seqNum=N cJSON,
-        // 不是 AuthEventInfo 自带的(AuthEventInfo 无 metadata 字段); per-request 级别无法存储 per-client 的多值
+        // eventMetadata 留空: SA 只把 seqnum 赋值到 AuthEvent.seqnum（见 PushEventsToClients），
+        // metadata 由消费方（另一仓）解析 seqnum 后自行填充；AuthEventInfo 无 metadata 字段，
+        // per-request 级别无法存储 per-client 的多值
         ctxPtr->resultPromise = std::make_shared<ffrt::promise<AuthResult>>();
         SGLOGD("routing context created, contentLen=%{public}zu", ctxPtr->eventContent.size());
         DispatchResult dispatchResult;
@@ -501,7 +546,8 @@ void AuthCoordinator::ProcessAuthResultAsync(sptr<AuthProviderSessionService> pr
         DispatchEventToClients(params);
 
         if (ctxPtr->sentClientCount == 0) {
-            SGLOGI("no subscribed client, default ALLOW, eventId=%{public}" PRId64, event.GetEventId());
+            SGLOGI("no subscribed client, default ALLOW, eventId=%{public}" PRId64,
+                event.GetEventId());
             ctxPtr->mergedAuthStrategy = AuthStrategy::ALLOW;
             AuthResult result;
             BuildAuthResult(*ctxPtr, result);
@@ -570,12 +616,14 @@ void AuthCoordinator::DecrementCounters(RoutingContext &ctx, const std::string &
             ctx.defaultDenyCount--;
         }
     }
-    SGLOGD("decrement counters, clientId=%{public}s, sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
-        clientId.c_str(), ctx.sentClientCount, ctx.defaultDenyCount);
+    SGLOGD("decrement counters, eventId=%{public}" PRId64 ", clientId=%{public}s"
+        ", sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
+        ctx.eventId, clientId.c_str(), ctx.sentClientCount, ctx.defaultDenyCount);
 }
 
 // 从严策略判定: 任一 DENY → 立即阻断；全部 ALLOW → 放行
-void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy, int64_t eventId)
+void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy authStrategy,
+    int64_t eventId, const std::string &clientId)
 {
     if (authStrategy == AuthStrategy::DENY) {
         ctx.mergedAuthStrategy = AuthStrategy::DENY;
@@ -586,7 +634,7 @@ void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy aut
             result.SetMergedAuthStrategy(AuthStrategy::DENY);
             ctx.resultPromise->set_value(result);
         }
-        SGLOGI("strict policy: DENY, eventId=%{public}" PRId64, eventId);
+        SGLOGI("strict policy: DENY, eventId=%{public}" PRId64 ", clientId=%{public}s", eventId, clientId.c_str());
     } else if (ctx.sentClientCount == 0 && ctx.defaultDenyCount == 0) {
         ctx.mergedAuthStrategy = AuthStrategy::ALLOW;
         ctx.completed = true;
@@ -596,7 +644,8 @@ void AuthCoordinator::EvaluateStrictPolicy(RoutingContext &ctx, AuthStrategy aut
             result.SetMergedAuthStrategy(AuthStrategy::ALLOW);
             ctx.resultPromise->set_value(result);
         }
-        SGLOGI("strict policy: all ALLOW, eventId=%{public}" PRId64, eventId);
+        SGLOGI("strict policy: all ALLOW, eventId=%{public}" PRId64 ", clientId=%{public}s",
+            eventId, clientId.c_str());
     }
 }
 
@@ -631,7 +680,8 @@ std::shared_ptr<AuthCoordinator::RoutingContext> AuthCoordinator::FindRoutingCon
 void AuthCoordinator::RecordClientResult(RoutingContext &ctx, const std::string &clientId, AuthStrategy strategy)
 {
     if (ctx.completed) {
-        SGLOGD("ctx already completed, skip, clientId=%{public}s", clientId.c_str());
+        SGLOGW("ctx already completed, skip late result, eventId=%{public}" PRId64 ", clientId=%{public}s"
+            ", strategy=%{public}d", ctx.eventId, clientId.c_str(), static_cast<int32_t>(strategy));
         return;
     }
     ctx.clientResults[clientId] = strategy;
@@ -642,7 +692,13 @@ void AuthCoordinator::RecordClientResult(RoutingContext &ctx, const std::string 
         promiseIter->second->set_value(strategy);
     }
     DecrementCounters(ctx, clientId);
-    EvaluateStrictPolicy(ctx, strategy, ctx.eventId);
+    EvaluateStrictPolicy(ctx, strategy, ctx.eventId, clientId);
+    // ALLOW 回填但还有 pending client：聚合未完成，记录中间态便于排查"哪个 client 还没回填"
+    if (strategy == AuthStrategy::ALLOW && !ctx.completed) {
+        SGLOGI("allow received but still pending, eventId=%{public}" PRId64 ", clientId=%{public}s"
+            ", sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
+            ctx.eventId, clientId.c_str(), ctx.sentClientCount, ctx.defaultDenyCount);
+    }
 }
 
 // 阻断回填 HA 打点: 仅 DENY 时上报，迟到响应已提前返回不会到达此处
@@ -651,6 +707,8 @@ void AuthCoordinator::ReportDenyResult(const RoutingContext &ctx, const std::str
 {
     auto appIt = ctx.clientAppInfos.find(clientId);
     if (appIt == ctx.clientAppInfos.end()) {
+        SGLOGW("report deny result skip, appInfo not found, eventId=%{public}" PRId64 ", clientId=%{public}s",
+            ctx.eventId, clientId.c_str());
         return;
     }
     cJSON *root = cJSON_CreateObject();
@@ -674,9 +732,13 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     AuthStrategy strategy = static_cast<AuthStrategy>(authStrategy);
     int64_t seqnum = event.GetSeqnum();
     std::string clientId = session->GetClientId();
-    SGLOGD("SetAuthResult, seqnum=%{public}" PRId64 ", authStrategy=%{public}d", seqnum, authStrategy);
+    int64_t eventId = event.GetEventId();
+    SGLOGI("SetAuthResult, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64
+        ", authStrategy=%{public}d", eventId, clientId.c_str(), seqnum, authStrategy);
     auto ctxPtr = FindRoutingContext(clientId, seqnum);
     if (ctxPtr == nullptr) {
+        SGLOGW("SetAuthResult ctx not found, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64
+            " (already completed by strict DENY or timeout)", eventId, clientId.c_str(), seqnum);
         return NOT_FOUND;
     }
     // P0-1: 用 ctx 自己的 ctxMutex 保护字段修改（per-request，不同 request 之间无竞争）
@@ -685,8 +747,9 @@ int32_t AuthCoordinator::SetAuthResult(AuthEventSessionService *session, const A
     if (strategy == AuthStrategy::DENY) {
         ReportDenyResult(*ctxPtr, clientId);
     }
-    SGLOGD("SetAuthResult done, clientId=%{public}s, strategy=%{public}d, sentClientCount=%{public}zu",
-        clientId.c_str(), authStrategy, ctxPtr->sentClientCount);
+    SGLOGI("SetAuthResult done, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64
+        ", strategy=%{public}d, sentClientCount=%{public}zu, defaultDenyCount=%{public}zu",
+        eventId, clientId.c_str(), seqnum, authStrategy, ctxPtr->sentClientCount, ctxPtr->defaultDenyCount);
     return SUCCESS;
 }
 
@@ -699,8 +762,18 @@ void AuthCoordinator::BuildAuthResult(RoutingContext &ctx, AuthResult &result)
         clientResults.emplace_back(clientId, strategy);
     }
     result.SetClientAuthResult(clientResults);
-    SGLOGD("build auth result, mergedStrategy=%{public}d, clientCount=%{public}zu",
-        static_cast<int32_t>(ctx.mergedAuthStrategy), clientResults.size());
+    // 聚合完成时打印每个 client 的最终策略，便于定位"哪个 client 阻断/超时/放行"
+    std::string resultDetail;
+    for (size_t i = 0; i < clientResults.size(); ++i) {
+        if (i > 0) {
+            resultDetail += ",";
+        }
+        resultDetail += clientResults[i].GetClientId() + "="
+            + std::to_string(static_cast<int32_t>(clientResults[i].GetAuthStrategy()));
+    }
+    SGLOGI("build auth result, eventId=%{public}" PRId64 ", mergedStrategy=%{public}d, clientCount=%{public}zu"
+        ", detail=[%{public}s]", ctx.eventId, static_cast<int32_t>(ctx.mergedAuthStrategy),
+        clientResults.size(), resultDetail.c_str());
 }
 
 // SA 聚合完成后回调通知 kit → kit 收到 AuthResult → 触发 Promise 或 std::function
@@ -718,6 +791,8 @@ void AuthCoordinator::NotifyAuthResult(const sptr<IRemoteObject> &callback, cons
         return;
     }
     proxy->OnAuthResult(result);
+    SGLOGI("OnAuthResult sent, mergedStrategy=%{public}d, clientCount=%{public}zu",
+        static_cast<int32_t>(result.GetMergedAuthStrategy()), result.GetClientAuthResult().size());
 }
 
 std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos(const std::string &serviceId)
@@ -753,31 +828,38 @@ std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos(const std::strin
     return infos;
 }
 
-// 验收: Client 状态通知 — 阻断服务 SA 按 provider 的 serviceId 过滤后通知事件提供者，
-// 每个 provider 只收到订阅了自己 serviceId 的 client 列表（含各自 subscribedEvents）。
-void AuthCoordinator::NotifyClientStatusChanged()
+// 验收: Client 状态通知 — 只回调 serviceId 匹配的 provider，上报订阅该 serviceId 的全量 client 列表。
+// 调用方传入变更的 serviceId，本函数只通知 serviceId 相同的 provider，其他 provider 不受影响。
+void AuthCoordinator::NotifyClientStatusChanged(const std::string &serviceId)
 {
-    // 收集所有有效 provider 的 (callback, serviceId) 对（锁内收集，锁外发 IPC 避免嵌套持锁调 IPC）
-    std::vector<std::pair<sptr<IRemoteObject>, std::string>> providerCallbacks;
+    // 锁内收集 serviceId 匹配的有效 provider callback（锁外发 IPC 避免嵌套持锁调 IPC）
+    std::vector<sptr<IRemoteObject>> callbacks;
     {
         std::lock_guard<ffrt::mutex> lock(mutex_);
         for (const auto &provider : providerSessions_) {
-            if (provider != nullptr && provider->IsValid()) {
-                providerCallbacks.emplace_back(provider->GetCallback(), provider->GetServiceId());
+            if (provider != nullptr && provider->IsValid() && provider->GetServiceId() == serviceId) {
+                callbacks.push_back(provider->GetCallback());
             }
         }
     }
-    SGLOGI("notify client status changed, providerCount=%{public}zu", providerCallbacks.size());
-    for (const auto &entry : providerCallbacks) {
-        auto proxy = iface_cast<IAuthProviderCallback>(entry.first);
-        if (proxy == nullptr) {
-            SGLOGE("auth provider callback proxy is null");
-            continue;
-        }
-        auto clientInfos = CollectClientInfos(entry.second);  // 按 provider 的 serviceId 过滤
-        proxy->OnClientStatusChanged(clientInfos);
+    if (callbacks.empty()) {
+        SGLOGD("no matching provider, serviceId=%{public}s", serviceId.c_str());
+        return;
     }
-    SGLOGD("notify clients status changed done, providerCount=%{public}zu", providerCallbacks.size());
+    // 全量收集订阅了该 serviceId 的 client 信息（非增量）
+    auto clientInfos = CollectClientInfos(serviceId);
+    SGLOGI("notify client status changed, serviceId=%{public}s, clientCount=%{public}zu, providerCount=%{public}zu",
+        serviceId.c_str(), clientInfos.size(), callbacks.size());
+    for (const auto &cb : callbacks) {
+        auto proxy = iface_cast<IAuthProviderCallback>(cb);
+        if (proxy != nullptr) {
+            proxy->OnClientStatusChanged(clientInfos);
+        } else {
+            SGLOGE("auth provider callback proxy is null, serviceId=%{public}s", serviceId.c_str());
+        }
+    }
+    SGLOGD("notify clients status changed done, serviceId=%{public}s, providerCount=%{public}zu",
+        serviceId.c_str(), callbacks.size());
 }
 
 AuthProviderSessionDeathRecipient::AuthProviderSessionDeathRecipient(wptr<AuthProviderSessionService> provider)
