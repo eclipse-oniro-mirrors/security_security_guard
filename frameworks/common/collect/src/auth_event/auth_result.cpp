@@ -44,7 +44,7 @@ bool AuthResult::ReadFromParcel(Parcel &parcel)
     if (!parcel.ReadInt32(size)) {
         return false;
     }
-    if (size < 0 || size > MAX_AUTH_CLIENT_SIZE) {
+    if (size < 0 || static_cast<size_t>(size) > MAX_AUTH_CLIENT_SIZE) {
         return false;
     }
     clientAuthResults_.clear();
