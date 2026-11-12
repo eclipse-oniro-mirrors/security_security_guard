@@ -55,7 +55,7 @@ int32_t AuthEventSubscribeManager::IsCallerAllowed()
     AccessToken::AccessTokenID callerToken = IPCSkeleton::GetCallingTokenID();
     AccessToken::ATokenTypeEnum tokenType = AccessToken::AccessTokenKit::GetTokenTypeFlag(callerToken);
     if (tokenType == AccessToken::ATokenTypeEnum::TOKEN_NATIVE) {
-        int32_t callingUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
+        int32_t callingUid = static_cast<int32_t>(IPCSkeleton::GetCallingAppUid());
         if (!GetInstance().IsUidAllowed(callingUid)) {
             SGLOGE("native caller uid not allowed");
             return NO_PERMISSION;

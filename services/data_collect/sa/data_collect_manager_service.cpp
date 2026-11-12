@@ -818,7 +818,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     XCollie_Utils xcollie("SGIPC_CreatAuthEventClient", XCOLLIE_FLAG);
     CreateClientParams params;
     params.callerPid = IPCSkeleton::GetCallingPid();
-    params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
+    params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingAppUid());
     params.timeoutAllowFlag = timeoutAllowFlag;
     params.defaultTimeoutMs = AUTH_RESULT_TIMEOUT_MS;
     params.callback = cb;
@@ -852,7 +852,7 @@ ErrCode DataCollectManagerService::CreateAuthProvider(const sptr<IRemoteObject> 
     }
     XCollie_Utils xcollie("SGIPC_CreateAuthProvider", XCOLLIE_FLAG);
     pid_t callerPid = IPCSkeleton::GetCallingPid();
-    int32_t callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingUid());
+    int32_t callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingAppUid());
     return AuthCoordinator::GetInstance().CreateAuthProvider(callerPid, callerUid, cb, serviceId, provider);
 }
 #else
