@@ -47,7 +47,8 @@ public:
         std::shared_ptr<AuthProviderSubscribeClient> &provider);
     // 返回码: 请求是否被接受；最终阻断策略经回调返回
     int32_t RequestAuthResult(const AuthEventInfo &event, AuthResultCallback callback);
-    void DeleteProvider();
+    // 销毁 Provider 并透传 SA 侧 Destroy() 的错误码(201/202/27000001)
+    int32_t DeleteProvider();
 
 private:
     AuthProviderSubscribeClient() = default;
@@ -55,7 +56,7 @@ private:
     AuthProviderSubscribeClient &operator=(const AuthProviderSubscribeClient &) = delete;
     static int32_t SetDeathRecipient(std::shared_ptr<AuthProviderSubscribeClient> provider,
         const sptr<IRemoteObject> &remote);
-    void Release();
+    int32_t Release();
     static void DestroyRemoteObjects(const sptr<IRemoteObject> &sessionRemote,
         const sptr<IRemoteObject::DeathRecipient> &deathRecipient);
     bool IsDeleted();
