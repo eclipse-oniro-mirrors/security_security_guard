@@ -204,7 +204,7 @@ int AcquireDataSubscribeManager::InsertSubscribeRecord(
     }
     int32_t code = SubscribeScIfNeeded(eventId);
     if (eventWrapper_ != nullptr && eventGroup == "auditGroup") {
-        eventWrapper_()->RecordSubscribeEvent(eventId, code, IPCSkeleton::GetCallingUid());
+        eventWrapper_()->RecordSubscribeEvent(eventId, code, IPCSkeleton::GetCallingAppUid());
     }
     if (code != SUCCESS) {
         std::lock_guard<ffrt::mutex> lock(sessionMutex_);
@@ -316,7 +316,7 @@ int AcquireDataSubscribeManager::SubscribeSc(int64_t eventId)
     if (config.eventType != static_cast<uint32_t>(EventTypeEnum::SUBSCRIBE_COLL)) {
         return SUCCESS;
     }
-    collectorListener_->InsertCallingUids(static_cast<uint32_t>(IPCSkeleton::GetCallingUid()));
+    collectorListener_->InsertCallingUids(static_cast<uint32_t>(IPCSkeleton::GetCallingAppUid()));
     // 订阅SG
     if (config.prog == "security_guard") {
         return SubscribeScInSg(eventId, config.isSticky);
