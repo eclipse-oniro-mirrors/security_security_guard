@@ -403,8 +403,6 @@ void AuthCoordinator::HandleTimeoutClient(RoutingContext &ctx, const std::string
     // mergedAuthStrategy 才记录聚合策略（DENY 触发阻断）
     ctx.clientResults[clientId] = AuthStrategy::TIMEOUT;
     if (strategy == AuthStrategy::DENY) {
-        // 超时且默认 DENY → mergedAuthStrategy 记 DENY 触发阻断
-        ctx.mergedAuthStrategy = AuthStrategy::DENY;
         ctx.completed = true;
         SGLOGW("timeout DENY triggers block, eventId=%{public}" PRId64 ", clientId=%{public}s, seqnum=%{public}" PRId64,
             ctx.eventId, clientId.c_str(), seqnum);
