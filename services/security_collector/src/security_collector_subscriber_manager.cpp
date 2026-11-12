@@ -105,7 +105,7 @@ int32_t SecurityCollectorSubscriberManager::GetAppSubscribeCount(const std::stri
     int32_t count = 0;
     for (const auto &element : eventToSubscribers_) {
         const auto &subscribers = element.second;
-        count = std::count_if(subscribers.begin(), subscribers.end(), [appName] (const auto &subscriber) {
+        count += std::count_if(subscribers.begin(), subscribers.end(), [appName] (const auto &subscriber) {
             return subscriber->GetAppName() == appName;
         });
     }
