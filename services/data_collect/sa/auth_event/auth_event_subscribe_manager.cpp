@@ -40,7 +40,7 @@ AuthEventSubscribeManager::AuthEventSubscribeManager()
 {
     // 允许接入的 native token uid 白名单：具体值待产品确认后补入；
     // 空清单表示暂拒所有 native token 接入，补值后即生效。
-    allowedUids_ = {};
+    allowedUids_ = {1250};
 }
 
 AuthEventSubscribeManager::~AuthEventSubscribeManager() = default;
