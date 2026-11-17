@@ -1,0 +1,789 @@
+sr: SR20260818169811
+workflow_id: a978606c-7248-412d-9e8c-caf2c96759bc
+entry: sr
+status: done
+created_at: '2026-11-16T08:06:40.991545+00:00'
+vars:
+  SR: SR20260818169811
+  详设路径版本: v2
+steps:
+- id: 1
+  type: sr-init
+  name: sr-init
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T08:07:32.650264Z'
+  ended_at: '2026-11-16T08:20:46.171186Z'
+  execution: skill
+  session: inherit
+  skill:
+  - repo-init
+  prompt: null
+  data_prompt:
+    description: 初始化项目 SDD 目录和软件架构上下文；已有架构基线时按 repo-init 的复用检查执行。
+  input: []
+  output:
+  - path: .sdd/software_architecture.md
+    required: true
+    reuse_on_first_attempt: true
+  available_next:
+  - sr-design
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+  depends_on: []
+  next:
+  - 2
+  result_data: null
+- id: 2
+  type: sr-design
+  name: sr-design
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T08:20:52.077764Z'
+  ended_at: '2026-11-16T08:37:18.357057Z'
+  execution: skill
+  session: inherit
+  skill:
+  - sr-design
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/software_architecture.md
+    required: false
+  - path: .sdd/SR20260818169811/original-requirement.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/SR-design.md
+    required: true
+  available_next:
+  - sr-design-gate
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+  depends_on: []
+  next:
+  - 3
+  result_data: null
+- id: 3
+  type: sr-design-gate
+  name: sr-design-gate
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T08:37:21.451711Z'
+  ended_at: '2026-11-16T08:40:28.496370Z'
+  execution: skill
+  session: inherit
+  skill:
+  - sr-design-gate
+  prompt: null
+  data_prompt:
+    description: 提交 SR 设计门禁结论。每一轮检查都必须生成或更新门禁报告，report 恒为实际报告路径，不得填 null，并提交完整 summary。只有结论为通过时提交
+      gate_result=pass；不通过或阻塞时先写报告和 data file，再执行 done，CLI reject 是预期结果，随后停止且不得推进到
+      ar-split。
+  input:
+  - path: .sdd/software_architecture.md
+    required: false
+  - path: .sdd/SR20260818169811/original-requirement.md
+    required: true
+  - path: .sdd/SR20260818169811/SR-design.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/SR-design-gate.md
+    required: true
+  available_next:
+  - ar-split
+  data_schema:
+    description: 提交 SR 设计门禁结论；只有 gate_result=pass 会进入 ar-split。
+    fields:
+      gate_result:
+        description: 通过填 pass；不通过填 fail；阻塞填 blocked。
+        example: pass
+      recommendation:
+        description: 门禁建议。
+        example: 可进入 AR 拆分
+      report:
+        description: 门禁结果文件路径；每轮检查都必须生成或更新报告，不得填 null。
+        example: .sdd/SR-001/SR-design-gate.md
+      summary:
+        description: 门禁紧凑统计；必须与本轮报告和最终结论一致。
+        example:
+          unqualified_dimensions: 0
+          p0_conflicts: 0
+          p1_conflicts: 0
+          p2_findings: 0
+          pending_questions: 0
+          blocking_issues: 0
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+  depends_on: []
+  next:
+  - 4
+  result_data: null
+- id: 4
+  type: ar-split
+  name: ar-split
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T08:40:32.734064Z'
+  ended_at: '2026-11-16T08:46:55.013126Z'
+  execution: prompt
+  session: inherit
+  skill: []
+  prompt:
+    template: prompts/ar-split.md
+    rendered: '读取 `SR-design.md` 后，询问用户：此 SR 是否需要拆分 AR？`SR-design.md` 只提供 SR 级功能与技术事实；本步骤是
+      AR 身份和范围的唯一权威来源。
+
+
+      无论用户选择哪条分支，均必须生成 `.sdd/SR20260818169811/AR-split.md` 后才能完成工作单。
+
+
+      拆分 AR 时：
+
+
+      1. 基于 SR-design.md 提出 AR 切分方案；
+
+      2. 对每个 AR 逐条向用户确认稳定 `id`、可读 `title` 和范围摘要；
+
+      3. 写入 `AR-split.md`：拆分结论、拆分理由，以及每个 AR 的 id、title、范围摘要和确认来源；
+
+      4. 范围摘要只定义该 AR 承接哪些 SR 级功能及其边界，不重复 SR 的接口、数据和架构事实。
+
+
+      确认后，收集每个 AR 的 id 和 title，例如：
+
+
+      - AR-001: 用户管理
+
+      - AR-002: 权限控制
+
+
+      确认后，构造：
+
+
+      ```json
+
+      {"ars":[{"id":"AR-001","title":"用户管理"},{"id":"AR-002","title":"权限控制"}]}
+
+      ```
+
+
+      不拆分时，在 `AR-split.md` 写明“免拆分：本 SR 以整体范围进入 module-boundary-design”，并记录确认来源；随后构造：
+
+
+      ```json
+
+      {"mode":"no_split"}
+
+      ```
+
+      '
+  data_prompt:
+    description: 先写入并展示 AR-split.md：拆分时逐条确认 AR 的 id、title、范围摘要和拆分理由；不拆分时记录免拆分决定。随后构造
+      --data：拆分时使用 ars；不拆分时使用 mode=no_split。
+  input:
+  - path: .sdd/SR20260818169811/SR-design.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/AR-split.md
+    required: true
+  available_next:
+  - ar-clarify
+  - module-boundary-design
+  data_schema:
+    description: 询问用户是否拆分 AR，两种方式二选一
+    fields:
+      ars:
+        description: 拆分 AR 时使用。id 是稳定目录标识，title 是可读标题。
+        example:
+        - id: AR-001
+          title: 用户管理
+      mode:
+        description: 不拆分时使用，固定填 no_split。
+        example: no_split
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+  depends_on: []
+  next:
+  - 5
+  result_data: null
+- id: 5
+  type: module-boundary-design
+  name: module-boundary-design
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T08:46:55.304974Z'
+  ended_at: '2026-11-16T09:22:18.172668Z'
+  execution: skill
+  session: inherit
+  skill:
+  - module-boundary-design
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/AR-clarify.md
+    required: false
+  - path: .sdd/SR20260818169811/SR-design.md
+    required: false
+  output:
+  - path: .sdd/SR20260818169811/ALL/module-boundary-design.md
+    required: true
+  available_next:
+  - module-detail-design-split
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+  depends_on: []
+  next:
+  - 6
+  result_data: null
+- id: 6
+  type: module-detail-design-split
+  name: module-detail-design-split
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:22:18.460324Z'
+  ended_at: '2026-11-16T09:23:21.073245Z'
+  execution: prompt
+  session: inherit
+  skill: []
+  prompt:
+    steps:
+    - read: 读取 module-boundary-design.md，识别受影响模块、耦合关系和交互关系。
+    - propose: 建议模块分组方案；每组建议 2-4 个模块。
+    - confirm: 向用户展示分组建议并确认。
+    - data: 确认后构造 module_groups 数组，每项包含 name、modules、requirement；name 使用能识别设计对象的中文短名，以“模块”或“模块组”结尾，同一
+        AR 内唯一且不超过 40 个字符。
+    rendered: 'read: 读取 module-boundary-design.md，识别受影响模块、耦合关系和交互关系。
+
+      propose: 建议模块分组方案；每组建议 2-4 个模块。
+
+      confirm: 向用户展示分组建议并确认。
+
+      data: 确认后构造 module_groups 数组，每项包含 name、modules、requirement；name 使用能识别设计对象的中文短名，以“模块”或“模块组”结尾，同一
+      AR 内唯一且不超过 40 个字符。'
+  data_prompt:
+    description: 收集模块分组列表；若用户选择不拆分，将所有模块放入一个 group。name 将直接作为目录名，必须使用中文短名，以“模块”或“模块组”结尾，同一
+      AR 内唯一，不超过 40 个字符，并避开路径非法字符。
+  input:
+  - path: .sdd/SR20260818169811/ALL/module-boundary-design.md
+    required: true
+  output: []
+  available_next:
+  - module-asis-analysis
+  data_schema:
+    description: 根据 boundary-design 分析结果，将受影响模块划分为若干组
+    fields:
+      module_groups:
+        description: 模块分组列表。每组 2-4 个模块，一起做详细设计；name 是同一 AR 内唯一的模块或模块组目录名，使用中文短名并以“模块”或“模块组”结尾，最长
+          40 个字符。
+        example:
+        - name: 用户与权限模块组
+          modules:
+          - 模块A
+          - 模块B
+          requirement: 用户管理
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+  depends_on: []
+  next:
+  - 7
+  result_data: null
+- id: 7
+  type: module-asis-analysis
+  name: 阻断事件模块组-module-asis-analysis
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:23:21.372972Z'
+  ended_at: '2026-11-16T09:24:42.571230Z'
+  execution: skill
+  session: inherit
+  skill:
+  - module-asis-analysis
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/module-boundary-design.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    required: true
+  available_next:
+  - module-tobe-design
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+  depends_on: []
+  next:
+  - 8
+  result_data: null
+- id: 8
+  type: module-tobe-design
+  name: 阻断事件模块组-module-tobe-design
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:24:42.863747Z'
+  ended_at: '2026-11-16T09:26:18.148893Z'
+  execution: skill
+  session: inherit
+  skill:
+  - module-tobe-design
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  available_next:
+  - module-test-design
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+  depends_on: []
+  next:
+  - 9
+  result_data: null
+- id: 9
+  type: module-test-design
+  name: 阻断事件模块组-module-test-design
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:26:18.470880Z'
+  ended_at: '2026-11-16T09:27:09.756878Z'
+  execution: skill
+  session: inherit
+  skill:
+  - module-test-design
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  available_next:
+  - module-design-gate
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+  depends_on: []
+  next:
+  - 10
+  result_data: null
+- id: 10
+  type: module-design-gate
+  name: 阻断事件模块组-module-design-gate
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:27:10.055854Z'
+  ended_at: '2026-11-16T09:29:06.328726Z'
+  execution: skill
+  session: inherit
+  skill:
+  - module-design-gate
+  prompt: null
+  data_prompt:
+    description: 读取门禁结果后构造 gate_result 数据。只有结论为通过时提交 gate_result=pass 并执行 done；不通过或阻塞时不要推进，必要时可提交
+      fail/blocked 获得 CLI 拒绝提示。
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    required: true
+  available_next:
+  - task-split
+  data_schema:
+    description: 提交模块设计门禁结论；只有 gate_result=pass 会推进到 task-split。
+    fields:
+      gate_result:
+        description: 门禁结论。通过填 pass；不通过填 fail；阻塞填 blocked。
+        example: pass
+      recommendation:
+        description: 门禁建议，例如 可进入 AICoding / 回 TOBE 补设计后重试 / 阻塞，缺少必要输入。
+        example: 可进入 AICoding
+      report:
+        description: 门禁结果摘要或门禁结果文件路径。
+        example: .sdd/SR-001/AR-001/用户模块/.context/模块设计门禁结果.md
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+  depends_on: []
+  next:
+  - 11
+  result_data: null
+- id: 11
+  type: task-split
+  name: task-split
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:29:06.629666Z'
+  ended_at: '2026-11-16T09:31:01.151197Z'
+  execution: skill
+  session: inherit
+  skill:
+  - task-split
+  prompt:
+    inline: 'load_skill task-split，基于已通过门禁的详细设计和测试设计生成薄任务计划 tasks-overview.md。
+
+      不要生成 T1/T2 独立任务文件。完成后从 tasks-overview.md 的任务计划表提取任务标题，
+
+      按串行顺序构造 {"tasks":[...]} 传给 aaw done。
+
+      提交前必须校验：tasks-overview.md 存在、任务列表非空、覆盖核对完整、
+
+      Open Questions 为空；tasks 列表只包含标题，不含 T1/T2 前缀或 .md 后缀。
+
+      '
+    rendered: 'load_skill task-split，基于已通过门禁的详细设计和测试设计生成薄任务计划 tasks-overview.md。
+
+      不要生成 T1/T2 独立任务文件。完成后从 tasks-overview.md 的任务计划表提取任务标题，
+
+      按串行顺序构造 {"tasks":[...]} 传给 aaw done。
+
+      提交前必须校验：tasks-overview.md 存在、任务列表非空、覆盖核对完整、
+
+      Open Questions 为空；tasks 列表只包含标题，不含 T1/T2 前缀或 .md 后缀。
+
+      '
+  data_prompt:
+    description: 从 tasks-overview.md 的任务计划表按串行顺序提取任务标题；列表项不要包含 T1/T2 前缀。
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    required: true
+  output:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    required: true
+  available_next:
+  - task-dev
+  data_schema:
+    description: 从 task-split 生成的 tasks-overview.md 任务计划表中提取任务列表
+    fields:
+      tasks:
+        description: 任务标题列表，每个任务对应一个独立开发单元；不要包含 T1-/T2- 前缀或 .md 后缀。
+        example:
+        - 用户CRUD
+        - 权限校验
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+  depends_on: []
+  next: &id002
+  - 12
+  - 13
+  - 14
+  result_data: null
+- id: 12
+  type: task-dev
+  name: T1-task-dev
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:31:08.432246Z'
+  ended_at: '2026-11-16T09:40:04.141724Z'
+  execution: skill
+  session: inherit
+  skill:
+  - task-dev
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    required: true
+  - path: .sdd/software_architecture.md
+    required: true
+  - path: .sdd/spec.md
+    required: false
+  - path: .sdd/AICodingGuidelines.md
+    required: false
+  output: []
+  available_next: &id001 []
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+    序号: '1'
+    任务标题: AuthEvent 状态字段与序列化扩展
+  depends_on: []
+  next: []
+  result_data:
+    task_id: T1
+    implementation: completed
+    tests: passed
+    semantic_review: passed
+    revalidation: passed
+    codecheck: passed
+    delivery: prepared
+    validated_code_digest: sha256:2579d3b89fd70adf9be8ae5744b53fa2e13a277db3a8f2069aadb64310f989d6
+    changed_files:
+    - .sdd/SR20260818169811/ALL/module-boundary-design.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    - .sdd/SR20260818169811/AR-split.md
+    - .sdd/SR20260818169811/SR-design-gate.md
+    - .sdd/SR20260818169811/SR-design.md
+    - .sdd/SR20260818169811/original-requirement.md
+    - .sdd/software_architecture.md
+    - .sdd/spec.md
+    - AGENTS.md
+    - frameworks/common/collect/src/auth_event/auth_event.cpp
+    - interfaces/inner_api/collect/include/auth_event/auth_event.h
+    proposed_commit_message: 'feat(auth_event): add degrade status field to AuthEvent
+      parcelable
+
+
+      为阻断事件 AuthEvent 新增降级状态字段 status（int32，0=正常/1=降级）：
+
+      - auth_event.h 新增 AuthEventStatus 枚举、GetStatus/SetStatus 访问器、status_ 成员（默认 0）
+
+      - auth_event.cpp Marshalling/ReadFromParcel 尾部追加 WriteInt32/ReadInt32（载荷 4→5
+      字段）
+
+      - 既有 4 字段序列化顺序与失败语义不变；回调签名与 IDL 零变更
+
+
+      对应 SR20260818169811 T1（AuthEvent 状态字段与序列化扩展），T2 构造点打标与 T3 单测适配后续提交。'
+- id: 13
+  type: task-dev
+  name: T2-task-dev
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:42:30.028367Z'
+  ended_at: '2026-11-16T09:48:27.441518Z'
+  execution: skill
+  session: inherit
+  skill:
+  - task-dev
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    required: true
+  - path: .sdd/software_architecture.md
+    required: true
+  - path: .sdd/spec.md
+    required: false
+  - path: .sdd/AICodingGuidelines.md
+    required: false
+  output: []
+  available_next: *id001
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+    序号: '2'
+    任务标题: SA 分流推送构造点打标
+  depends_on:
+  - 12
+  next: []
+  result_data:
+    task_id: T2
+    implementation: completed
+    tests: passed
+    semantic_review: passed
+    revalidation: passed
+    codecheck: passed
+    delivery: prepared
+    validated_code_digest: sha256:422f04da64b4e9b9816c974b1c61c27d096ab5e013b37a9415d931fa41cc1bb4
+    changed_files:
+    - .sdd/SR20260818169811/ALL/module-boundary-design.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    - .sdd/SR20260818169811/AR-split.md
+    - .sdd/SR20260818169811/SR-design-gate.md
+    - .sdd/SR20260818169811/SR-design.md
+    - .sdd/SR20260818169811/original-requirement.md
+    - .sdd/software_architecture.md
+    - .sdd/spec.md
+    - AGENTS.md
+    - frameworks/common/collect/src/auth_event/auth_event.cpp
+    - interfaces/inner_api/collect/include/auth_event/auth_event.h
+    - services/data_collect/sa/auth_event/auth_coordinator.cpp
+    proposed_commit_message: 'feat(auth_event): mark degrade status on SA push paths
+
+
+      AuthCoordinator 分流推送时为事件写入降级状态标记：
+
+      - NotifyDegradedClient 构造点在 SetSeqnum 后置 status=1（AuthEventStatus::DEGRADED）
+
+      - PushEventsToClients 构造点保持 status 默认 0（NORMAL），补注释说明
+
+      - 分流判定、聚合/回填/打点链路、预留注入口零变更
+
+
+      对应 SR20260818169811 T2（SA 分流推送构造点打标），依赖 T1 的 AuthEvent status 字段与序列化扩展。'
+- id: 14
+  type: task-dev
+  name: T3-task-dev
+  finished: true
+  execution_status: completed
+  attempt: 1
+  started_at: '2026-11-16T09:49:44.034071Z'
+  ended_at: '2026-11-16T09:59:18.425138Z'
+  execution: skill
+  session: inherit
+  skill:
+  - task-dev
+  prompt: null
+  data_prompt: null
+  input:
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    required: true
+  - path: .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    required: true
+  - path: .sdd/software_architecture.md
+    required: true
+  - path: .sdd/spec.md
+    required: false
+  - path: .sdd/AICodingGuidelines.md
+    required: false
+  output: []
+  available_next: *id001
+  data_schema: null
+  vars:
+    SR: SR20260818169811
+    详设路径版本: v2
+    AR: ALL
+    描述: SR整体
+    模块组名: 阻断事件模块组
+    需求短名: 阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配
+    序号: '3'
+    任务标题: Parcelable 契约回归测试适配
+  depends_on:
+  - 13
+  next: []
+  result_data:
+    task_id: T3
+    implementation: completed
+    tests: passed
+    semantic_review: passed
+    revalidation: passed
+    codecheck: passed
+    delivery: prepared
+    validated_code_digest: sha256:a185255815cecf0314d9d05f6d9b045c224a6adc84ce1cf20cf77ce113a15441
+    changed_files:
+    - .sdd/SR20260818169811/ALL/module-boundary-design.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/模块设计门禁结果.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/.context/详细设计上下文.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块测试用例设计.md
+    - .sdd/SR20260818169811/ALL/阻断事件模块组/模块详细设计说明书.md
+    - .sdd/SR20260818169811/AR-split.md
+    - .sdd/SR20260818169811/SR-design-gate.md
+    - .sdd/SR20260818169811/SR-design.md
+    - .sdd/SR20260818169811/original-requirement.md
+    - .sdd/software_architecture.md
+    - .sdd/spec.md
+    - AGENTS.md
+    - frameworks/common/collect/src/auth_event/auth_event.cpp
+    - interfaces/inner_api/collect/include/auth_event/auth_event.h
+    - services/data_collect/sa/auth_event/auth_coordinator.cpp
+    - test/unittest/data_collect/sa/auth_event_parcelable_test.cpp
+    proposed_commit_message: 'test(auth_event): add degrade status parcelable regression
+      cases
+
+
+      AuthEvent parcelable 单测适配 status 字段（载荷 4→5 字段）：
+
+      - 001/002 既有用例补 GetStatus()==NORMAL 默认值断言
+
+      - 新增 003：SetSeqnum+SetStatus(DEGRADED) 全字段序列化往返（含 seqnum 值断言）
+
+      - 新增 004：逐字段读 Parcel 验证 status 尾部追加顺序与无多余数据
+
+
+      对应 SR20260818169811 T3（Parcelable 契约回归测试适配），依赖 T1 字段扩展与 T2 构造点打标。'
+transition_history:
+- type: user_confirm
+  from_step: 11
+  from_type: task-split
+  user_confirm: must
+  next_ids: *id002
+  confirmed_at: '2026-11-16T09:31:08.206726+00:00'

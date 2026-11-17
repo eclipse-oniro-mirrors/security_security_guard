@@ -229,6 +229,7 @@ void AuthCoordinator::NotifyDegradedClient(const AuthEventInfo &eventInfo, AuthE
         eventInfo.GetEventId(), clientId.c_str(), seqnum);
     AuthEvent event(eventInfo.GetEventId(), eventInfo.GetContent());
     event.SetSeqnum(seqnum);
+    event.SetStatus(static_cast<int32_t>(AuthEventStatus::DEGRADED));
     auto proxy = iface_cast<IAuthEventCallback>(session->GetCallback());
     if (proxy == nullptr) {
         SGLOGE("degraded client callback proxy is null, eventId=%{public}" PRId64 ", clientId=%{public}s"
@@ -288,6 +289,7 @@ void AuthCoordinator::PushEventsToClients(const AuthEventInfo &eventInfo,
         eventInfo.GetEventId(), targets.size());
     size_t pushFailed = 0;
     for (size_t i = 0; i < targets.size() && i < result.seqnums.size() && i < result.clientIds.size(); ++i) {
+        // 正常阻断事件保持 status 默认 0（AuthEventStatus::NORMAL），仅降级路径 NotifyDegradedClient 打标
         AuthEvent event(eventInfo.GetEventId(), eventInfo.GetContent());
         int64_t seqnum = result.seqnums[i];
         const std::string &clientId = result.clientIds[i];

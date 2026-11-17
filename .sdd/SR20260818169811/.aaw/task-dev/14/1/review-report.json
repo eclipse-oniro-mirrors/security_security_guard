@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "task_id": "T3",
+  "validated_code_digest": "sha256:d307d467576f0486be201ae5cd9710fe83a0e4305f19816c729f542dfff70e98",
+  "verdict": "fail",
+  "reviewers": [
+    {
+      "role": "reviewer-a",
+      "status": "completed",
+      "report_ref": "task ses_e1c3ba3f3ffeL2l4v2jlVtRZCB（会话内返回：F1 seqnum 值断言缺失[major/requirements]、F2 TC7 记账归属[minor/requirements]）"
+    },
+    {
+      "role": "reviewer-b",
+      "status": "completed",
+      "report_ref": "task ses_e1c3b8f0cffefqIp7jRptDtW6W（会话内返回：F1 同一 seqnum 缺口[low/structure]，其余维度 pass）"
+    }
+  ],
+  "covered_dimensions": [
+    "requirements",
+    "security",
+    "evolution",
+    "performance",
+    "structure",
+    "readability"
+  ],
+  "applied_extension_rule_ids": [],
+  "findings": [
+    {
+      "id": "T3-F1",
+      "severity": "high",
+      "dimension": "requirements",
+      "subcategory": "seqnum 值级断言缺失（两位 Reviewer 一致发现：A 判 major、B 判 low，合并取高）",
+      "file": "test/unittest/data_collect/sa/auth_event_parcelable_test.cpp",
+      "line": 71,
+      "evidence": "测试设计 TC1 断言列要求『eventId/seqnum/content/metadata 与源对象一致』、TC2 要求『按顺序读出各字段值与写入一致』；实际 003 往返断言与 004 逐字段读均未对 seqnum 做值断言（全文件无 GetSeqnum 值校验）",
+      "impact": "seqnum 值级回归不可见：读写值错误但流不偏移时用例全通过",
+      "recommendation": "003 源对象 SetSeqnum(非 0) 并断言 result->GetSeqnum() 一致；004 补 EXPECT_EQ(0L, seqnum)",
+      "status": "open"
+    },
+    {
+      "id": "T3-F2",
+      "severity": "low",
+      "dimension": "requirements",
+      "subcategory": "TC7 记账归属（tasks-overview 将 TC7 列入 T3，但 TC7 建议位置为 auth_event_subscribe_manager_test.cpp，T3 未触碰该文件）",
+      "file": ".sdd/SR20260818169811/ALL/阻断事件模块组/tasks-overview.md",
+      "line": 32,
+      "evidence": "TC7 属 P2 声明性验证；T3 仅交付 parcelable 用例",
+      "impact": "覆盖矩阵 TC7『已覆盖（声明性）』的承接方式需澄清",
+      "recommendation": "以 D4 声明性结论结案 TC7（说明书 4.1.4 明确『不强制用例』），修正 tasks-overview 记账",
+      "status": "open"
+    }
+  ]
+}

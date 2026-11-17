@@ -1,0 +1,13 @@
+{
+  "module_groups": [
+    {
+      "name": "阻断事件模块组",
+      "modules": [
+        "data_collect（SA 3524）",
+        "libsg_collect_sdk（含 AuthEvent Parcelable）",
+        "test/unittest/data_collect"
+      ],
+      "requirement": "阻断事件新增降级状态字段 status（0=正常/1=降级）：AuthEvent 载体扩展与序列化、SA 两构造点打标、parcelable 单测适配"
+    }
+  ]
+}

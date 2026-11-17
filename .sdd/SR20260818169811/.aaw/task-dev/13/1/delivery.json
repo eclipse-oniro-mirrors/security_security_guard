@@ -1,0 +1,5 @@
+{
+  "proposed_commit_message": "feat(auth_event): mark degrade status on SA push paths\n\nAuthCoordinator 分流推送时为事件写入降级状态标记：\n- NotifyDegradedClient 构造点在 SetSeqnum 后置 status=1（AuthEventStatus::DEGRADED）\n- PushEventsToClients 构造点保持 status 默认 0（NORMAL），补注释说明\n- 分流判定、聚合/回填/打点链路、预留注入口零变更\n\n对应 SR20260818169811 T2（SA 分流推送构造点打标），依赖 T1 的 AuthEvent status 字段与序列化扩展。",
+  "message_basis": "实现模块详细设计说明书 4.1.2 决策 D3（两构造点打标：降级置 1/正常默认 0 仅注释）；完成结构核对 6 项与混合分流真实输入链路推导、双 Reviewer 语义 Review（0 findings）、修复重验（无需修复）与 CodeCheck（通过）",
+  "diff_confirmed": true
+}

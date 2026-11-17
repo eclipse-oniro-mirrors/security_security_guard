@@ -1,0 +1,5 @@
+{
+  "proposed_commit_message": "feat(auth_event): add degrade status field to AuthEvent parcelable\n\n为阻断事件 AuthEvent 新增降级状态字段 status（int32，0=正常/1=降级）：\n- auth_event.h 新增 AuthEventStatus 枚举、GetStatus/SetStatus 访问器、status_ 成员（默认 0）\n- auth_event.cpp Marshalling/ReadFromParcel 尾部追加 WriteInt32/ReadInt32（载荷 4→5 字段）\n- 既有 4 字段序列化顺序与失败语义不变；回调签名与 IDL 零变更\n\n对应 SR20260818169811 T1（AuthEvent 状态字段与序列化扩展），T2 构造点打标与 T3 单测适配后续提交。",
+  "message_basis": "实现模块详细设计说明书 4.1.3 契约 K1/K2（枚举/访问器/尾部追加序列化，决策 D1/D2）；完成结构核对与既有单测兼容性验证、双 Reviewer 语义 Review（0 findings）、修复重验（无需修复）与 CodeCheck（通过）",
+  "diff_confirmed": true
+}

@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "validated_code_digest": "sha256:2579d3b89fd70adf9be8ae5744b53fa2e13a277db3a8f2069aadb64310f989d6",
+  "open_blocking_findings": [],
+  "finding_resolutions": [],
+  "semantic_impact": "none",
+  "targeted_review_required": false,
+  "targeted_review_refs": [],
+  "checks": [
+    {
+      "name": "structural-static-check",
+      "status": "passed"
+    },
+    {
+      "name": "existing-test-compat",
+      "status": "passed"
+    }
+  ]
+}
