@@ -803,6 +803,33 @@ int32_t DataCollectManagerService::IsCallerHasApiPermission(const std::string &a
 
 // 验收: Client 扩展参数 — CreatAuthEventClient 参数从 timeoutAllowFlag 改为 defaultTimeoutStrategy + defaultTimeoutMs
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
+// 按 calling token 取调用方名：HAP 取 bundleName，native 进程取 processName，随会话缓存供 ClientInfo 补全
+static std::string GetCallingBundleName()
+{
+    AccessToken::AccessTokenID tokenId = IPCSkeleton::GetCallingTokenID();
+    AccessToken::ATokenTypeEnum tokenType = AccessToken::AccessTokenKit::GetTokenTypeFlag(tokenId);
+    if (tokenType == AccessToken::ATokenTypeEnum::TOKEN_HAP) {
+        AccessToken::HapTokenInfo hapTokenInfo;
+        int32_t ret = AccessToken::AccessTokenKit::GetHapTokenInfo(tokenId, hapTokenInfo);
+        if (ret != 0) {
+            SGLOGE("failed to get hap token info, ret=%{public}d", ret);
+            return "";
+        }
+        return hapTokenInfo.bundleName;
+    }
+    if (tokenType == AccessToken::ATokenTypeEnum::TOKEN_NATIVE) {
+        AccessToken::NativeTokenInfo nativeTokenInfo;
+        int32_t ret = AccessToken::AccessTokenKit::GetNativeTokenInfo(tokenId, nativeTokenInfo);
+        if (ret != 0) {
+            SGLOGE("failed to get native token info, ret=%{public}d", ret);
+            return "";
+        }
+        return nativeTokenInfo.processName;
+    }
+    SGLOGE("unsupported token type=%{public}d", static_cast<int32_t>(tokenType));
+    return "";
+}
+
 ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
     int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
@@ -822,6 +849,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     params.timeoutAllowFlag = timeoutAllowFlag;
     params.defaultTimeoutMs = AUTH_RESULT_TIMEOUT_MS;
     params.callback = cb;
+    params.bundleName = GetCallingBundleName();
     return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(params, session);
 }
 #else

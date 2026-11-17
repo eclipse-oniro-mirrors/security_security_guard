@@ -80,7 +80,7 @@ ohos_fuzztest("SecurityCollectorClibFuzzTest") {
     "access_token:libaccesstoken_sdk",
     "access_token:libtokenid_sdk",
     "access_token:libtoken_setproc",
-    "access_token:libnativetoken",
+    "access_token:libnativetoken_shared",
     "c_utils:utils",
     "bounds_checking_function:libsec_shared",
     "common_event_service:cesfwk_innerkits",

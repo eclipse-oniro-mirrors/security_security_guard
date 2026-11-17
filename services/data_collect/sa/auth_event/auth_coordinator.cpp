@@ -820,8 +820,7 @@ std::vector<AuthClientInfo> AuthCoordinator::CollectClientInfos(const std::strin
         }
         AuthClientInfo info;
         info.SetClientId(session->GetClientId());
-        // 本期置空，待产品确认后按 calling token 查 BundleManager 补全
-        info.SetBundleName("");
+        info.SetBundleName(session->GetBundleName());
         info.SetSubscribedEvents(matchedEvents);
         info.SetDefaultTimeoutStrategy(session->GetTimeoutStrategy());
         info.SetDefaultTimeoutMs(session->GetDefaultTimeoutMs());

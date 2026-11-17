@@ -284,6 +284,26 @@ HWTEST_F(AuthEventSubscribeManagerTest, CreatAuthEventClient001, TestSize.Level0
     EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, nullptr), sessionRemote3), NULL_OBJECT);
 }
 
+HWTEST_F(AuthEventSubscribeManagerTest, BundleNameCache001, TestSize.Level0)
+{
+    auto &manager = AuthEventSubscribeManager::GetInstance();
+    // 创建时传入的调用方名随会话缓存：HAP 为 bundleName，native 为 processName，创建后只读
+    auto params = MakeParams(9201, 9201 + 100, true, CreateRemoteObject());
+    params.bundleName = "com.ut.authbundle";
+    sptr<IRemoteObject> sessionRemote = nullptr;
+    ASSERT_EQ(manager.CreatAuthEventClient(params, sessionRemote), SUCCESS);
+    auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
+    ASSERT_NE(nullptr, session);
+    EXPECT_EQ(session->GetBundleName(), "com.ut.authbundle");
+    // 未设置时（service 层查询失败回退）缓存为空串
+    sptr<IRemoteObject> sessionRemote2 = nullptr;
+    ASSERT_EQ(manager.CreatAuthEventClient(MakeParams(9202, 9202 + 100, true, CreateRemoteObject()),
+        sessionRemote2), SUCCESS);
+    auto *session2 = static_cast<AuthEventSessionService *>(sessionRemote2.GetRefPtr());
+    ASSERT_NE(nullptr, session2);
+    EXPECT_TRUE(session2->GetBundleName().empty());
+}
+
 HWTEST_F(AuthEventSubscribeManagerTest, TimeoutPolicyStorage001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
