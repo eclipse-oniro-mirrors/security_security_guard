@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "validated_code_digest": "sha256:a185255815cecf0314d9d05f6d9b045c224a6adc84ce1cf20cf77ce113a15441",
+  "open_blocking_findings": [],
+  "finding_resolutions": [
+    {
+      "id": "T3-F1",
+      "status": "fixed",
+      "rationale": "已修复：003 源对象补 SetSeqnum(2002L) 并断言 result->GetSeqnum()==2002L；004 补 EXPECT_EQ(0L, seqnum)。seqnum 值级回归缺口消除，TC1/TC2 断言口径与测试设计完全对齐（重验 6 项全 PASS，TC1/TC2 既有断言无破坏）。"
+    },
+    {
+      "id": "T3-F2",
+      "status": "fixed",
+      "rationale": "已修正记账：tasks-overview T3 行验证范围改为 TC1、TC2；新增注记说明 TC7 以详细设计说明书 4.1.4 决策 D4（预留口不强制用例）声明性结案。"
+    }
+  ],
+  "semantic_impact": "none",
+  "targeted_review_required": false,
+  "targeted_review_refs": [],
+  "checks": [
+    {
+      "name": "fix-recheck-static",
+      "status": "passed"
+    },
+    {
+      "name": "tc1-tc2-assertion-coverage",
+      "status": "passed"
+    }
+  ]
+}

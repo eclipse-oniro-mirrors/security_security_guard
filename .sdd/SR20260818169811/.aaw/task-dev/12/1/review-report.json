@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "task_id": "T1",
+  "validated_code_digest": "sha256:2579d3b89fd70adf9be8ae5744b53fa2e13a277db3a8f2069aadb64310f989d6",
+  "verdict": "pass",
+  "reviewers": [
+    {
+      "role": "reviewer-a",
+      "status": "completed",
+      "report_ref": "task ses_e1c4adce6ffeYu4o31n3gvNMac（会话内返回，verdict=pass，0 findings）"
+    },
+    {
+      "role": "reviewer-b",
+      "status": "completed",
+      "report_ref": "task ses_e1c4ac3e3ffezeeujWTZ7bwbXq（会话内返回，verdict=pass，0 findings）"
+    }
+  ],
+  "covered_dimensions": [
+    "requirements",
+    "security",
+    "evolution",
+    "performance",
+    "structure",
+    "readability"
+  ],
+  "applied_extension_rule_ids": [],
+  "findings": []
+}

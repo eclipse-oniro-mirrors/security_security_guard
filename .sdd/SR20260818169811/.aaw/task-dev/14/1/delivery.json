@@ -1,0 +1,5 @@
+{
+  "proposed_commit_message": "test(auth_event): add degrade status parcelable regression cases\n\nAuthEvent parcelable 单测适配 status 字段（载荷 4→5 字段）：\n- 001/002 既有用例补 GetStatus()==NORMAL 默认值断言\n- 新增 003：SetSeqnum+SetStatus(DEGRADED) 全字段序列化往返（含 seqnum 值断言）\n- 新增 004：逐字段读 Parcel 验证 status 尾部追加顺序与无多余数据\n\n对应 SR20260818169811 T3（Parcelable 契约回归测试适配），依赖 T1 字段扩展与 T2 构造点打标。",
+  "message_basis": "落实模块测试用例设计 TC1/TC2 断言口径（往返一致/默认 0/尾部顺序/无多余数据）；经双 Reviewer 语义 Review（2 findings：seqnum 值断言缺失已修复、TC7 记账已按 D4 声明性结案修正）、修复重验 6 项全 PASS 与 CodeCheck（通过）",
+  "diff_confirmed": true
+}

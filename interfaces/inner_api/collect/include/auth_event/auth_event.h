@@ -22,6 +22,11 @@
 #include "parcel.h"
 
 namespace OHOS::Security::SecurityGuard {
+enum class AuthEventStatus : int32_t {
+    NORMAL = 0,
+    DEGRADED = 1,
+};
+
 class AuthEvent : public Parcelable {
 public:
     AuthEvent() = default;
@@ -33,9 +38,11 @@ public:
     int64_t GetSeqnum() const { return seqnum_; };
     std::string GetContent() const { return content_; };
     std::string GetMetadata() const { return metadata_; };
+    int32_t GetStatus() const { return status_; };
     void SetSeqnum(int64_t seqnum) { seqnum_ = seqnum; };
     void SetContent(const std::string &content) { content_ = content; };
     void SetMetadata(const std::string &metadata) { metadata_ = metadata; };
+    void SetStatus(int32_t status) { status_ = status; };
     bool Marshalling(Parcel& parcel) const override;
     bool ReadFromParcel(Parcel &parcel);
     static AuthEvent* Unmarshalling(Parcel& parcel);
@@ -45,6 +52,7 @@ private:
     int64_t seqnum_ = 0;
     std::string content_ {};
     std::string metadata_ {};
+    int32_t status_ = 0;
 };
 } // namespace OHOS::Security::SecurityGuard
 

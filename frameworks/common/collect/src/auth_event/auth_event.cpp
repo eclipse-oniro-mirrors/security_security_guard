@@ -30,6 +30,9 @@ bool AuthEvent::Marshalling(Parcel& parcel) const
     if (!parcel.WriteString(metadata_)) {
         return false;
     }
+    if (!parcel.WriteInt32(status_)) {
+        return false;
+    }
     return true;
 }
 
@@ -45,6 +48,9 @@ bool AuthEvent::ReadFromParcel(Parcel &parcel)
         return false;
     }
     if (!parcel.ReadString(metadata_)) {
+        return false;
+    }
+    if (!parcel.ReadInt32(status_)) {
         return false;
     }
     return true;

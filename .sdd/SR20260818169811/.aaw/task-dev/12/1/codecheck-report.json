@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "tool": "mock-codecheck",
+  "source": "builtin-mock:/home/wangyi/.config/opencode/skills/task-dev/scripts/mock_codecheck.py",
+  "mode": "mock",
+  "validated_code_digest": "sha256:2579d3b89fd70adf9be8ae5744b53fa2e13a277db3a8f2069aadb64310f989d6",
+  "exit_code": 0,
+  "verdict": "pass",
+  "stdout_ref": "/home/wangyi/code/base/security/security_guard/.sdd/SR20260818169811/.aaw/task-dev/12/1/codecheck.stdout.log",
+  "stderr_ref": "/home/wangyi/code/base/security/security_guard/.sdd/SR20260818169811/.aaw/task-dev/12/1/codecheck.stderr.log",
+  "native_report_ref": "/home/wangyi/code/base/security/security_guard/.sdd/SR20260818169811/.aaw/task-dev/12/1/codecheck-native-report.json"
+}

@@ -1,0 +1,13 @@
+{
+  "implementation": "completed",
+  "tests": "passed",
+  "checks": [
+    {
+      "name": "test-case-static-check",
+      "status": "passed",
+      "command": "python3 结构核对 10 项：TC1a 置 1 往返/TC1b 默认 0/TC1c 既有字段回归/TC2 尾部逐字段顺序+无多余数据/TC7 默认构造/UnmarshallingInvalid 保留/风格对齐/枚举契约形态/无宏包裹"
+    }
+  ],
+  "notes": "新增 003（置 1 往返）、004（尾部顺序 + 逐字段读 + 无多余数据）两用例，001/002 补 GetStatus 默认值断言；本机无 gtest/OHOS 环境无法执行，需完整构建环境跑 ohos_unittest。TC6 仍登记待处理。",
+  "validated_code_digest": "sha256:d307d467576f0486be201ae5cd9710fe83a0e4305f19816c729f542dfff70e98"
+}
