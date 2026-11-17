@@ -78,6 +78,17 @@ public:
         return clientId_;
     }
 
+    // 调用方名（创建会话时按 calling token 取得并缓存：HAP 为 bundleName，native 为 processName）
+    std::string GetBundleName() const
+    {
+        return bundleName_;
+    }
+
+    void SetBundleName(const std::string &bundleName)
+    {
+        bundleName_ = bundleName;
+    }
+
     // per-client seqnum 递增（每个客户端接收事件数量的递增数字）
     int64_t GenerateSeqnum()
     {
@@ -142,6 +153,7 @@ private:
     pid_t pid_ {};
     int32_t uid_ {};
     std::string clientId_ {};
+    std::string bundleName_ {};  // 调用方名缓存（创建时由 CreatAuthEventClient 按 calling token 取得）
     int64_t seqnumCounter_ {0};  // per-client seqnum 计数器
     AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
     int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};

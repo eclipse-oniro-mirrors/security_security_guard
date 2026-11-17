@@ -49,6 +49,7 @@ struct CreateClientParams {
     int32_t timeoutAllowFlag;
     int32_t defaultTimeoutMs;
     sptr<IRemoteObject> callback;
+    std::string bundleName;  // 调用方名：HAP 为 bundleName，native 进程为 processName（创建时取，随会话缓存）
 };
 
 class AuthEventSubscribeManager {

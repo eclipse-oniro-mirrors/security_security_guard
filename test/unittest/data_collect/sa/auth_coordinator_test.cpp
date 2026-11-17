@@ -132,6 +132,37 @@ HWTEST_F(AuthCoordinatorTest, RequestAuthResultNoClient001, TestSize.Level0)
     EXPECT_EQ(ret, SUCCESS);
 }
 
+HWTEST_F(AuthCoordinatorTest, CollectClientInfosBundleName001, TestSize.Level0)
+{
+    auto &manager = AuthEventSubscribeManager::GetInstance();
+    auto &coordinator = AuthCoordinator::GetInstance();
+    // 会话创建时缓存的调用方名，经 CollectClientInfos 原样带给 Provider 的 ClientInfo 列表
+    auto cb = CreateRemoteObject();
+    CreateClientParams params;
+    params.callerPid = 4501;
+    params.callerUid = 4501;
+    params.timeoutAllowFlag = 1;
+    params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
+    params.callback = cb;
+    params.bundleName = "com.ut.coordinatorbundle";
+    sptr<IRemoteObject> sessionRemote = nullptr;
+    ASSERT_EQ(manager.CreatAuthEventClient(params, sessionRemote), SUCCESS);
+    auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
+    ASSERT_NE(nullptr, session);
+    constexpr int64_t eventId = 4501;
+    {
+        std::lock_guard<ffrt::mutex> lock(manager.mutex_);
+        session->GetEventIds().insert(eventId);
+        session->RegisterEventService(eventId, "svc-bundle-ut");
+    }
+    auto infos = coordinator.CollectClientInfos("svc-bundle-ut");
+    ASSERT_EQ(1U, infos.size());
+    EXPECT_EQ(session->GetClientId(), infos[0].GetClientId());
+    EXPECT_EQ("com.ut.coordinatorbundle", infos[0].GetBundleName());
+    // 未订阅该 serviceId 的会话不出现在其他 provider 的列表中
+    EXPECT_EQ(0U, coordinator.CollectClientInfos("svc-other").size());
+}
+
 HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
 {
     auto cb = CreateRemoteObject();

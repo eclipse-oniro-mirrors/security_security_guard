@@ -136,6 +136,7 @@ int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams
             SGLOGE("new session fail");
             return FAILED;
         }
+        session->SetBundleName(params.bundleName);
         sessions_.insert(session);
     }
     // AddDeathRecipient 是跨进程调用，放锁外执行；失败则回滚会话，避免孤儿会话占用配额
