@@ -1,6 +1,7 @@
 # 支持阻断服务使用者接入阻断框架 · dev 设计
 
-> 状态：正式稿 v10（v9 + PR #543 增量：NotifyClientStatusChanged 按 serviceId 只回调相关 provider；seqNum 不再塞 metadata 改为只赋值到 AuthEvent.seqnum 字段；聚合流程日志增强便于定位多客户端聚合问题）
+> 状态：正式稿 v11（v10 + PR #563 增量：Provider 接入校验 native 路径补权限校验，HAP 路径保留权限+系统应用双校验）
+> v11 变更（PR #563）：`AuthCoordinator::IsProviderAllowed()` 调整为"权限校验前置 + token 类型分支"——① 权限校验(201)前置，native SA 与 HAP 均需 `AUTH_SERVICE_ACCESS_PERMISSION` 为 GRANTED（原 HEAD native 直接放行不校验权限，存在越权风险，此版补齐）；② native SA（TOKEN_NATIVE）有权限即放行（`IsSystemAppByFullTokenID` 仅适用于 HAP，native 不是 HAP 意义上的"系统应用"，跳过该检查）；③ HAP 应用（TOKEN_HAP）保留系统应用校验(202)；④ 其他 token 类型拒绝 `NO_PERMISSION`。`CreateAuthProvider`/`RequestAuthResult`/`Destroy` 三个 IPC 入口前置共用。同步修复 `RequestAuthResultInvalidProvider001` 测试断言缺失 mock（补 `VerifyAccessToken` GRANTED + `IsSystemAppByFullTokenID` true 让权限校验通过使执行流到达 `IsValid()` 检查返回 BAD_PARAM，此 bug 在 HEAD 版本同样存在）。
 > v10 变更（PR #543）：① **NotifyClientStatusChanged 改为只回调 serviceId 匹配的 provider**：签名从无参改为 `NotifyClientStatusChanged(const std::string &serviceId)`，锁内只收集 serviceId 匹配的有效 provider callback（无匹配则 return），`CollectClientInfos(serviceId)` 收集订阅该 serviceId 的全量 client 列表（非增量），只对匹配的 provider 回调；7 个触发点各自传入变更的 serviceId（Subscribe/Unsubscribe 传变更 eventId 的 serviceId；Destroy/RemoveSession 遍历该 client 订阅过的所有 serviceId 逐个通知；CreateAuthProvider 传新 provider 的 serviceId 只通知自己；DestroyAuthProvider/RemoveProvider 不通知任何 provider）。② **seqNum 不再塞 metadata**：`NotifyDegradedClient` 和 `PushEventsToClients` 删除 cJSON 把 seqNum 塞到 `AuthEvent.metadata` 的代码，改为只 `event.SetSeqnum(seqnum)` 赋值到 AuthEvent.seqnum 字段；metadata 由消费方（另一仓）解析 seqnum 后自行填充。③ **聚合流程日志增强**（便于定位多客户端聚合时哪个 client 出问题、每个 client 的阻断策略、是否成功），覆盖全链路静默分支与缺失维度：`DispatchEventToClients` skip null/invalid session 补 W 级日志带 clientId + dispatch done 汇总补 subscribed/sent/degraded/skipped 计数；`NotifyDegradedClient` 补 clientId + 检查 `OnAuthEvent` 返回值失败打 E 级日志；`PushEventsToClients` 检查 `OnAuthEvent` 返回值失败打 E 级日志带 clientId+ret + push done 补 failed 计数提 I 级；`RegisterNormalClient` 补 timeoutStrategy 提 I 级；`SetAuthResult` 入口/出口补 eventId+clientId+seqnum 提 I 级，NOT_FOUND 补 W 级说明原因；`RecordClientResult` ctx already completed 从 D 提 W 级并补 eventId+strategy + 新增 ALLOW 回填但还有 pending client 的 I 级中间态日志（覆盖 EvaluateStrictPolicy 静默 else 分支）；`HandleTimeout` 入口补 totalClients/alreadyReplied 计数 + 新增 timeoutHandled/alreadyReplied 汇总 W 级日志 + 已回填 client 跳过补 D 级；`HandleTimeoutClient` 补 eventId+seqnum 提 W 级；`WaitForCompletion` 补 elapsedMs 耗时日志（完成/超时均打）；`EvaluateStrictPolicy` 补 clientId；`SatisfyResultPromise` 拆分 null/satisfied 分支分别打 E/D 级日志；`NotifyTimeoutResult`/`ReportDenyResult` appInfo not found 补 W 级日志带 eventId+clientId；`DecrementCounters` 补 eventId；`BuildAuthResult` 补每个 client 最终策略的 detail 汇总日志（I 级）；`NotifyAuthResult` 补 OnAuthResult 发送确认日志；`ProcessAuthResultAsync` 无订阅 client 分支日志补 eventId。日志级别约定：低频 INFO，高频 DEBUG，异常/超时 WARN，错误 ERROR。
 > v9 变更：① **移除服务端事件超时判断**（本需求只做会话管理）：删除 pendingResults_ 超时跟踪表、CheckAuthResultTimeout、AUTH_RESULT_TIMEOUT_MS=400、~~timeoutAllowFlag~~、seqNum 的 metadata 填充与解析、AUTH_RESULT_TIMEOUT 打点；保留结果表 authResults_、NotifyAuthEvent 分发（不再分配 eventIndex）、AUTH_BLOCK_RESULT 打点。【修订：timeoutAllowFlag 参数保留——IDL/SDK/会话链路携带并随会话保存，本需求仅保存不消费，供超时需求（另一需求）届时按会话读取】② **会话关联改方案 D（会话即远端对象）**：主接口 IDL 5 方法缩减为 1 方法 `CreatAuthEventClient([in] IRemoteObject cb, [in] boolean timeoutAllowFlag, [out] IRemoteObject session)`（实测 IDL 支持 [out] IRemoteObject：proxy `reply.ReadRemoteObject()` / stub `SUCCEEDED(errCode)` 时 `WriteRemoteObject`）；新增独立 `AuthEventSession.idl`（Subscribe/Unsubscribe/SetAuthResult/Destroy 四方法）；服务端 `AuthEventSessionService`（stub 实例）即会话本体——每会话对象自带 pid/uid/callback/eventIds/timeoutAllowFlag，方法直落对象、零会话查表；SDK 持 session 代理直调、零身份参数；clientId、ConstructClientId、会话查重/空判/死亡反查遍历全部删除。③ 用户裁决：Unsubscribe 未订阅 eventId 幂等 SUCCESS；同一 cb 重复 CreatAuthEventClient → BAD_PARAM；Destroy 幂等 SUCCESS，销毁后调其他方法 → BAD_PARAM。④ 错误码场景全量梳理（见 4.9）。⑤ **对外头文件回归标准位置、声明常驻**（修订：初版曾迁 frameworks/ 由 public_configs 条件暴露，因 binarys 预编译消费拿不到头、且宏包裹导致外部 include 为空，改回）：5 个对外头（auth_event.h、i_auth_event_callback.h、auth_event_callback_service.h、auth_event_callback_stub.h、auth_event_subscribe_client.h）位于 `interfaces/inner_api/collect/include/`（bundle.json header_base 登记，源码树与 binarys 发布链路天然可用）；**声明不做功能宏包裹（常驻），符号有无由 so 按 gni 决定**——未开启设备上调用方编译通过、链接报 undefined symbol（对齐 syscap 裁剪常规形态）；头内注释声明"仅特定设备开放"。
 > v8 变更：分发索引不再作为 AuthEvent 独立字段（eventIndex_ 删除，parcelable 回归三字段），改为以 JSON 键 `seqNum` 填充在 metadata 中传输（服务端分发时 nlohmann 合并写入，客户端回填时解析；pending 内部键仍为 (clientId, eventIndex) 整数）。【v9 已随超时特性整体移除，仅存档】
@@ -24,7 +25,7 @@
   - HA 打点：AUTH_BLOCK_RESULT（阻断结果回填，allowFlag=false 时），适配层 `AuthEventReporter` 单点接入 HA lite 客户端；
   - 服务端会话与订阅管理（eventId 匹配分发、订阅者死亡清理）；
   - 配额限制：一个进程最多 2 个客户端，一个设备最多 16 个客户端（用户规格）；
-  - 接入校验：SA 应用（native token）按硬编码 uid 清单校验；HAP 应用按权限名 `ohos.permission.kernel.AUTH_AUDIT_EVENT` 校验；
+  - 接入校验：SA 应用（native token）按硬编码 uid 清单校验；HAP 应用按权限名 `ohos.permission.kernel.AUTH_AUDIT_EVENT` 校验；**Provider 接入校验（`AuthCoordinator::IsProviderAllowed`，PR #563 调整）权限校验前置（native+HAP 共用）+ token 类型分支：native SA 有权限即放行（跳过系统应用检查），HAP 应用需权限+系统应用双校验，其他 token 类型拒绝**；
   - 结果回填：`SetAuthResult(AuthEvent, bool allowFlag)`——订阅者向框架设置某事件的阻断/放行结果（allowFlag 由订阅者下发，SDK 暴露，同套双轨校验）；
   - 客户端 SDK：新增 `AuthEventSubscribeClient` 类（含 SetAuthResult），编入 libsg_collect_sdk；
   - 整需求编译隔离：gni 开关 `security_guard_auth_event_enable`（默认 false，仅特定设备开启）。
@@ -186,6 +187,7 @@ void Destroy();
 - `std::set<sptr<AuthProviderSessionService>> providerSessions_` — provider 会话集合（按 sptr 排序，无 serviceId 索引；`CreateAuthProvider`/`DestroyAuthProvider`/`RemoveProvider` 增删，`FindProviderLocked` 按裸指针查）。
 - `std::vector<AuthClientInfo> CollectClientInfos(const std::string &serviceId)`（PR #534：签名加 `serviceId` 参数）——遍历所有 session，每个 session 按 `serviceId` 过滤 `eventIds`（`GetServiceIdForEvent(eventId) == serviceId`），只收集订阅了属于该 serviceId 的 eventId 的 client；同一 client 订阅不同 serviceId 的 eventId 时，在不同 provider 列表里各出现一次，`subscribedEvents` 只含属于该 serviceId 的 eventId。
 - `void NotifyClientStatusChanged(const std::string &serviceId)`（PR #543：只回调 serviceId 匹配的 provider）——锁内只收集 serviceId 匹配的有效 provider callback（无匹配则直接 return）；`CollectClientInfos(serviceId)` 收集订阅该 serviceId 的全量 client 列表（非增量）；只对匹配的 provider 回调 `OnClientStatusChanged(clientInfos)`，其他 provider 不受影响。调用方传变更的 serviceId：Subscribe/Unsubscribe 传变更 eventId 的 serviceId；Destroy/RemoveSession 遍历该 client 订阅过的所有 serviceId 逐个通知；CreateAuthProvider 传新 provider 的 serviceId（只通知自己）；DestroyAuthProvider/RemoveProvider 不通知任何 provider。
+- `static int32_t IsProviderAllowed()`——Provider 接入校验（PR #563 调整为"权限前置 + token 类型分支"）：① 权限校验(201)前置——`AccessTokenKit::VerifyAccessToken(callerToken, AUTH_SERVICE_ACCESS_PERMISSION)` 非 GRANTED → `NO_PERMISSION`，native SA 与 HAP 均需满足（原 HEAD native 直接放行不校验权限，此版补齐）；② native SA（TOKEN_NATIVE）有权限即放行——`IsSystemAppByFullTokenID` 仅适用于 HAP，native 不是 HAP 意义上的"系统应用"，跳过该检查；③ HAP 应用（TOKEN_HAP）保留系统应用校验(202)——`IsSystemAppByFullTokenID` false → `NO_SYSTEMCALL`；④ 其他 token 类型 → `NO_PERMISSION`。`CreateAuthProvider`/`RequestAuthResult`/`Destroy` 三个 IPC 入口前置共用。
 
 ### 4.7 错误码 / 兼容
 
@@ -212,6 +214,15 @@ void Destroy();
 | P2 | HAP token 权限 `ohos.permission.kernel.AUTH_AUDIT_EVENT` DENIED | `NO_PERMISSION` | |
 | P3 | token 类型非法（非 native/HAP） | `NO_PERMISSION` | |
 | P4 | gni 开关关闭形态下的主接口调用 | `FAILED` | 占位实现一律拒绝，session 不下发 |
+
+**Provider 接入校验（`AuthCoordinator::IsProviderAllowed`，PR #563 权限前置+token 分支）**：
+
+| # | 场景 | 错误码 | 说明 |
+|---|---|---|---|
+| PP1 | `AUTH_SERVICE_ACCESS_PERMISSION` 非 GRANTED（native + HAP 共用） | `NO_PERMISSION`（201） | 权限校验前置，native SA 也需声明该权限 |
+| PP2 | HAP 应用非系统应用（`IsSystemAppByFullTokenID` false） | `NO_SYSTEMCALL`（202） | 仅 HAP 路径校验，native 跳过此检查 |
+| PP3 | token 类型非法（非 native/HAP，如 TOKEN_SHELL/TOKEN_INVALID） | `NO_PERMISSION` | 显式拒绝 |
+| PP4 | gni 开关关闭形态下 Provider 入口调用 | `API_SUPPORT_ERROR`（801） | 占位实现返回不支持 |
 
 **CreatAuthEventClient(cb, [out] session)**：
 
