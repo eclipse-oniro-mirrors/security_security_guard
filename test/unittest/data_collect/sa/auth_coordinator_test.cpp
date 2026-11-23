@@ -146,7 +146,7 @@ HWTEST_F(AuthCoordinatorTest, CollectClientInfosBundleName001, TestSize.Level0)
     params.callback = cb;
     params.bundleName = "com.ut.coordinatorbundle";
     sptr<IRemoteObject> sessionRemote = nullptr;
-    ASSERT_EQ(manager.CreatAuthEventClient(params, sessionRemote), SUCCESS);
+    ASSERT_EQ(manager.CreateAuthEventClient(params, sessionRemote), SUCCESS);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
     ASSERT_NE(nullptr, session);
     constexpr int64_t eventId = 4501;
@@ -174,7 +174,7 @@ HWTEST_F(AuthCoordinatorTest, SetAuthResultNoRoutingContext001, TestSize.Level0)
     params.timeoutAllowFlag = 1;
     params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
     params.callback = cb;
-    manager.CreatAuthEventClient(params, sessionRemote);
+    manager.CreateAuthEventClient(params, sessionRemote);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
 
     AuthEvent event(2001);

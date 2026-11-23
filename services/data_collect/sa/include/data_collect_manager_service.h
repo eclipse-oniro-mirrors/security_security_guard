@@ -75,7 +75,7 @@ public:
     // 关闭 SECURITY_GUARD_AUTH_EVENT_ENABLE 时实现为占位（返回 FAILED，session 不下发）。
     // 会话内方法（Subscribe/Unsubscribe/SetAuthResult/Destroy）由 AuthEventSession.idl
     // 生成的独立会话对象 AuthEventSessionService 承载，不在本服务类。
-    ErrCode CreatAuthEventClient(const sptr<IRemoteObject> &cb, int32_t timeoutAllowFlag,
+    ErrCode CreateAuthEventClient(const sptr<IRemoteObject> &cb, int32_t timeoutAllowFlag,
         sptr<IRemoteObject> &session) override;
     ErrCode CreateAuthProvider(const sptr<IRemoteObject> &cb, const std::string &serviceId,
         sptr<IRemoteObject> &provider) override;

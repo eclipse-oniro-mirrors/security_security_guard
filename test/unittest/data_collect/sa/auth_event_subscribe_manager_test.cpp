@@ -67,7 +67,7 @@ sptr<MockRemoteObject> CreateRemoteObject()
     return obj;
 }
 
-// 构造 CreatAuthEventClient 入参（控制入参 ≤5 适配）
+// 构造 CreateAuthEventClient 入参（控制入参 ≤5 适配）
 CreateClientParams MakeParams(pid_t pid, int32_t uid, bool allowFlag, const sptr<IRemoteObject> &cb)
 {
     CreateClientParams params;
@@ -91,7 +91,7 @@ AuthEventSessionService *CreateManagedSession(pid_t pid, int32_t uid, AuthStrate
     params.timeoutAllowFlag = static_cast<int32_t>(timeoutStrategy);
     params.defaultTimeoutMs = TEST_DEFAULT_TIMEOUT_MS;
     params.callback = cb;
-    if (manager.CreatAuthEventClient(params, sessionRemote) != SUCCESS) {
+    if (manager.CreateAuthEventClient(params, sessionRemote) != SUCCESS) {
         return nullptr;
     }
     return static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
@@ -118,7 +118,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, DualTrackCheck001, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_NATIVE));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t result = service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
+    int32_t result = service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
     EXPECT_EQ(result, NO_PERMISSION);
     EXPECT_EQ(sessionRemote, nullptr);
 }
@@ -132,7 +132,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, DualTrackCheck002, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_NATIVE));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t result = service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
+    int32_t result = service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
     EXPECT_EQ(result, SUCCESS);
     EXPECT_NE(sessionRemote, nullptr);
     manager.allowedUids_.clear();
@@ -147,7 +147,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, DualTrackCheck003, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t result = service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
+    int32_t result = service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
     EXPECT_EQ(result, SUCCESS);
     EXPECT_NE(sessionRemote, nullptr);
 }
@@ -161,7 +161,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, DualTrackCheck004, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_DENIED));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t result = service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
+    int32_t result = service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
     EXPECT_EQ(result, NO_PERMISSION);
 }
 
@@ -172,7 +172,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, DualTrackCheck005, TestSize.Level0)
         .WillRepeatedly(Return(AccessToken::TypeATokenTypeEnum::TOKEN_INVALID));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t result = service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
+    int32_t result = service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote);
     EXPECT_EQ(result, NO_PERMISSION);
 }
 
@@ -185,7 +185,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission001, TestSize.Lev
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    ASSERT_EQ(service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote), SUCCESS);
+    ASSERT_EQ(service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote), SUCCESS);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
     EXPECT_CALL(*(AccessToken::AccessTokenKit::GetInterface()), VerifyAccessToken)
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_DENIED));
@@ -202,7 +202,7 @@ HWTEST_F(AuthEventSubscribeManagerTest, SetAuthResultPermission002, TestSize.Lev
         .WillRepeatedly(Return(AccessToken::PermissionState::PERMISSION_GRANTED));
     DataCollectManagerService service(SecurityGuard::DATA_COLLECT_MANAGER_SA_ID, true);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    ASSERT_EQ(service.CreatAuthEventClient(CreateRemoteObject(), 1, sessionRemote), SUCCESS);
+    ASSERT_EQ(service.CreateAuthEventClient(CreateRemoteObject(), 1, sessionRemote), SUCCESS);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
     AuthEvent event(4002, "content", "metadata");
     EXPECT_EQ(session->SetAuthResult(event, true), SUCCESS);
@@ -268,20 +268,20 @@ HWTEST_F(AuthEventSubscribeManagerTest, SubscribeEventIdNotInConfig001, TestSize
     EXPECT_EQ(session->Unsubscribe(6002), SUCCESS);
 }
 
-HWTEST_F(AuthEventSubscribeManagerTest, CreatAuthEventClient001, TestSize.Level0)
+HWTEST_F(AuthEventSubscribeManagerTest, CreateAuthEventClient001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> cb = CreateRemoteObject();
     sptr<IRemoteObject> sessionRemote = nullptr;
     // 正常创建：下发非空会话对象
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote), SUCCESS);
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote), SUCCESS);
     EXPECT_NE(sessionRemote, nullptr);
     // 同一 cb 重复创建 -> BAD_PARAM
     sptr<IRemoteObject> sessionRemote2 = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote2), BAD_PARAM);
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9001, 9001 + 100, true, cb), sessionRemote2), BAD_PARAM);
     // 空回调 -> NULL_OBJECT
     sptr<IRemoteObject> sessionRemote3 = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9001, 9001 + 100, true, nullptr), sessionRemote3), NULL_OBJECT);
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9001, 9001 + 100, true, nullptr), sessionRemote3), NULL_OBJECT);
 }
 
 HWTEST_F(AuthEventSubscribeManagerTest, BundleNameCache001, TestSize.Level0)
@@ -291,13 +291,13 @@ HWTEST_F(AuthEventSubscribeManagerTest, BundleNameCache001, TestSize.Level0)
     auto params = MakeParams(9201, 9201 + 100, true, CreateRemoteObject());
     params.bundleName = "com.ut.authbundle";
     sptr<IRemoteObject> sessionRemote = nullptr;
-    ASSERT_EQ(manager.CreatAuthEventClient(params, sessionRemote), SUCCESS);
+    ASSERT_EQ(manager.CreateAuthEventClient(params, sessionRemote), SUCCESS);
     auto *session = static_cast<AuthEventSessionService *>(sessionRemote.GetRefPtr());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(session->GetBundleName(), "com.ut.authbundle");
     // 未设置时（service 层查询失败回退）缓存为空串
     sptr<IRemoteObject> sessionRemote2 = nullptr;
-    ASSERT_EQ(manager.CreatAuthEventClient(MakeParams(9202, 9202 + 100, true, CreateRemoteObject()),
+    ASSERT_EQ(manager.CreateAuthEventClient(MakeParams(9202, 9202 + 100, true, CreateRemoteObject()),
         sessionRemote2), SUCCESS);
     auto *session2 = static_cast<AuthEventSessionService *>(sessionRemote2.GetRefPtr());
     ASSERT_NE(nullptr, session2);
@@ -321,15 +321,15 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit001, TestSize.Level0)
 {
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
         SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
         SUCCESS);
     // 同一进程第 3 个客户端
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9101, 9101 + 100, true, CreateRemoteObject()), sessionRemote),
         CLIENT_EXCEED_PROCESS_LIMIT);
     // 其他进程不受影响
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9102, 9102 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9102, 9102 + 100, true, CreateRemoteObject()), sessionRemote),
         SUCCESS);
 }
 
@@ -338,19 +338,19 @@ HWTEST_F(AuthEventSubscribeManagerTest, QuotaLimit002, TestSize.Level0)
     auto &manager = AuthEventSubscribeManager::GetInstance();
     sptr<IRemoteObject> sessionRemote = nullptr;
     for (pid_t pid = 9200; pid < 9208; pid++) {
-        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+        EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
             SUCCESS);
-        EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
+        EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(pid, pid + 100, true, CreateRemoteObject()), sessionRemote),
             SUCCESS);
     }
     // 会话集合已满 16，新进程创建 -> GLOBAL_LIMIT
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
         CLIENT_EXCEED_GLOBAL_LIMIT);
     // 销毁后可重新创建
     auto *session = CreateManagedSession(9207, 9207 + 100, AuthStrategy::ALLOW, CreateRemoteObject());
     ASSERT_NE(nullptr, session);
     EXPECT_EQ(manager.DestroyAuthEventClient(session), SUCCESS);
-    EXPECT_EQ(manager.CreatAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
+    EXPECT_EQ(manager.CreateAuthEventClient(MakeParams(9300, 9300 + 100, true, CreateRemoteObject()), sessionRemote),
         SUCCESS);
 }
 

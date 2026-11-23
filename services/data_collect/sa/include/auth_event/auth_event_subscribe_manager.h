@@ -57,7 +57,7 @@ public:
     static AuthEventSubscribeManager& GetInstance();
 
     // 主接口路径：创建会话对象并经 sessionRemote 下发其远端引用（binder handle 即会话路由）。
-    int32_t CreatAuthEventClient(const CreateClientParams &params, sptr<IRemoteObject> &sessionRemote);
+    int32_t CreateAuthEventClient(const CreateClientParams &params, sptr<IRemoteObject> &sessionRemote);
     // 会话对象方法路径（AuthEventSessionService 转调，会话有效性以"在会话集合中"为权威判定）
     int32_t SubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId, const std::string &serviceId);
     int32_t UnsubscribeAuthEvent(AuthEventSessionService *session, int64_t eventId);
@@ -73,7 +73,7 @@ public:
     std::vector<sptr<AuthEventSessionService>> GetAllSessions();
     // 订阅者死亡清理入口（AuthEventSessionDeathRecipient 转调）
     void RemoveSession(const sptr<AuthEventSessionService> &session);
-    // 双轨接入校验（主接口 CreatAuthEventClient 与 session 四方法前置共用）：
+    // 双轨接入校验（主接口 CreateAuthEventClient 与 session 四方法前置共用）：
     // native token 查 uid 白名单，HAP token 查 ohos.permission.kernel.AUTH_AUDIT_EVENT
     static int32_t IsCallerAllowed();
     // 允许接入 AuthEvent 框架的 SA 应用（native token）uid 白名单查询。
