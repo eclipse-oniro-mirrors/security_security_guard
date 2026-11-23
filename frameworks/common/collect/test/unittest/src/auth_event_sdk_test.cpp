@@ -125,15 +125,15 @@ HWTEST_F(AuthEventSdkTest, CallbackStubOnRemoteRequest002, TestSize.Level0)
     delete service;
 }
 
-HWTEST_F(AuthEventSdkTest, ClientCreatClient001, TestSize.Level0)
+HWTEST_F(AuthEventSdkTest, ClientCreateClient001, TestSize.Level0)
 {
     std::shared_ptr<AuthEventSubscribeClient> client;
     // 回调为空
-    EXPECT_EQ(AuthEventSubscribeClient::CreatClient(nullptr, client), NULL_OBJECT);
+    EXPECT_EQ(AuthEventSubscribeClient::CreateClient(nullptr, client), NULL_OBJECT);
     EXPECT_EQ(client, nullptr);
     // 正常回调：单测进程无 SA 3524 环境，创建失败但不得崩溃、client 不落值
     auto func = [](const AuthEvent &event) {};
-    int32_t ret = AuthEventSubscribeClient::CreatClient(func, client);
+    int32_t ret = AuthEventSubscribeClient::CreateClient(func, client);
     EXPECT_NE(ret, SUCCESS);
     EXPECT_EQ(client, nullptr);
 }

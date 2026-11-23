@@ -801,7 +801,7 @@ int32_t DataCollectManagerService::IsCallerHasApiPermission(const std::string &a
     return SUCCESS;
 }
 
-// 验收: Client 扩展参数 — CreatAuthEventClient 参数从 timeoutAllowFlag 改为 defaultTimeoutStrategy + defaultTimeoutMs
+// 验收: Client 扩展参数 — CreateAuthEventClient 参数从 timeoutAllowFlag 改为 defaultTimeoutStrategy + defaultTimeoutMs
 #ifdef SECURITY_GUARD_AUTH_EVENT_ENABLE
 // 按 calling token 取调用方名：HAP 取 bundleName，native 进程取 processName，随会话缓存供 ClientInfo 补全
 static std::string GetCallingBundleName()
@@ -830,10 +830,10 @@ static std::string GetCallingBundleName()
     return "";
 }
 
-ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
+ErrCode DataCollectManagerService::CreateAuthEventClient(const sptr<IRemoteObject> &cb,
     int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
-    SGLOGI("CreatAuthEventClient, timeoutAllowFlag=%{public}d", timeoutAllowFlag);
+    SGLOGI("CreateAuthEventClient, timeoutAllowFlag=%{public}d", timeoutAllowFlag);
     int32_t code = AuthEventSubscribeManager::GetInstance().IsCallerAllowed();
     if (code != SUCCESS) {
         return code;
@@ -842,7 +842,7 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
         SGLOGE("cb is null");
         return BAD_PARAM;
     }
-    XCollie_Utils xcollie("SGIPC_CreatAuthEventClient", XCOLLIE_FLAG);
+    XCollie_Utils xcollie("SGIPC_CreateAuthEventClient", XCOLLIE_FLAG);
     CreateClientParams params;
     params.callerPid = IPCSkeleton::GetCallingPid();
     params.callerUid = static_cast<int32_t>(IPCSkeleton::GetCallingAppUid());
@@ -850,10 +850,10 @@ ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject
     params.defaultTimeoutMs = AUTH_RESULT_TIMEOUT_MS;
     params.callback = cb;
     params.bundleName = GetCallingBundleName();
-    return AuthEventSubscribeManager::GetInstance().CreatAuthEventClient(params, session);
+    return AuthEventSubscribeManager::GetInstance().CreateAuthEventClient(params, session);
 }
 #else
-ErrCode DataCollectManagerService::CreatAuthEventClient(const sptr<IRemoteObject> &cb,
+ErrCode DataCollectManagerService::CreateAuthEventClient(const sptr<IRemoteObject> &cb,
     int32_t timeoutAllowFlag, sptr<IRemoteObject> &session)
 {
     (void)cb;
@@ -1316,7 +1316,7 @@ ErrCode DataCollectManagerService::CreatClient(const std::string &eventGroup, co
         SGLOGE("check permission fail");
         return ret;
     }
-    XCollie_Utils xcollie("SGIPC_CreatClient", XCOLLIE_FLAG);
+    XCollie_Utils xcollie("SGIPC_CreateClient", XCOLLIE_FLAG);
     if (cb == nullptr) {
         SGLOGE("cb is null");
         return NULL_OBJECT;

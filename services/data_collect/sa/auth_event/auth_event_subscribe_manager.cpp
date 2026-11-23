@@ -109,7 +109,7 @@ void AuthEventSubscribeManager::RemoveSessionLocked(const sptr<AuthEventSessionS
     }
 }
 
-int32_t AuthEventSubscribeManager::CreatAuthEventClient(const CreateClientParams &params,
+int32_t AuthEventSubscribeManager::CreateAuthEventClient(const CreateClientParams &params,
     sptr<IRemoteObject> &sessionRemote)
 {
     if (params.callback == nullptr) {

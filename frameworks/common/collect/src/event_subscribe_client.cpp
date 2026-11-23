@@ -181,7 +181,7 @@ void EventSubscribeClient::HandleDeath()
         }
         int32_t ret = proxy->CreatClient(eventGroup_, clientId_, callback_);
         if (ret != SUCCESS) {
-            SGLOGE("ReCreatClient fail, clientId=%{public}s, ret=%{public}d", clientId_.c_str(), ret);
+            SGLOGE("ReCreateClient fail, clientId=%{public}s, ret=%{public}d", clientId_.c_str(), ret);
             continue;
         }
         for (int64_t eventId : events) {

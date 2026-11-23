@@ -60,7 +60,7 @@
         OHOS::Security::SecurityGuard::EventSubscribeClient::ClearCallBack*;
         OHOS::Security::SecurityGuard::DataCollectManager::QueryCodeSignInfoByPath*;
         OHOS::Security::SecurityGuard::DataCollectManager::QueryAllClientsInfo*;
-        OHOS::Security::SecurityGuard::AuthEventSubscribeClient::CreatClient*;
+        OHOS::Security::SecurityGuard::AuthEventSubscribeClient::CreateClient*;
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::Subscribe*;
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::Unsubscribe*;
         OHOS::Security::SecurityGuard::AuthEventSubscribeClient::SetAuthResult*;

@@ -30,7 +30,7 @@
 
 namespace OHOS::Security::SecurityGuard {
 // AuthEvent 会话对象：一个实例 = 一个客户端会话。
-// 由 AuthEventSubscribeManager 在 CreatAuthEventClient 时创建，经 [out] 参数把本对象的
+// 由 AuthEventSubscribeManager 在 CreateAuthEventClient 时创建，经 [out] 参数把本对象的
 // 远端引用下发给客户端；客户端 SDK 持代理直调四方法，binder handle 即会话路由，
 // 全链路无 clientId。状态成员即会话状态（非查表所得）；eventIds_ 的读写统一经
 // 管理器锁进行（本类自身无锁，IsEventSubscribed 仅允许在管理器锁内调用）。
@@ -153,7 +153,7 @@ private:
     pid_t pid_ {};
     int32_t uid_ {};
     std::string clientId_ {};
-    std::string bundleName_ {};  // 调用方名缓存（创建时由 CreatAuthEventClient 按 calling token 取得）
+    std::string bundleName_ {};  // 调用方名缓存（创建时由 CreateAuthEventClient 按 calling token 取得）
     int64_t seqnumCounter_ {0};  // per-client seqnum 计数器
     AuthStrategy defaultTimeoutStrategy_ {AuthStrategy::ALLOW};
     int32_t defaultTimeoutMs_ {AUTH_RESULT_TIMEOUT_MS};

@@ -38,14 +38,14 @@ private:
 
 public:
     // 供 std::make_shared 使用的构造占位：ConstructTag 为私有类型，外部无法构造实参，
-    // 保证实例仍只能经 CreatClient 创建
+    // 保证实例仍只能经 CreateClient 创建
     AuthEventSubscribeClient(ConstructTag tag);
     // 最后一个 shared_ptr 释放时自动断开回调、排空在途 OnAuthEvent 并销毁服务端会话
     ~AuthEventSubscribeClient();
     // 创建会话：服务端创建会话对象并经 [out] 下发远端引用（sessionRemote_），
     // 一个 client 对象 = 一个服务端会话，会话身份由 binder handle 承载，无 clientId。
     // timeoutAllowFlag 随会话保存，供超时处置消费；内部转换为 AuthStrategy
-    static int32_t CreatClient(AuthEventCallback callback,
+    static int32_t CreateClient(AuthEventCallback callback,
         std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag = true);
     int32_t Subscribe(int64_t eventId);
     int32_t Unsubscribe(int64_t eventId);
@@ -86,7 +86,7 @@ private:
         std::weak_ptr<AuthEventSubscribeClient> client_;
     };
     sptr<AuthEventCallbackService> callback_{};
-    sptr<IRemoteObject> sessionRemote_{}; // 服务端下发的会话对象远端引用，CreatClient 时填充
+    sptr<IRemoteObject> sessionRemote_{}; // 服务端下发的会话对象远端引用，CreateClient 时填充
     sptr<IRemoteObject::DeathRecipient> deathRecipient_{};
     std::set<int64_t> subscribedEventIds_{};
     bool timeoutAllowFlag_ {true};

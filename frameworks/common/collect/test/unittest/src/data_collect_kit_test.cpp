@@ -658,7 +658,7 @@ HWTEST_F(DataCollectKitTest, QuerySecurityEventConfig01, TestSize.Level1)
     EXPECT_EQ(ret, SecurityGuard::NO_PERMISSION);
 }
 
-HWTEST_F(DataCollectKitTest, ClientCreatClient01, TestSize.Level1)
+HWTEST_F(DataCollectKitTest, ClientCreateClient01, TestSize.Level1)
 {
     auto func = [](const OHOS::Security::SecurityCollector::Event &event) {};
     std::shared_ptr<SecurityGuard::EventSubscribeClient> client {};

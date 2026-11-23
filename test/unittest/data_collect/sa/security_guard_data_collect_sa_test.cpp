@@ -1391,7 +1391,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, CollectorListenerGetExtraInfo001, TestS
     EXPECT_NE(extraInfo.find("987651"), std::string::npos);
 }
 
-HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient001, TestSize.Level0)
+HWTEST_F(SecurityGuardDataCollectSaTest, CreateClient001, TestSize.Level0)
 {
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     sptr<IPCObjectProxy::DeathRecipient> rec = nullptr;
@@ -1434,7 +1434,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient001, TestSize.Level0)
     EXPECT_EQ(result, BAD_PARAM);
 }
 
-HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient002, TestSize.Level0)
+HWTEST_F(SecurityGuardDataCollectSaTest, CreateClient002, TestSize.Level0)
 {
     sptr<MockRemoteObject> obj(new (std::nothrow) MockRemoteObject());
     int32_t result = AcquireDataSubscribeManager::GetInstance().CreatClient("auditGroup", "111", obj);
@@ -1447,7 +1447,7 @@ HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient002, TestSize.Level0)
     EXPECT_EQ(result, CLIENT_EXCEED_PROCESS_LIMIT);
 }
 
-HWTEST_F(SecurityGuardDataCollectSaTest, CreatClient003, TestSize.Level0)
+HWTEST_F(SecurityGuardDataCollectSaTest, CreateClient003, TestSize.Level0)
 {
     AcquireDataSubscribeManager adsm{};
     EXPECT_CALL(ConfigDataManager::GetInstance(), GetEventConfig).WillRepeatedly([](int64_t eventId, EventCfg &config) {

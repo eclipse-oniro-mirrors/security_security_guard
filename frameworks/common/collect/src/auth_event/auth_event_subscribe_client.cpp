@@ -85,10 +85,10 @@ void AuthEventSubscribeClient::DestroyRemoteObjects(const sptr<IRemoteObject> &s
     }
 }
 
-int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
+int32_t AuthEventSubscribeClient::CreateClient(AuthEventCallback callback,
     std::shared_ptr<AuthEventSubscribeClient> &client, bool timeoutAllowFlag)
 {
-    SGLOGI("CreatClient");
+    SGLOGI("CreateClient");
     std::lock_guard<ffrt::mutex> lock(g_clientMutex);
     if (callback == nullptr) {
         SGLOGE("callback is nullptr");
@@ -112,10 +112,10 @@ int32_t AuthEventSubscribeClient::CreatClient(AuthEventCallback callback,
     }
     serviceCallback->RegistCallBack(callback);
     sptr<IRemoteObject> sessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(serviceCallback, static_cast<int32_t>(timeoutAllowFlag),
+    int32_t ret = proxy->CreateAuthEventClient(serviceCallback, static_cast<int32_t>(timeoutAllowFlag),
         sessionRemote);
     if (ret != SUCCESS || sessionRemote == nullptr) {
-        SGLOGI("CreatAuthEventClient result, ret=%{public}d", ret);
+        SGLOGI("CreateAuthEventClient result, ret=%{public}d", ret);
         return ret != SUCCESS ? ret : FAILED;
     }
     client = std::make_shared<AuthEventSubscribeClient>(ConstructTag {});
@@ -221,10 +221,10 @@ bool AuthEventSubscribeClient::RecoverSession(const std::set<int64_t> &events)
     }
     // 服务端重启后会话丢失，重建会话并获取新的会话对象代理（沿用超时处置策略）
     sptr<IRemoteObject> newSessionRemote = nullptr;
-    int32_t ret = proxy->CreatAuthEventClient(callback_,
+    int32_t ret = proxy->CreateAuthEventClient(callback_,
         static_cast<int32_t>(timeoutAllowFlag_), newSessionRemote);
     if (ret != SUCCESS || newSessionRemote == nullptr) {
-        SGLOGE("ReCreatClient fail, ret=%{public}d", ret);
+        SGLOGE("ReCreateClient fail, ret=%{public}d", ret);
         return false;
     }
     auto sessionProxy = iface_cast<AuthEventSession>(newSessionRemote);
